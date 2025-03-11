@@ -149,6 +149,11 @@ class MainWindow(QMainWindow):
         settings_tab = QWidget()
         self.tab_widget.addTab(settings_tab, "设置")
         self.create_settings_tab(settings_tab)
+        
+        # 创建关于选项卡
+        about_tab = QWidget()
+        self.tab_widget.addTab(about_tab, "关于")
+        self.create_about_tab(about_tab)
 
         # 进度条
         self.progress_bar = QProgressBar()
@@ -2793,6 +2798,994 @@ class MainWindow(QMainWindow):
         self.update_status('正在预测...')
         self.prediction_started.emit()
 
+    def update_status(self, message):
+        """更新状态栏消息"""
+        try:
+            if hasattr(self, 'status_label') and self.status_label is not None:
+                self.status_label.setText(message)
+            print(f"状态更新: {message}")
+        except Exception as e:
+            print(f"更新状态时出错: {str(e)}")
+
+    def update_progress(self, value):
+        self.progress_bar.setValue(value)
+        
+    def update_prediction_result(self, result):
+        self.result_list.clear()
+        for pred in result['predictions']:
+            item_text = f"{pred['class_name']}: {pred['probability']:.2f}%"
+            self.result_list.addItem(item_text)
+
+    def goto_annotation_tab(self):
+        # 切换到标注选项卡
+        self.tab_widget.setCurrentIndex(1)
+        
+        # 如果有预处理后的文件夹，则自动设置标注界面的文件夹路径
+        if hasattr(self, 'preprocessed_folder') and self.preprocessed_folder:
+            self.processed_folder = self.preprocessed_folder
+            self.processed_folder_label.setText(self.preprocessed_folder)
+            
+            # 如果有标注输出目录，则自动设置
+            if hasattr(self, 'annotation_folder') and self.annotation_folder:
+                self.annotation_folder_label.setText(self.annotation_folder)
+            
+            # 启用标注按钮
+            self.start_annotation_btn.setEnabled(True)
+            
+        # 从设置中加载缺陷类别
+        try:
+            from config_loader import ConfigLoader
+            config_loader = ConfigLoader()
+            config = config_loader.get_config()
+            
+            # 如果类别列表为空，则从设置中加载
+            if self.class_list.count() == 0:
+                defect_classes = config.get('defect_classes', [])
+                for class_name in defect_classes:
+                    self.class_list.addItem(class_name)
+        except Exception as e:
+            print(f"加载缺陷类别时出错: {str(e)}")
+
+    def create_settings_tab(self, parent):
+        """创建设置选项卡"""
+        layout = QVBoxLayout(parent)
+        
+        # 路径设置组
+        paths_group = QGroupBox("路径设置")
+        paths_layout = QVBoxLayout()
+        
+        # 默认源文件夹
+        source_layout = QHBoxLayout()
+        source_layout.addWidget(QLabel("默认源文件夹:"))
+        self.default_source_path = QLineEdit()
+        self.default_source_path.setReadOnly(True)
+        self.select_default_source_btn = QPushButton("选择")
+        source_layout.addWidget(self.default_source_path)
+        source_layout.addWidget(self.select_default_source_btn)
+        paths_layout.addLayout(source_layout)
+        source_tip = QLabel("提示: 存放原始图像的文件夹")
+        source_tip.setStyleSheet("color: gray; font-size: 10px;")
+        paths_layout.addWidget(source_tip)
+        
+        # 默认输出根目录
+        output_layout = QHBoxLayout()
+        output_layout.addWidget(QLabel("默认输出根目录:"))
+        self.default_output_path = QLineEdit()
+        self.default_output_path.setReadOnly(True)
+        self.select_default_output_btn = QPushButton("选择")
+        output_layout.addWidget(self.default_output_path)
+        output_layout.addWidget(self.select_default_output_btn)
+        paths_layout.addLayout(output_layout)
+        output_tip = QLabel("提示: 存放预处理后的图像和训练结果的根目录")
+        output_tip.setStyleSheet("color: gray; font-size: 10px;")
+        paths_layout.addWidget(output_tip)
+        
+        # 默认待标注图片文件夹
+        processed_layout = QHBoxLayout()
+        processed_layout.addWidget(QLabel("默认待标注图片文件夹:"))
+        self.default_processed_path = QLineEdit()
+        self.default_processed_path.setReadOnly(True)
+        self.select_default_processed_btn = QPushButton("选择")
+        processed_layout.addWidget(self.default_processed_path)
+        processed_layout.addWidget(self.select_default_processed_btn)
+        paths_layout.addLayout(processed_layout)
+        processed_tip = QLabel("提示: 存放待标注的图片文件夹，可以是预处理后的图片文件夹或其他文件夹")
+        processed_tip.setStyleSheet("color: gray; font-size: 10px;")
+        paths_layout.addWidget(processed_tip)
+        
+        # 默认标注数据文件夹
+        annotation_layout = QHBoxLayout()
+        annotation_layout.addWidget(QLabel("标注结果保存目录:"))
+        self.default_annotation_path = QLineEdit()
+        self.default_annotation_path.setReadOnly(True)
+        self.select_default_annotation_btn = QPushButton("选择")
+        annotation_layout.addWidget(self.default_annotation_path)
+        annotation_layout.addWidget(self.select_default_annotation_btn)
+        paths_layout.addLayout(annotation_layout)
+        annotation_tip = QLabel("提示: 存放标注工具生成的标注文件的目录，与标注界面的标注结果保存目录相同")
+        annotation_tip.setStyleSheet("color: gray; font-size: 10px;")
+        paths_layout.addWidget(annotation_tip)
+        
+        # 批量预测相关路径设置
+        # 默认模型文件
+        model_layout = QHBoxLayout()
+        model_layout.addWidget(QLabel("默认模型文件:"))
+        self.default_model_path = QLineEdit()
+        self.default_model_path.setReadOnly(True)
+        self.select_default_model_btn = QPushButton("选择")
+        model_layout.addWidget(self.default_model_path)
+        model_layout.addWidget(self.select_default_model_btn)
+        paths_layout.addLayout(model_layout)
+        model_tip = QLabel("提示: 默认使用的模型文件路径")
+        model_tip.setStyleSheet("color: gray; font-size: 10px;")
+        paths_layout.addWidget(model_tip)
+        
+        # 默认类别信息文件
+        class_info_layout = QHBoxLayout()
+        class_info_layout.addWidget(QLabel("默认类别信息文件:"))
+        self.default_class_info_path = QLineEdit()
+        self.default_class_info_path.setReadOnly(True)
+        self.select_default_class_info_btn = QPushButton("选择")
+        class_info_layout.addWidget(self.default_class_info_path)
+        class_info_layout.addWidget(self.select_default_class_info_btn)
+        paths_layout.addLayout(class_info_layout)
+        class_info_tip = QLabel("提示: 默认使用的类别信息文件路径")
+        class_info_tip.setStyleSheet("color: gray; font-size: 10px;")
+        paths_layout.addWidget(class_info_tip)
+        
+        # 默认批量预测源文件夹
+        batch_source_layout = QHBoxLayout()
+        batch_source_layout.addWidget(QLabel("默认批量预测源文件夹:"))
+        self.default_batch_source_path = QLineEdit()
+        self.default_batch_source_path.setReadOnly(True)
+        self.select_default_batch_source_btn = QPushButton("选择")
+        batch_source_layout.addWidget(self.default_batch_source_path)
+        batch_source_layout.addWidget(self.select_default_batch_source_btn)
+        paths_layout.addLayout(batch_source_layout)
+        batch_source_tip = QLabel("提示: 存放待批量预测图片的文件夹")
+        batch_source_tip.setStyleSheet("color: gray; font-size: 10px;")
+        paths_layout.addWidget(batch_source_tip)
+        
+        # 默认批量预测目标文件夹
+        batch_target_layout = QHBoxLayout()
+        batch_target_layout.addWidget(QLabel("默认批量预测目标文件夹:"))
+        self.default_batch_target_path = QLineEdit()
+        self.default_batch_target_path.setReadOnly(True)
+        self.select_default_batch_target_btn = QPushButton("选择")
+        batch_target_layout.addWidget(self.default_batch_target_path)
+        batch_target_layout.addWidget(self.select_default_batch_target_btn)
+        paths_layout.addLayout(batch_target_layout)
+        batch_target_tip = QLabel("提示: 存放批量预测结果的文件夹")
+        batch_target_tip.setStyleSheet("color: gray; font-size: 10px;")
+        paths_layout.addWidget(batch_target_tip)
+        
+        # 自动设置标注文件夹为输出目录的子文件夹
+        auto_annotation_layout = QHBoxLayout()
+        self.auto_annotation_checkbox = QCheckBox("自动设置标注文件夹为输出目录的子文件夹")
+        self.auto_annotation_checkbox.setChecked(True)
+        self.auto_annotation_checkbox.stateChanged.connect(self.toggle_auto_annotation)
+        auto_annotation_layout.addWidget(self.auto_annotation_checkbox)
+        paths_layout.addLayout(auto_annotation_layout)
+        
+        paths_group.setLayout(paths_layout)
+        layout.addWidget(paths_group)
+        
+        # 缺陷类别设置组
+        classes_group = QGroupBox("缺陷类别设置")
+        classes_layout = QVBoxLayout()
+        
+        # 类别列表
+        self.settings_class_list = QListWidget()
+        classes_layout.addWidget(self.settings_class_list)
+        
+        # 添加/删除类别按钮
+        class_btn_layout = QHBoxLayout()
+        self.settings_add_class_btn = QPushButton("添加类别")
+        self.settings_remove_class_btn = QPushButton("删除类别")
+        class_btn_layout.addWidget(self.settings_add_class_btn)
+        class_btn_layout.addWidget(self.settings_remove_class_btn)
+        classes_layout.addLayout(class_btn_layout)
+        
+        classes_group.setLayout(classes_layout)
+        layout.addWidget(classes_group)
+        
+        # 保存设置按钮
+        self.save_settings_btn = QPushButton("保存设置")
+        self.save_settings_btn.setStyleSheet("background-color: #4CAF50; color: white; font-weight: bold; padding: 8px;")
+        layout.addWidget(self.save_settings_btn)
+        
+        # 绑定事件
+        self.select_default_source_btn.clicked.connect(self.select_default_source_folder)
+        self.select_default_output_btn.clicked.connect(self.select_default_output_folder)
+        self.select_default_processed_btn.clicked.connect(self.select_default_processed_folder)
+        self.select_default_annotation_btn.clicked.connect(self.select_default_annotation_folder)
+        self.select_default_model_btn.clicked.connect(self.select_default_model_file)
+        self.select_default_class_info_btn.clicked.connect(self.select_default_class_info_file)
+        self.select_default_batch_source_btn.clicked.connect(self.select_default_batch_source_folder)
+        self.select_default_batch_target_btn.clicked.connect(self.select_default_batch_target_folder)
+        self.settings_add_class_btn.clicked.connect(self.settings_add_defect_class)
+        self.settings_remove_class_btn.clicked.connect(self.settings_remove_defect_class)
+        self.save_settings_btn.clicked.connect(self.save_settings)
+        
+        # 加载当前设置
+        self.load_current_settings()
+        
+    def toggle_auto_annotation(self, state):
+        """切换自动设置标注文件夹模式"""
+        if state == Qt.Checked:
+            # 如果已有输出目录，则自动设置标注文件夹
+            if self.default_output_path.text():
+                annotation_dir = os.path.join(self.default_output_path.text(), 'annotations')
+                self.default_annotation_path.setText(annotation_dir)
+            # 禁用手动选择按钮
+            self.select_default_annotation_btn.setEnabled(False)
+        else:
+            # 启用手动选择按钮
+            self.select_default_annotation_btn.setEnabled(True)
+            
+    def select_default_source_folder(self):
+        folder = QFileDialog.getExistingDirectory(self, "选择默认源文件夹")
+        if folder:
+            self.default_source_path.setText(folder)
+            
+    def select_default_output_folder(self):
+        folder = QFileDialog.getExistingDirectory(self, "选择默认输出根目录")
+        if folder:
+            self.default_output_path.setText(folder)
+            # 如果启用了自动设置标注文件夹，则更新标注文件夹路径
+            if self.auto_annotation_checkbox.isChecked():
+                annotation_dir = os.path.join(folder, 'annotations')
+                self.default_annotation_path.setText(annotation_dir)
+            
+    def select_default_processed_folder(self):
+        folder = QFileDialog.getExistingDirectory(self, "选择默认待标注图片文件夹")
+        if folder:
+            self.default_processed_path.setText(folder)
+            
+    def select_default_annotation_folder(self):
+        folder = QFileDialog.getExistingDirectory(self, "选择标注文件存储目录")
+        if folder:
+            self.default_annotation_path.setText(folder)
+            
+    def settings_add_defect_class(self):
+        class_name, ok = QInputDialog.getText(self, "添加缺陷类别", "请输入缺陷类别名称:")
+        if ok and class_name:
+            self.settings_class_list.addItem(class_name)
+            
+    def settings_remove_defect_class(self):
+        selected_items = self.settings_class_list.selectedItems()
+        if not selected_items:
+            QMessageBox.warning(self, "警告", "请先选择要删除的类别")
+            return
+            
+        for item in selected_items:
+            self.settings_class_list.takeItem(self.settings_class_list.row(item))
+            
+    def load_current_settings(self):
+        """加载当前设置"""
+        try:
+            from config_loader import ConfigLoader
+            config_loader = ConfigLoader()
+            config = config_loader.get_config()
+            
+            # 加载缺陷类别
+            defect_classes = config.get('defect_classes', [])
+            self.settings_class_list.clear()
+            for class_name in defect_classes:
+                self.settings_class_list.addItem(class_name)
+                
+            # 应用路径配置
+            paths_config = config.get('paths', {})
+            default_source_dir = paths_config.get('default_source_dir', '')
+            default_output_dir = paths_config.get('default_output_dir', '')
+            default_processed_dir = paths_config.get('default_processed_dir', '')
+            default_annotation_dir = paths_config.get('default_annotation_dir', '')
+            auto_annotation = paths_config.get('auto_annotation', True)
+            
+            # 加载批量预测路径配置
+            prediction_paths = config.get('prediction_paths', {})
+            default_model_path = prediction_paths.get('default_model_path', '')
+            default_class_info_path = prediction_paths.get('default_class_info_path', '')
+            default_batch_source_path = prediction_paths.get('default_batch_source_path', '')
+            default_batch_target_path = prediction_paths.get('default_batch_target_path', '')
+            
+            # 标准化路径格式
+            if default_source_dir:
+                default_source_dir = os.path.normpath(default_source_dir).replace('\\', '/')
+            if default_output_dir:
+                default_output_dir = os.path.normpath(default_output_dir).replace('\\', '/')
+            if default_processed_dir:
+                default_processed_dir = os.path.normpath(default_processed_dir).replace('\\', '/')
+            if default_annotation_dir:
+                default_annotation_dir = os.path.normpath(default_annotation_dir).replace('\\', '/')
+            if default_model_path:
+                default_model_path = os.path.normpath(default_model_path).replace('\\', '/')
+            if default_class_info_path:
+                default_class_info_path = os.path.normpath(default_class_info_path).replace('\\', '/')
+            if default_batch_source_path:
+                default_batch_source_path = os.path.normpath(default_batch_source_path).replace('\\', '/')
+            if default_batch_target_path:
+                default_batch_target_path = os.path.normpath(default_batch_target_path).replace('\\', '/')
+            
+            # 设置UI中的路径
+            self.default_source_path.setText(default_source_dir)
+            self.default_output_path.setText(default_output_dir)
+            self.default_processed_path.setText(default_processed_dir)
+            self.default_annotation_path.setText(default_annotation_dir)
+            self.auto_annotation_checkbox.setChecked(auto_annotation)
+            
+            # 设置批量预测路径
+            self.default_model_path.setText(default_model_path)
+            self.default_class_info_path.setText(default_class_info_path)
+            self.default_batch_source_path.setText(default_batch_source_path)
+            self.default_batch_target_path.setText(default_batch_target_path)
+            
+            # 设置初始文件夹
+            if default_source_dir and os.path.exists(default_source_dir):
+                self.data_folder = default_source_dir
+                if hasattr(self, 'source_path_label'):
+                    self.source_path_label.setText(default_source_dir)
+                
+            if default_output_dir and os.path.exists(default_output_dir):
+                self.output_folder = default_output_dir
+                if hasattr(self, 'output_path_label'):
+                    self.output_path_label.setText(default_output_dir)
+                
+            if default_processed_dir and os.path.exists(default_processed_dir):
+                self.processed_folder = default_processed_dir
+                if hasattr(self, 'processed_folder_label'):
+                    self.processed_folder_label.setText(default_processed_dir)
+                
+            if default_annotation_dir and os.path.exists(default_annotation_dir):
+                self.annotation_folder = default_annotation_dir
+                if hasattr(self, 'annotation_folder_label'):
+                    self.annotation_folder_label.setText(default_annotation_dir)
+                if hasattr(self, 'training_annotation_folder_label'):
+                    self.training_annotation_folder_label.setText(default_annotation_dir)
+                    # 启用训练按钮
+                    if hasattr(self, 'train_model_btn'):
+                        self.train_model_btn.setEnabled(True)
+            
+            # 设置批量预测初始文件夹
+            if default_model_path and os.path.exists(default_model_path):
+                self.model_path = default_model_path
+                if hasattr(self, 'model_path_label'):
+                    self.model_path_label.setText(default_model_path)
+                    
+            if default_class_info_path and os.path.exists(default_class_info_path):
+                self.class_info_path = default_class_info_path
+                if hasattr(self, 'class_info_path_label'):
+                    self.class_info_path_label.setText(default_class_info_path)
+                    
+            if default_batch_source_path and os.path.exists(default_batch_source_path):
+                self.batch_source_folder = default_batch_source_path
+                if hasattr(self, 'batch_source_path_label'):
+                    self.batch_source_path_label.setText(default_batch_source_path)
+                    
+            if default_batch_target_path and os.path.exists(default_batch_target_path):
+                self.batch_target_folder = default_batch_target_path
+                if hasattr(self, 'batch_target_path_label'):
+                    self.batch_target_path_label.setText(default_batch_target_path)
+            
+            # 检查是否可以启用开始处理按钮
+            if hasattr(self, 'check_preprocess_ready'):
+                self.check_preprocess_ready()
+            
+            # 检查是否可以启用标注按钮
+            if hasattr(self, 'check_annotation_ready'):
+                self.check_annotation_ready()
+                
+            # 检查批量预测是否准备就绪
+            if hasattr(self, 'check_batch_predict_ready'):
+                self.check_batch_predict_ready()
+                
+            # 检查模型是否准备就绪
+            if hasattr(self, 'check_model_ready'):
+                self.check_model_ready()
+                
+        except Exception as e:
+            print(f"加载设置时出错: {str(e)}")
+            
+    def save_settings(self):
+        """保存设置"""
+        try:
+            # 创建配置对象
+            config = {
+                'paths': {
+                    'default_source_dir': self.default_source_path.text(),
+                    'default_output_dir': self.default_output_path.text(),
+                    'default_processed_dir': self.default_processed_path.text(),
+                    'default_annotation_dir': self.default_annotation_path.text(),
+                    'auto_annotation': self.auto_annotation_checkbox.isChecked()
+                },
+                'defect_classes': [self.settings_class_list.item(i).text() for i in range(self.settings_class_list.count())],
+                'preprocessing': {
+                    'default_size': self.size_combo.currentText(),
+                    'default_format': self.format_combo.currentText().lower(),
+                    'default_train_ratio': self.train_ratio_spin.value(),
+                    'default_augmentation': self.augmentation_combo.currentText()
+                },
+                'training': {
+                    'default_model': self.classification_model_combo.currentText(),
+                    'default_batch_size': self.batch_size_spin.value(),
+                    'default_learning_rate': self.lr_spin.value(),
+                    'default_epochs': self.epochs_spin.value()
+                }
+            }
+            
+            # 保存配置
+            from config_loader import ConfigLoader
+            config_loader = ConfigLoader()
+            if config_loader.save_config(config):
+                QMessageBox.information(self, '成功', '设置已保存')
+                
+                # 更新当前路径
+                if self.default_source_path.text():
+                    self.data_folder = self.default_source_path.text()
+                    self.source_path_label.setText(self.data_folder)
+                
+                if self.default_output_path.text():
+                    self.output_folder = self.default_output_path.text()
+                    self.output_path_label.setText(self.output_folder)
+                
+                if self.default_processed_path.text():
+                    self.processed_folder = self.default_processed_path.text()
+                    if hasattr(self, 'processed_folder_label'):
+                        self.processed_folder_label.setText(self.processed_folder)
+                    # 检查是否可以启用标注按钮
+                    if hasattr(self, 'check_annotation_ready'):
+                        self.check_annotation_ready()
+                
+                if self.default_annotation_path.text():
+                    self.annotation_folder = self.default_annotation_path.text()
+                    if hasattr(self, 'annotation_folder_label'):
+                        self.annotation_folder_label.setText(self.annotation_folder)
+                    if hasattr(self, 'training_annotation_folder_label'):
+                        self.training_annotation_folder_label.setText(self.annotation_folder)
+                
+                # 更新类别列表
+                self.class_list.clear()
+                for i in range(self.settings_class_list.count()):
+                    self.class_list.addItem(self.settings_class_list.item(i).text())
+                    
+                # 检查是否可以启用相关按钮
+                self.check_preprocess_ready()
+                if self.annotation_folder:
+                    self.train_model_btn.setEnabled(True)
+                
+                self.update_status('设置已保存并应用')
+            else:
+                QMessageBox.warning(self, '错误', '保存设置失败')
+        except Exception as e:
+            QMessageBox.critical(self, '错误', f'保存设置时出错: {str(e)}')
+
+    def apply_config(self, config):
+        """应用配置"""
+        try:
+            # 应用UI配置
+            ui_config = config.get('ui', {})
+            width = ui_config.get('window_width', 1200)
+            height = ui_config.get('window_height', 900)
+            self.setGeometry(100, 100, width, height)
+            
+            # 应用预处理配置
+            preprocess_config = config.get('preprocessing', {})
+            default_size = preprocess_config.get('default_size', '224x224')
+            default_format = preprocess_config.get('default_format', 'jpg').upper()
+            default_train_ratio = preprocess_config.get('default_train_ratio', 0.8)
+            default_augmentation = preprocess_config.get('default_augmentation', '基础')
+            
+            # 设置默认值
+            index = self.size_combo.findText(default_size)
+            if index >= 0:
+                self.size_combo.setCurrentIndex(index)
+            
+            index = self.format_combo.findText(default_format)
+            if index >= 0:
+                self.format_combo.setCurrentIndex(index)
+            
+            self.train_ratio_spin.setValue(default_train_ratio)
+            
+            index = self.augmentation_combo.findText(default_augmentation)
+            if index >= 0:
+                self.augmentation_combo.setCurrentIndex(index)
+            
+            # 应用训练配置
+            training_config = config.get('training', {})
+            default_model = training_config.get('default_model', 'ResNet50')
+            default_batch_size = training_config.get('default_batch_size', 32)
+            default_lr = training_config.get('default_learning_rate', 0.001)
+            default_epochs = training_config.get('default_epochs', 20)
+            
+            index = self.classification_model_combo.findText(default_model)
+            if index >= 0:
+                self.classification_model_combo.setCurrentIndex(index)
+            
+            self.batch_size_spin.setValue(default_batch_size)
+            self.lr_spin.setValue(default_lr)
+            self.epochs_spin.setValue(default_epochs)
+            
+            # 应用缺陷类别配置
+            defect_classes = config.get('defect_classes', [])
+            self.class_list.clear()
+            for class_name in defect_classes:
+                self.class_list.addItem(class_name)
+            
+            # 应用路径配置
+            paths_config = config.get('paths', {})
+            default_source_dir = paths_config.get('default_source_dir', '')
+            default_output_dir = paths_config.get('default_output_dir', '')
+            default_processed_dir = paths_config.get('default_processed_dir', '')
+            default_annotation_dir = paths_config.get('default_annotation_dir', '')
+            
+            # 标准化路径格式
+            if default_source_dir:
+                default_source_dir = os.path.normpath(default_source_dir).replace('\\', '/')
+            if default_output_dir:
+                default_output_dir = os.path.normpath(default_output_dir).replace('\\', '/')
+            if default_processed_dir:
+                default_processed_dir = os.path.normpath(default_processed_dir).replace('\\', '/')
+            if default_annotation_dir:
+                default_annotation_dir = os.path.normpath(default_annotation_dir).replace('\\', '/')
+            
+            # 设置初始文件夹
+            if default_source_dir and os.path.exists(default_source_dir):
+                self.data_folder = default_source_dir
+                if hasattr(self, 'source_path_label'):
+                    self.source_path_label.setText(default_source_dir)
+                
+            if default_output_dir and os.path.exists(default_output_dir):
+                self.output_folder = default_output_dir
+                if hasattr(self, 'output_path_label'):
+                    self.output_path_label.setText(default_output_dir)
+                
+            if default_processed_dir and os.path.exists(default_processed_dir):
+                self.processed_folder = default_processed_dir
+                if hasattr(self, 'processed_folder_label'):
+                    self.processed_folder_label.setText(default_processed_dir)
+                
+            if default_annotation_dir and os.path.exists(default_annotation_dir):
+                self.annotation_folder = default_annotation_dir
+                if hasattr(self, 'annotation_folder_label'):
+                    self.annotation_folder_label.setText(default_annotation_dir)
+                if hasattr(self, 'training_annotation_folder_label'):
+                    self.training_annotation_folder_label.setText(default_annotation_dir)
+                    # 启用训练按钮
+                    if hasattr(self, 'train_model_btn'):
+                        self.train_model_btn.setEnabled(True)
+            
+            # 检查是否可以启用开始处理按钮
+            self.check_preprocess_ready()
+            
+            # 检查是否可以启用标注按钮
+            if hasattr(self, 'check_annotation_ready'):
+                self.check_annotation_ready()
+                
+            # 初始化内置标注工具
+            if hasattr(self, 'annotation_widget'):
+                # 设置类别
+                class_names = [self.class_list.item(i).text() for i in range(self.class_list.count())]
+                if class_names:
+                    self.annotation_widget.set_class_names(class_names)
+                
+                # 设置图像文件夹
+                if hasattr(self, 'processed_folder') and self.processed_folder and os.path.exists(self.processed_folder):
+                    print(f"初始化标注工具：设置图像文件夹 {self.processed_folder}")
+                    self.annotation_widget.set_image_folder(self.processed_folder)
+                
+                # 设置输出文件夹
+                if hasattr(self, 'annotation_folder') and self.annotation_folder:
+                    print(f"初始化标注工具：设置输出文件夹 {self.annotation_folder}")
+                    self.annotation_widget.set_output_folder(self.annotation_folder)
+                
+        except Exception as e:
+            print(f"应用配置时出错: {str(e)}")
+
+    def toggle_annotation_task(self, checked):
+        """切换任务类型"""
+        if checked:  # 选择了分类任务
+            self.annotation_task_stack.setCurrentIndex(0)
+        else:  # 选择了目标检测任务
+            self.annotation_task_stack.setCurrentIndex(1)
+
+    def toggle_detection_tool(self, checked):
+        """切换标注工具显示"""
+        if checked:  # 选择了内置标注工具
+            self.detection_tool_stack.setCurrentIndex(0)
+            
+            # 设置内置标注工具的路径和类别
+            if hasattr(self, 'processed_folder') and self.processed_folder and os.path.exists(self.processed_folder):
+                print(f"toggle_detection_tool: 设置图像文件夹 {self.processed_folder}")
+                self.annotation_widget.set_image_folder(self.processed_folder)
+                
+            if hasattr(self, 'annotation_folder') and self.annotation_folder:
+                print(f"toggle_detection_tool: 设置输出文件夹 {self.annotation_folder}")
+                self.annotation_widget.set_output_folder(self.annotation_folder)
+                
+            # 设置类别
+            class_names = [self.class_list.item(i).text() for i in range(self.class_list.count())]
+            if class_names:
+                self.annotation_widget.set_class_names(class_names)
+        else:  # 选择了外部标注工具
+            self.detection_tool_stack.setCurrentIndex(1)
+
+    def create_classification_folders(self):
+        """创建分类数据集目录结构"""
+        if not self.annotation_folder:
+            QMessageBox.warning(self, '警告', '请先选择标注结果保存目录')
+            return
+            
+        try:
+            # 创建train和val目录
+            train_dir = os.path.join(self.annotation_folder, 'train')
+            val_dir = os.path.join(self.annotation_folder, 'val')
+            
+            os.makedirs(train_dir, exist_ok=True)
+            os.makedirs(val_dir, exist_ok=True)
+            
+            # 为每个类别创建子目录
+            class_names = [self.class_list.item(i).text() for i in range(self.class_list.count())]
+            if not class_names:
+                QMessageBox.warning(self, '警告', '请先添加缺陷类别')
+                return
+                
+            for class_name in class_names:
+                os.makedirs(os.path.join(train_dir, class_name), exist_ok=True)
+                os.makedirs(os.path.join(val_dir, class_name), exist_ok=True)
+                
+            QMessageBox.information(self, '成功', '分类数据集目录结构创建成功')
+            self.update_status('分类数据集目录结构创建成功')
+            
+            # 启用打开文件夹按钮
+            self.open_folders_btn.setEnabled(True)
+            
+        except Exception as e:
+            QMessageBox.critical(self, '错误', f'创建目录结构时出错: {str(e)}')
+            
+    def open_annotation_folder(self):
+        """打开标注结果目录"""
+        if not self.annotation_folder:
+            QMessageBox.warning(self, '警告', '请先选择标注结果保存目录')
+            return
+            
+        try:
+            # 使用系统默认程序打开文件夹
+            if sys.platform == 'win32':
+                os.startfile(self.annotation_folder)
+            elif sys.platform == 'darwin':  # macOS
+                subprocess.run(['open', self.annotation_folder])
+            else:  # Linux
+                subprocess.run(['xdg-open', self.annotation_folder])
+                
+        except Exception as e:
+            QMessageBox.critical(self, '错误', f'打开文件夹时出错: {str(e)}')
+
+    def toggle_training_task(self, checked):
+        """切换训练任务类型"""
+        try:
+            print(f"切换训练任务类型: {'分类' if checked else '检测'}")
+            
+            if not hasattr(self, 'model_stack') or not hasattr(self, 'params_stack'):
+                print("错误: model_stack 或 params_stack 未初始化")
+                return
+                
+            if checked:  # 选择了分类任务
+                if self.model_stack.count() > 0:
+                    self.model_stack.setCurrentIndex(0)  # 显示分类模型选择
+                if self.params_stack.count() > 0:
+                    self.params_stack.setCurrentIndex(0)  # 显示分类参数设置
+                print("已切换到分类任务界面")
+            else:  # 选择了目标检测任务
+                if self.model_stack.count() > 1:
+                    self.model_stack.setCurrentIndex(1)  # 显示检测模型选择
+                if self.params_stack.count() > 1:
+                    self.params_stack.setCurrentIndex(1)  # 显示检测参数设置
+                print("已切换到检测任务界面")
+                
+            # 强制更新界面
+            if hasattr(self, 'model_stack'):
+                self.model_stack.update()
+            if hasattr(self, 'params_stack'):
+                self.params_stack.update()
+                
+            # 打印当前状态
+            print(f"model_stack 当前索引: {self.model_stack.currentIndex()}")
+            print(f"params_stack 当前索引: {self.params_stack.currentIndex()}")
+            
+        except Exception as e:
+            print(f"切换任务类型时出错: {str(e)}")
+            import traceback
+            traceback.print_exc()
+
+    def show_training_help(self):
+        """显示训练参数和评估指标的详细说明对话框"""
+        help_text = """
+        <h2>训练参数说明</h2>
+        
+        <h3>基本训练参数</h3>
+        <ul>
+            <li><b>批次大小</b>：模型一次处理的图像数量。较大的批次可以加速训练，但需要更多内存。较小的批次可能提高模型泛化能力，但训练速度较慢。</li>
+            <li><b>学习率</b>：控制模型参数更新的步长。较大的学习率可能导致训练不稳定。较小的学习率可能导致训练过慢或陷入局部最优。</li>
+            <li><b>训练轮数</b>：模型遍历整个训练数据集的次数。轮数过少可能导致欠拟合，轮数过多可能导致过拟合。</li>
+            <li><b>学习率调度</b>：控制训练过程中学习率的变化。固定学习率整个训练过程使用相同的学习率；阶梯下降在特定轮数后降低学习率；余弦退火学习率按余弦函数逐渐降低。</li>
+            <li><b>优化器</b>：决定如何更新模型参数。Adam是自适应优化器，适用于大多数情况；SGD是随机梯度下降，可能需要更多调参但有时效果更好；RMSprop是自适应学习率优化器。</li>
+            <li><b>权重衰减</b>：一种正则化技术，用于防止过拟合。较大的值会使模型更简单但可能欠拟合。较小的值允许模型更复杂但可能过拟合。</li>
+        </ul>
+        
+        <h3>高级训练参数</h3>
+        <ul>
+            <li><b>使用预训练权重</b>：使用在大型数据集上预训练的权重。这通常可以加速训练并提高模型性能，特别是在训练数据较少的情况下。</li>
+            <li><b>混合精度训练</b>：使用FP16和FP32混合计算，可以加速训练并减少内存使用，在支持的GPU上可提高训练速度2-3倍。</li>
+            <li><b>使用早停</b>：早停机制会监控验证集性能，当性能不再提升时自动停止训练，有助于防止过拟合并节省训练时间。</li>
+            <li><b>早停耐心值</b>：指定在停止训练前，模型可以连续多少轮没有改进。较大的值使训练更有耐心，较小的值使训练更早停止。</li>
+            <li><b>类别权重</b>：用于处理不平衡的数据集。均衡为所有类别分配相同权重；自动计算根据类别频率自动计算权重；不使用则不应用类别权重。</li>
+        </ul>
+        
+        <h3>检测特有参数</h3>
+        <ul>
+            <li><b>IoU阈值</b>：交并比阈值，用于确定预测框和真实框的匹配程度。较高的阈值要求更精确的定位，较低的阈值更宽松。</li>
+            <li><b>NMS阈值</b>：非极大值抑制阈值，用于过滤重叠的检测框。较高的阈值保留更多可能重叠的框，较低的阈值更严格地过滤重叠框。</li>
+            <li><b>置信度阈值</b>：决定检测结果的最低可信度。较高的阈值减少误报但可能增加漏报，较低的阈值减少漏报但可能增加误报。</li>
+            <li><b>锚框尺寸</b>：检测算法预设的边界框。自动根据数据集统计自动生成；小目标优化适合检测小物体；大目标优化适合检测大物体；混合目标平衡不同尺寸的目标。</li>
+            <li><b>使用特征金字塔</b>：特征金字塔网络通过结合不同尺度的特征，提高检测不同大小目标的能力，特别是小目标。</li>
+        </ul>
+        
+        <h2>评估指标说明</h2>
+        
+        <h3>分类评估指标</h3>
+        <ul>
+            <li><b>准确率</b>：正确预测的样本比例。计算公式：正确预测数 / 总样本数。适用于类别平衡的数据集，但在类别不平衡时可能产生误导。</li>
+            <li><b>精确率</b>：预测为正类的样本中真正属于正类的比例。计算公式：真正例 / (真正例 + 假正例)。高精确率意味着模型预测为正类的结果很可靠，误报率低。</li>
+            <li><b>召回率</b>：真实正类样本中被正确预测为正类的比例。计算公式：真正例 / (真正例 + 假负例)。高召回率意味着模型能够捕获大部分正类样本，漏报率低。</li>
+            <li><b>F1分数</b>：精确率和召回率的调和平均。计算公式：2 * (精确率 * 召回率) / (精确率 + 召回率)。当需要在精确率和召回率之间取得平衡时，F1分数是很好的选择。</li>
+            <li><b>混淆矩阵</b>：详细展示各类别之间的预测情况，包含真正例、假正例、真负例和假负例的数量。帮助理解模型在哪些类别上表现好，哪些类别容易混淆。</li>
+        </ul>
+        
+        <h3>检测评估指标</h3>
+        <ul>
+            <li><b>平均精度均值(mAP)</b>：目标检测的主要评估指标，计算不同IoU阈值和类别下的平均精度。值越高表示检测性能越好，同时考虑了定位和分类准确性。</li>
+            <li><b>mAP@0.5</b>：IoU阈值为0.5时的平均精度，是COCO数据集的标准评估指标之一。这是一个相对宽松的评估标准，适合一般应用。</li>
+            <li><b>mAP@0.75</b>：IoU阈值为0.75时的平均精度，这是一个更严格的评估标准，要求更精确的目标定位。在需要高精度定位的应用中很有用。</li>
+            <li><b>精确率-召回率曲线</b>：展示不同置信度阈值下，精确率和召回率的变化关系。帮助选择最佳置信度阈值，平衡误报和漏报。</li>
+            <li><b>检测速度(FPS)</b>：以每秒帧数衡量，反映模型在实际应用中的实时性能。对于需要实时处理的应用尤为重要。</li>
+        </ul>
+        """
+        
+        msg_box = QMessageBox(self)
+        msg_box.setWindowTitle("训练参数和评估指标说明")
+        msg_box.setTextFormat(Qt.RichText)
+        msg_box.setText(help_text)
+        msg_box.setStandardButtons(QMessageBox.Ok)
+        msg_box.exec_()
+
+    def create_tensorboard_tab(self, parent):
+        layout = QVBoxLayout(parent)
+        
+        # 创建TensorBoard组件
+        self.tensorboard_widget = TensorBoardWidget()
+        layout.addWidget(self.tensorboard_widget)
+
+    def train_model(self):
+        """开始模型训练"""
+        # 检查是否选择了标注数据文件夹
+        if not hasattr(self, 'annotation_folder') or not self.annotation_folder:
+            QMessageBox.warning(self, '警告', '请先选择标注数据文件夹')
+            return
+            
+        print(f"开始训练模型，使用标注数据文件夹: {self.annotation_folder}")
+            
+        # 获取当前任务类型
+        is_classification = hasattr(self, 'training_classification_radio') and self.training_classification_radio.isChecked()
+        
+        # 检查数据集目录结构
+        train_dir = os.path.join(self.annotation_folder, 'train')
+        val_dir = os.path.join(self.annotation_folder, 'val')
+        
+        if not os.path.exists(train_dir):
+            QMessageBox.warning(self, '警告', f'训练数据集目录不存在: {train_dir}\n请确保标注数据文件夹下有train和val子目录')
+            return
+            
+        if not os.path.exists(val_dir):
+            QMessageBox.warning(self, '警告', f'验证数据集目录不存在: {val_dir}\n请确保标注数据文件夹下有train和val子目录')
+            return
+            
+        # 获取训练参数
+        if is_classification:
+            # 分类任务
+            selected_model = self.classification_model_combo.currentText()
+            task_type = 'classification'
+            
+            # 基本训练参数
+            batch_size = self.batch_size_spin.value()
+            learning_rate = self.lr_spin.value()
+            epochs = self.epochs_spin.value()
+            optimizer = self.optimizer_combo.currentText()
+            lr_scheduler = self.lr_scheduler_combo.currentText()
+            weight_decay = self.weight_decay_spin.value()
+            
+            # 高级训练参数
+            use_pretrained = self.pretrained_checkbox.isChecked()
+            use_mixed_precision = self.mixed_precision_checkbox.isChecked()
+            use_early_stopping = self.early_stopping_checkbox.isChecked()
+            patience = self.patience_spin.value()
+            class_weight = self.class_weight_combo.currentText()
+            use_tensorboard = self.tensorboard_checkbox.isChecked()
+            
+            # 评估指标
+            metrics = []
+            if self.accuracy_checkbox.isChecked():
+                metrics.append('accuracy')
+            if self.precision_checkbox.isChecked():
+                metrics.append('precision')
+            if self.recall_checkbox.isChecked():
+                metrics.append('recall')
+            if self.f1_checkbox.isChecked():
+                metrics.append('f1')
+            if self.confusion_matrix_checkbox.isChecked():
+                metrics.append('confusion_matrix')
+            
+            # 检查数据集是否符合分类任务的要求
+            class_names = [self.class_list.item(i).text() for i in range(self.class_list.count())]
+            if not class_names:
+                QMessageBox.warning(self, '警告', '请先添加缺陷类别')
+                return
+                
+            # 检查每个类别目录是否存在
+            missing_dirs = []
+            for class_name in class_names:
+                train_class_dir = os.path.join(train_dir, class_name)
+                val_class_dir = os.path.join(val_dir, class_name)
+                
+                if not os.path.exists(train_class_dir):
+                    missing_dirs.append(f"训练集缺少类别目录: {train_class_dir}")
+                    
+                if not os.path.exists(val_class_dir):
+                    missing_dirs.append(f"验证集缺少类别目录: {val_class_dir}")
+                    
+            if missing_dirs:
+                error_msg = "\n".join(missing_dirs)
+                QMessageBox.warning(self, '警告', f'数据集目录结构不完整:\n{error_msg}\n\n请先创建完整的分类数据集目录结构')
+                return
+                
+            # 创建训练配置字典
+            training_config = {
+                'model': selected_model,
+                'task_type': task_type,
+                'batch_size': batch_size,
+                'learning_rate': learning_rate,
+                'epochs': epochs,
+                'optimizer': optimizer,
+                'lr_scheduler': lr_scheduler,
+                'weight_decay': weight_decay,
+                'use_pretrained': use_pretrained,
+                'use_mixed_precision': use_mixed_precision,
+                'use_early_stopping': use_early_stopping,
+                'patience': patience,
+                'class_weight': class_weight,
+                'metrics': metrics,
+                'use_tensorboard': use_tensorboard
+            }
+            
+        else:
+            # 目标检测任务
+            selected_model = self.detection_model_combo.currentText()
+            task_type = 'detection'
+            
+            # 基本训练参数
+            batch_size = self.detection_batch_size_spin.value()
+            learning_rate = self.detection_lr_spin.value()
+            epochs = self.detection_epochs_spin.value()
+            optimizer = self.detection_optimizer_combo.currentText()
+            lr_scheduler = self.detection_lr_scheduler_combo.currentText()
+            weight_decay = self.detection_weight_decay_spin.value()
+            
+            # 检测特有参数
+            iou_threshold = self.iou_threshold_spin.value()
+            nms_threshold = self.nms_threshold_spin.value()
+            conf_threshold = self.conf_threshold_spin.value()
+            anchor_size = self.anchor_size_combo.currentText()
+            use_fpn = self.use_fpn_checkbox.isChecked()
+            
+            # 评估指标
+            metrics = []
+            if self.map_checkbox.isChecked():
+                metrics.append('mAP')
+            if self.map50_checkbox.isChecked():
+                metrics.append('mAP_50')
+            if self.map75_checkbox.isChecked():
+                metrics.append('mAP_75')
+            if self.precision_curve_checkbox.isChecked():
+                metrics.append('precision_recall_curve')
+            if self.detection_speed_checkbox.isChecked():
+                metrics.append('fps')
+            
+            # 检查数据集是否符合目标检测任务的要求
+            # 这里简化处理，只检查目录是否存在
+            # 实际应用中可能需要检查XML文件或其他标注文件
+            xml_files = []
+            for root, _, files in os.walk(train_dir):
+                for file in files:
+                    if file.lower().endswith('.xml'):
+                        xml_files.append(os.path.join(root, file))
+                        
+            if not xml_files:
+                QMessageBox.warning(self, '警告', f'训练数据集中未找到XML标注文件\n请确保已完成目标检测标注')
+                return
+                
+            # 创建训练配置字典
+            training_config = {
+                'model': selected_model,
+                'task_type': task_type,
+                'batch_size': batch_size,
+                'learning_rate': learning_rate,
+                'epochs': epochs,
+                'optimizer': optimizer,
+                'lr_scheduler': lr_scheduler,
+                'weight_decay': weight_decay,
+                'iou_threshold': iou_threshold,
+                'nms_threshold': nms_threshold,
+                'conf_threshold': conf_threshold,
+                'anchor_size': anchor_size,
+                'use_fpn': use_fpn,
+                'metrics': metrics,
+                'use_tensorboard': use_tensorboard
+            }
+            
+        # 更新状态并启动训练
+        self.update_status(f'正在训练{selected_model}模型...')
+        self.train_model_btn.setEnabled(False)
+        self.stop_train_btn.setEnabled(True)
+        
+        # 打印训练配置（调试用）
+        print("训练配置:", training_config)
+        
+        # 发射训练信号，传递任务类型和模型名称
+        self.training_started.emit()
+
+        # 创建模型保存目录
+        model_save_dir = os.path.join(self.annotation_folder, 'models', selected_model)
+        os.makedirs(model_save_dir, exist_ok=True)
+        
+        # 如果启用了TensorBoard，设置TensorBoard日志目录
+        if use_tensorboard:
+            tensorboard_dir = os.path.join(model_save_dir, 'tensorboard_logs')
+            os.makedirs(tensorboard_dir, exist_ok=True)
+            self.tensorboard_widget.set_tensorboard_dir(tensorboard_dir)
+        
+        # 连接信号
+        self.worker.model_trainer.progress_updated.connect(self.update_training_progress)
+        self.worker.model_trainer.status_updated.connect(self.update_training_status)
+        self.worker.model_trainer.training_finished.connect(self.on_training_finished)
+        self.worker.model_trainer.training_error.connect(self.on_training_error)
+        self.worker.model_trainer.epoch_finished.connect(self.training_visualization.update_plots)
+
+    def stop_training(self):
+        self.update_status('正在停止训练...')
+        self.train_model_btn.setEnabled(True)
+        self.stop_train_btn.setEnabled(False)
+
+    def select_image(self):
+        file_name, _ = QFileDialog.getOpenFileName(
+            self, "选择图片", "", "图片文件 (*.png *.jpg *.jpeg)")
+        if file_name:
+            self.image_path = file_name
+            self.image_path_label.setText(file_name)
+            self.predict_btn.setEnabled(True)
+            self.update_status('已选择图片')
+            
+            # 显示图片
+            pixmap = QPixmap(file_name)
+            if not pixmap.isNull():
+                pixmap = pixmap.scaled(300, 300, Qt.KeepAspectRatio)
+                self.image_label.setPixmap(pixmap)
+
+    def predict(self):
+        if not self.image_path:
+            QMessageBox.warning(self, '警告', '请先选择图片')
+            return
+        self.update_status('正在预测...')
+        self.prediction_started.emit()
+
     def update_training_progress(self, value):
         self.training_progress_bar.setValue(value)
 
@@ -3268,3 +4261,231 @@ class MainWindow(QMainWindow):
         if folder:
             self.default_batch_target_path.setText(folder)
             self.update_status('已选择默认批量预测目标文件夹')
+
+    def create_about_tab(self, parent):
+        """创建关于标签页，提供模型信息和下载链接"""
+        layout = QVBoxLayout(parent)
+        
+        # 添加标题
+        title_label = QLabel("关于模型")
+        title_label.setFont(QFont('Arial', 16, QFont.Bold))
+        title_label.setAlignment(Qt.AlignCenter)
+        layout.addWidget(title_label)
+        
+        # 添加说明
+        description_label = QLabel("本系统支持多种深度学习模型用于图像分类和目标检测任务。以下是可用模型的详细信息和下载链接。")
+        description_label.setWordWrap(True)
+        description_label.setStyleSheet("color: #555; margin: 10px 0; font-size: 12px;")
+        layout.addWidget(description_label)
+        
+        # 创建滚动区域
+        scroll_area = QScrollArea()
+        scroll_area.setWidgetResizable(True)
+        scroll_content = QWidget()
+        scroll_layout = QVBoxLayout(scroll_content)
+        
+        # 分类模型组
+        classification_group = QGroupBox("图像分类模型")
+        classification_layout = QVBoxLayout()
+        
+        # ResNet系列
+        resnet_group = QGroupBox("ResNet系列")
+        resnet_layout = QVBoxLayout()
+        
+        resnet18_text = QTextEdit()
+        resnet18_text.setReadOnly(True)
+        resnet18_text.setHtml("""
+            <h3>ResNet18</h3>
+            <p><strong>简介：</strong>ResNet18是ResNet系列中最轻量级的模型，具有18层深度，适合资源受限的场景。</p>
+            <p><strong>特点：</strong>
+                <ul>
+                    <li>参数量：约11.7M</li>
+                    <li>适用场景：资源受限设备、实时应用</li>
+                    <li>优势：速度快、资源占用少</li>
+                </ul>
+            </p>
+            <p><strong>下载链接：</strong><a href="https://download.pytorch.org/models/resnet18-5c106cde.pth">PyTorch官方预训练模型</a></p>
+        """)
+        resnet_layout.addWidget(resnet18_text)
+        
+        resnet50_text = QTextEdit()
+        resnet50_text.setReadOnly(True)
+        resnet50_text.setHtml("""
+            <h3>ResNet50</h3>
+            <p><strong>简介：</strong>ResNet50是ResNet系列中平衡性能和资源占用的中型模型，具有50层深度。</p>
+            <p><strong>特点：</strong>
+                <ul>
+                    <li>参数量：约25.6M</li>
+                    <li>适用场景：通用图像分类任务</li>
+                    <li>优势：性能与效率的良好平衡</li>
+                </ul>
+            </p>
+            <p><strong>下载链接：</strong><a href="https://download.pytorch.org/models/resnet50-19c8e357.pth">PyTorch官方预训练模型</a></p>
+        """)
+        resnet_layout.addWidget(resnet50_text)
+        
+        resnet_group.setLayout(resnet_layout)
+        classification_layout.addWidget(resnet_group)
+        
+        # EfficientNet系列
+        efficientnet_group = QGroupBox("EfficientNet系列")
+        efficientnet_layout = QVBoxLayout()
+        
+        efficientnet_b0_text = QTextEdit()
+        efficientnet_b0_text.setReadOnly(True)
+        efficientnet_b0_text.setHtml("""
+            <h3>EfficientNet-B0</h3>
+            <p><strong>简介：</strong>EfficientNet-B0是EfficientNet系列中最基础的模型，通过复合缩放方法实现高效率。</p>
+            <p><strong>特点：</strong>
+                <ul>
+                    <li>参数量：约5.3M</li>
+                    <li>适用场景：移动设备、边缘计算</li>
+                    <li>优势：高效率、低延迟</li>
+                </ul>
+            </p>
+            <p><strong>下载链接：</strong><a href="https://github.com/lukemelas/EfficientNet-PyTorch/releases/download/1.0/efficientnet-b0-355c32eb.pth">预训练模型</a></p>
+        """)
+        efficientnet_layout.addWidget(efficientnet_b0_text)
+        
+        efficientnet_group.setLayout(efficientnet_layout)
+        classification_layout.addWidget(efficientnet_group)
+        
+        # MobileNet系列
+        mobilenet_group = QGroupBox("MobileNet系列")
+        mobilenet_layout = QVBoxLayout()
+        
+        mobilenetv2_text = QTextEdit()
+        mobilenetv2_text.setReadOnly(True)
+        mobilenetv2_text.setHtml("""
+            <h3>MobileNetV2</h3>
+            <p><strong>简介：</strong>MobileNetV2是专为移动设备设计的轻量级模型，采用倒残差结构和线性瓶颈。</p>
+            <p><strong>特点：</strong>
+                <ul>
+                    <li>参数量：约3.5M</li>
+                    <li>适用场景：移动应用、实时处理</li>
+                    <li>优势：极低的计算成本、适合资源受限设备</li>
+                </ul>
+            </p>
+            <p><strong>下载链接：</strong><a href="https://download.pytorch.org/models/mobilenet_v2-b0353104.pth">PyTorch官方预训练模型</a></p>
+        """)
+        mobilenet_layout.addWidget(mobilenetv2_text)
+        
+        mobilenet_group.setLayout(mobilenet_layout)
+        classification_layout.addWidget(mobilenet_group)
+        
+        # DenseNet系列
+        densenet_group = QGroupBox("DenseNet系列")
+        densenet_layout = QVBoxLayout()
+        
+        densenet121_text = QTextEdit()
+        densenet121_text.setReadOnly(True)
+        densenet121_text.setHtml("""
+            <h3>DenseNet121</h3>
+            <p><strong>简介：</strong>DenseNet121采用密集连接结构，每层都与之前的所有层直接相连，提高了特征重用和梯度流动。</p>
+            <p><strong>特点：</strong>
+                <ul>
+                    <li>参数量：约8M</li>
+                    <li>适用场景：需要丰富特征表示的任务</li>
+                    <li>优势：参数效率高、减轻梯度消失问题</li>
+                </ul>
+            </p>
+            <p><strong>下载链接：</strong><a href="https://download.pytorch.org/models/densenet121-a639ec97.pth">PyTorch官方预训练模型</a></p>
+        """)
+        densenet_layout.addWidget(densenet121_text)
+        
+        densenet_group.setLayout(densenet_layout)
+        classification_layout.addWidget(densenet_group)
+        
+        classification_group.setLayout(classification_layout)
+        scroll_layout.addWidget(classification_group)
+        
+        # 目标检测模型组
+        detection_group = QGroupBox("目标检测模型")
+        detection_layout = QVBoxLayout()
+        
+        # YOLO系列
+        yolo_group = QGroupBox("YOLO系列")
+        yolo_layout = QVBoxLayout()
+        
+        yolov5_text = QTextEdit()
+        yolov5_text.setReadOnly(True)
+        yolov5_text.setHtml("""
+            <h3>YOLOv5</h3>
+            <p><strong>简介：</strong>YOLOv5是一款高效的目标检测模型，提供了从轻量级到大型的多种版本（n、s、m、l、x）。</p>
+            <p><strong>特点：</strong>
+                <ul>
+                    <li>参数量：1.9M(n)到86.7M(x)</li>
+                    <li>适用场景：实时目标检测、多目标跟踪</li>
+                    <li>优势：速度快、精度高、易于部署</li>
+                </ul>
+            </p>
+            <p><strong>下载链接：</strong><a href="https://github.com/ultralytics/yolov5/releases/download/v7.0/yolov5s.pt">YOLOv5s</a> | 
+            <a href="https://github.com/ultralytics/yolov5/releases/download/v7.0/yolov5m.pt">YOLOv5m</a> | 
+            <a href="https://github.com/ultralytics/yolov5/releases/download/v7.0/yolov5l.pt">YOLOv5l</a></p>
+        """)
+        yolo_layout.addWidget(yolov5_text)
+        
+        yolo_group.setLayout(yolo_layout)
+        detection_layout.addWidget(yolo_group)
+        
+        # Faster R-CNN
+        rcnn_group = QGroupBox("R-CNN系列")
+        rcnn_layout = QVBoxLayout()
+        
+        faster_rcnn_text = QTextEdit()
+        faster_rcnn_text.setReadOnly(True)
+        faster_rcnn_text.setHtml("""
+            <h3>Faster R-CNN</h3>
+            <p><strong>简介：</strong>Faster R-CNN是一种两阶段目标检测模型，包含区域提议网络(RPN)和检测网络。</p>
+            <p><strong>特点：</strong>
+                <ul>
+                    <li>参数量：约41.7M</li>
+                    <li>适用场景：高精度目标检测任务</li>
+                    <li>优势：检测精度高、对小目标敏感</li>
+                </ul>
+            </p>
+            <p><strong>下载链接：</strong><a href="https://download.pytorch.org/models/fasterrcnn_resnet50_fpn_coco-258fb6c6.pth">PyTorch官方预训练模型</a></p>
+        """)
+        rcnn_layout.addWidget(faster_rcnn_text)
+        
+        rcnn_group.setLayout(rcnn_layout)
+        detection_layout.addWidget(rcnn_group)
+        
+        detection_group.setLayout(detection_layout)
+        scroll_layout.addWidget(detection_group)
+        
+        # 添加模型使用说明
+        usage_group = QGroupBox("模型使用说明")
+        usage_layout = QVBoxLayout()
+        
+        usage_text = QTextEdit()
+        usage_text.setReadOnly(True)
+        usage_text.setHtml("""
+            <h3>如何使用预训练模型</h3>
+            <p>1. 在"模型训练"标签页中选择合适的模型架构</p>
+            <p>2. 勾选"使用预训练模型"选项</p>
+            <p>3. 系统会自动下载并加载预训练权重</p>
+            <p>4. 如需手动加载预训练模型，请下载对应链接的模型文件，并放置在models/pretrained目录下</p>
+            
+            <h3>模型选择建议</h3>
+            <p><strong>图像分类任务：</strong></p>
+            <ul>
+                <li>资源受限场景：MobileNetV2、EfficientNet-B0</li>
+                <li>平衡场景：ResNet18、ResNet50</li>
+                <li>高精度需求：DenseNet121、ResNet101</li>
+            </ul>
+            
+            <p><strong>目标检测任务：</strong></p>
+            <ul>
+                <li>实时检测：YOLOv5s、YOLOv5n</li>
+                <li>平衡场景：YOLOv5m</li>
+                <li>高精度需求：YOLOv5l、Faster R-CNN</li>
+            </ul>
+        """)
+        usage_layout.addWidget(usage_text)
+        
+        usage_group.setLayout(usage_layout)
+        scroll_layout.addWidget(usage_group)
+        
+        scroll_area.setWidget(scroll_content)
+        layout.addWidget(scroll_area)
