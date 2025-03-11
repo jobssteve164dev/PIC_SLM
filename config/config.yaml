@@ -1,39 +1,22 @@
-# 半导体芯片缺陷检测系统配置文件
-
-# 图像预处理设置
-preprocessing:
-  default_size: "224x224"  # 默认图像尺寸
-  default_format: "jpg"    # 默认图像格式
-  default_train_ratio: 0.8 # 默认训练集比例
-  default_augmentation: "基础" # 默认数据增强级别
-
-# 模型训练设置
-training:
-  default_model: "ResNet50"  # 默认模型
-  default_batch_size: 32     # 默认批次大小
-  default_learning_rate: 0.001 # 默认学习率
-  default_epochs: 20         # 默认训练轮数
-  use_gpu: true              # 是否使用GPU
-  save_best_only: true       # 是否只保存最佳模型
-
-# 缺陷类别设置
 defect_classes:
-  # 预定义的缺陷类别，可根据实际情况修改
-  - "划痕"
-  - "污点"
-  - "缺失"
-  - "变形"
-  - "异物"
-
-# 界面设置
-ui:
-  window_width: 1200
-  window_height: 900
-  style: "Fusion"
-  language: "zh_CN"
-
-# 路径设置
+- 划痕
+- 污点
+- 缺失
+- 变形
+- 异物
 paths:
-  default_data_dir: "data/raw"
-  default_output_dir: "data/processed"
-  model_save_dir: "models/saved_models" 
+  auto_annotation: true
+  default_annotation_dir: E:/PIC_SLM/TEST/OUTPUT/annotations
+  default_output_dir: E:/PIC_SLM/TEST/OUTPUT
+  default_processed_dir: E:/PIC_SLM/TEST/OUTPUT/dataset/train
+  default_source_dir: E:/PIC_SLM/TEST/SOURCE
+preprocessing:
+  default_augmentation: 基础
+  default_format: jpg
+  default_size: 224x224
+  default_train_ratio: 0.8
+training:
+  default_batch_size: 32
+  default_epochs: 20
+  default_learning_rate: 0.001
+  default_model: ResNet50
