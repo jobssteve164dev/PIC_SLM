@@ -98,12 +98,20 @@ def main():
     )
     window.stop_train_btn.clicked.connect(worker.model_trainer.stop)
     
-    # 预测信号
+    # 单张预测信号
     worker.predictor.prediction_error.connect(lambda msg: QMessageBox.critical(window, '错误', msg))
     window.prediction_started.connect(
         lambda: worker.predictor.predict(window.image_path)
     )
     worker.predictor.prediction_finished.connect(window.update_prediction_result)
+    
+    # 批量预测信号
+    worker.predictor.batch_prediction_progress.connect(window.update_batch_progress)
+    worker.predictor.batch_prediction_status.connect(window.update_batch_status)
+    worker.predictor.batch_prediction_finished.connect(window.on_batch_prediction_finished)
+    
+    # 将Worker实例保存到window中，以便在UI中访问
+    window.worker = worker
     
     # 显示主窗口
     window.show()

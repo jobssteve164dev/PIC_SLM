@@ -4,7 +4,8 @@ from PyQt5.QtWidgets import (QMainWindow, QWidget, QVBoxLayout, QPushButton,
                            QTabWidget, QListWidget, QListWidgetItem, QGridLayout,
                            QGroupBox, QRadioButton, QButtonGroup, QScrollArea,
                            QSizePolicy, QFrame, QSlider, QLineEdit, QInputDialog,
-                           QCheckBox, QStackedWidget, QToolTip, QApplication)
+                           QCheckBox, QStackedWidget, QToolTip, QApplication,
+                           QTextEdit)
 from PyQt5.QtCore import Qt, pyqtSignal, QSize
 from PyQt5.QtGui import QFont, QPixmap, QImage
 import os
@@ -1172,14 +1173,22 @@ class MainWindow(QMainWindow):
 
     def create_prediction_tab(self, parent):
         layout = QVBoxLayout(parent)
-
+        
+        # 创建选项卡，分为单张预测和批量预测两个子标签页
+        predict_tab_widget = QTabWidget()
+        layout.addWidget(predict_tab_widget)
+        
+        # 单张预测子标签页
+        single_predict_tab = QWidget()
+        single_predict_layout = QVBoxLayout(single_predict_tab)
+        
         # 选择图片
         select_image_layout = QHBoxLayout()
         self.select_image_btn = QPushButton('选择图片')
         self.image_path_label = QLabel('未选择图片')
         select_image_layout.addWidget(self.select_image_btn)
         select_image_layout.addWidget(self.image_path_label)
-        layout.addLayout(select_image_layout)
+        single_predict_layout.addLayout(select_image_layout)
 
         # 预测结果显示区域
         result_group = QGroupBox("预测结果")
@@ -1196,16 +1205,153 @@ class MainWindow(QMainWindow):
         result_layout.addWidget(self.result_list)
         
         result_group.setLayout(result_layout)
-        layout.addWidget(result_group)
+        single_predict_layout.addWidget(result_group)
 
         # 预测按钮
         self.predict_btn = QPushButton('开始预测')
         self.predict_btn.setEnabled(False)
-        layout.addWidget(self.predict_btn)
+        single_predict_layout.addWidget(self.predict_btn)
         
         # 绑定事件
         self.select_image_btn.clicked.connect(self.select_image)
         self.predict_btn.clicked.connect(self.predict)
+        
+        # 添加单张预测子标签页
+        predict_tab_widget.addTab(single_predict_tab, "单张预测")
+        
+        # 批量预测子标签页
+        batch_predict_tab = QWidget()
+        batch_predict_layout = QVBoxLayout(batch_predict_tab)
+        
+        # 1. 模型选择
+        model_group = QGroupBox("1. 选择模型")
+        model_layout = QVBoxLayout()
+        
+        model_select_layout = QHBoxLayout()
+        self.select_model_btn = QPushButton('选择模型文件')
+        self.model_path_label = QLabel('未选择模型')
+        model_select_layout.addWidget(self.select_model_btn)
+        model_select_layout.addWidget(self.model_path_label)
+        model_layout.addLayout(model_select_layout)
+        
+        class_info_layout = QHBoxLayout()
+        self.select_class_info_btn = QPushButton('选择类别信息文件')
+        self.class_info_path_label = QLabel('未选择类别信息')
+        class_info_layout.addWidget(self.select_class_info_btn)
+        class_info_layout.addWidget(self.class_info_path_label)
+        model_layout.addLayout(class_info_layout)
+        
+        self.load_model_btn = QPushButton('加载模型')
+        self.load_model_btn.setEnabled(False)
+        model_layout.addWidget(self.load_model_btn)
+        
+        model_group.setLayout(model_layout)
+        batch_predict_layout.addWidget(model_group)
+        
+        # 2. 源文件夹选择
+        source_group = QGroupBox("2. 选择源图片文件夹")
+        source_layout = QVBoxLayout()
+        
+        source_select_layout = QHBoxLayout()
+        self.select_batch_source_btn = QPushButton('选择源文件夹')
+        self.batch_source_path_label = QLabel('未选择文件夹')
+        source_select_layout.addWidget(self.select_batch_source_btn)
+        source_select_layout.addWidget(self.batch_source_path_label)
+        source_layout.addLayout(source_select_layout)
+        
+        source_group.setLayout(source_layout)
+        batch_predict_layout.addWidget(source_group)
+        
+        # 3. 目标文件夹选择
+        target_group = QGroupBox("3. 选择目标文件夹")
+        target_layout = QVBoxLayout()
+        
+        target_select_layout = QHBoxLayout()
+        self.select_batch_target_btn = QPushButton('选择目标文件夹')
+        self.batch_target_path_label = QLabel('未选择文件夹')
+        target_select_layout.addWidget(self.select_batch_target_btn)
+        target_select_layout.addWidget(self.batch_target_path_label)
+        target_layout.addLayout(target_select_layout)
+        
+        target_group.setLayout(target_layout)
+        batch_predict_layout.addWidget(target_group)
+        
+        # 4. 批量预测选项
+        options_group = QGroupBox("4. 预测选项")
+        options_layout = QVBoxLayout()
+        
+        # 置信度阈值
+        threshold_layout = QHBoxLayout()
+        threshold_layout.addWidget(QLabel('置信度阈值:'))
+        self.confidence_threshold_spin = QDoubleSpinBox()
+        self.confidence_threshold_spin.setRange(0, 100)
+        self.confidence_threshold_spin.setValue(50)
+        self.confidence_threshold_spin.setSuffix('%')
+        threshold_layout.addWidget(self.confidence_threshold_spin)
+        options_layout.addLayout(threshold_layout)
+        
+        # 文件处理模式
+        mode_layout = QHBoxLayout()
+        mode_layout.addWidget(QLabel('文件处理模式:'))
+        self.copy_radio = QRadioButton('复制')
+        self.move_radio = QRadioButton('移动')
+        self.copy_radio.setChecked(True)
+        mode_layout.addWidget(self.copy_radio)
+        mode_layout.addWidget(self.move_radio)
+        options_layout.addLayout(mode_layout)
+        
+        # 创建子文件夹选项
+        self.create_subfolders_checkbox = QCheckBox('为每个类别创建子文件夹')
+        self.create_subfolders_checkbox.setChecked(True)
+        options_layout.addWidget(self.create_subfolders_checkbox)
+        
+        options_group.setLayout(options_layout)
+        batch_predict_layout.addWidget(options_group)
+        
+        # 5. 批量预测进度和结果
+        progress_group = QGroupBox("5. 预测进度和结果")
+        progress_layout = QVBoxLayout()
+        
+        # 进度条
+        self.batch_progress_bar = QProgressBar()
+        progress_layout.addWidget(self.batch_progress_bar)
+        
+        # 状态标签
+        self.batch_status_label = QLabel('就绪')
+        progress_layout.addWidget(self.batch_status_label)
+        
+        # 结果统计
+        self.batch_result_text = QTextEdit()
+        self.batch_result_text.setReadOnly(True)
+        self.batch_result_text.setMinimumHeight(150)
+        progress_layout.addWidget(self.batch_result_text)
+        
+        progress_group.setLayout(progress_layout)
+        batch_predict_layout.addWidget(progress_group)
+        
+        # 批量预测按钮
+        buttons_layout = QHBoxLayout()
+        self.batch_predict_btn = QPushButton('开始批量预测')
+        self.batch_predict_btn.setEnabled(False)
+        buttons_layout.addWidget(self.batch_predict_btn)
+        
+        self.stop_batch_btn = QPushButton('停止')
+        self.stop_batch_btn.setEnabled(False)
+        buttons_layout.addWidget(self.stop_batch_btn)
+        
+        batch_predict_layout.addLayout(buttons_layout)
+        
+        # 绑定批量预测事件
+        self.select_model_btn.clicked.connect(self.select_model_file)
+        self.select_class_info_btn.clicked.connect(self.select_class_info_file)
+        self.load_model_btn.clicked.connect(self.load_prediction_model)
+        self.select_batch_source_btn.clicked.connect(self.select_batch_source_folder)
+        self.select_batch_target_btn.clicked.connect(self.select_batch_target_folder)
+        self.batch_predict_btn.clicked.connect(self.start_batch_predict)
+        self.stop_batch_btn.clicked.connect(self.stop_batch_predict)
+        
+        # 添加批量预测子标签页
+        predict_tab_widget.addTab(batch_predict_tab, "批量预测")
 
     def select_source_folder(self):
         folder = QFileDialog.getExistingDirectory(self, "选择源图片文件夹")
@@ -1612,6 +1758,23 @@ class MainWindow(QMainWindow):
         # 发射训练信号，传递任务类型和模型名称
         self.training_started.emit()
 
+        # 创建模型保存目录
+        model_save_dir = os.path.join(self.annotation_folder, 'models', selected_model)
+        os.makedirs(model_save_dir, exist_ok=True)
+        
+        # 如果启用了TensorBoard，设置TensorBoard日志目录
+        if use_tensorboard:
+            tensorboard_dir = os.path.join(model_save_dir, 'tensorboard_logs')
+            os.makedirs(tensorboard_dir, exist_ok=True)
+            self.tensorboard_widget.set_tensorboard_dir(tensorboard_dir)
+        
+        # 连接信号
+        self.worker.model_trainer.progress_updated.connect(self.update_training_progress)
+        self.worker.model_trainer.status_updated.connect(self.update_training_status)
+        self.worker.model_trainer.training_finished.connect(self.on_training_finished)
+        self.worker.model_trainer.training_error.connect(self.on_training_error)
+        self.worker.model_trainer.epoch_finished.connect(self.training_visualization.update_plots)
+
     def stop_training(self):
         """停止模型训练"""
         # 实现停止训练的逻辑
@@ -1750,6 +1913,59 @@ class MainWindow(QMainWindow):
         annotation_tip.setStyleSheet("color: gray; font-size: 10px;")
         paths_layout.addWidget(annotation_tip)
         
+        # 批量预测相关路径设置
+        # 默认模型文件
+        model_layout = QHBoxLayout()
+        model_layout.addWidget(QLabel("默认模型文件:"))
+        self.default_model_path = QLineEdit()
+        self.default_model_path.setReadOnly(True)
+        self.select_default_model_btn = QPushButton("选择")
+        model_layout.addWidget(self.default_model_path)
+        model_layout.addWidget(self.select_default_model_btn)
+        paths_layout.addLayout(model_layout)
+        model_tip = QLabel("提示: 默认使用的模型文件路径")
+        model_tip.setStyleSheet("color: gray; font-size: 10px;")
+        paths_layout.addWidget(model_tip)
+        
+        # 默认类别信息文件
+        class_info_layout = QHBoxLayout()
+        class_info_layout.addWidget(QLabel("默认类别信息文件:"))
+        self.default_class_info_path = QLineEdit()
+        self.default_class_info_path.setReadOnly(True)
+        self.select_default_class_info_btn = QPushButton("选择")
+        class_info_layout.addWidget(self.default_class_info_path)
+        class_info_layout.addWidget(self.select_default_class_info_btn)
+        paths_layout.addLayout(class_info_layout)
+        class_info_tip = QLabel("提示: 默认使用的类别信息文件路径")
+        class_info_tip.setStyleSheet("color: gray; font-size: 10px;")
+        paths_layout.addWidget(class_info_tip)
+        
+        # 默认批量预测源文件夹
+        batch_source_layout = QHBoxLayout()
+        batch_source_layout.addWidget(QLabel("默认批量预测源文件夹:"))
+        self.default_batch_source_path = QLineEdit()
+        self.default_batch_source_path.setReadOnly(True)
+        self.select_default_batch_source_btn = QPushButton("选择")
+        batch_source_layout.addWidget(self.default_batch_source_path)
+        batch_source_layout.addWidget(self.select_default_batch_source_btn)
+        paths_layout.addLayout(batch_source_layout)
+        batch_source_tip = QLabel("提示: 存放待批量预测图片的文件夹")
+        batch_source_tip.setStyleSheet("color: gray; font-size: 10px;")
+        paths_layout.addWidget(batch_source_tip)
+        
+        # 默认批量预测目标文件夹
+        batch_target_layout = QHBoxLayout()
+        batch_target_layout.addWidget(QLabel("默认批量预测目标文件夹:"))
+        self.default_batch_target_path = QLineEdit()
+        self.default_batch_target_path.setReadOnly(True)
+        self.select_default_batch_target_btn = QPushButton("选择")
+        batch_target_layout.addWidget(self.default_batch_target_path)
+        batch_target_layout.addWidget(self.select_default_batch_target_btn)
+        paths_layout.addLayout(batch_target_layout)
+        batch_target_tip = QLabel("提示: 存放批量预测结果的文件夹")
+        batch_target_tip.setStyleSheet("color: gray; font-size: 10px;")
+        paths_layout.addWidget(batch_target_tip)
+        
         # 自动设置标注文件夹为输出目录的子文件夹
         auto_annotation_layout = QHBoxLayout()
         self.auto_annotation_checkbox = QCheckBox("自动设置标注文件夹为输出目录的子文件夹")
@@ -1790,6 +2006,10 @@ class MainWindow(QMainWindow):
         self.select_default_output_btn.clicked.connect(self.select_default_output_folder)
         self.select_default_processed_btn.clicked.connect(self.select_default_processed_folder)
         self.select_default_annotation_btn.clicked.connect(self.select_default_annotation_folder)
+        self.select_default_model_btn.clicked.connect(self.select_default_model_file)
+        self.select_default_class_info_btn.clicked.connect(self.select_default_class_info_file)
+        self.select_default_batch_source_btn.clicked.connect(self.select_default_batch_source_folder)
+        self.select_default_batch_target_btn.clicked.connect(self.select_default_batch_target_folder)
         self.settings_add_class_btn.clicked.connect(self.settings_add_defect_class)
         self.settings_remove_class_btn.clicked.connect(self.settings_remove_defect_class)
         self.save_settings_btn.clicked.connect(self.save_settings)
@@ -1855,26 +2075,6 @@ class MainWindow(QMainWindow):
             config_loader = ConfigLoader()
             config = config_loader.get_config()
             
-            # 加载路径设置
-            paths = config.get('paths', {})
-            self.default_source_path.setText(paths.get('default_source_dir', ''))
-            self.default_output_path.setText(paths.get('default_output_dir', ''))
-            self.default_processed_path.setText(paths.get('default_processed_dir', ''))
-            
-            # 处理自动标注文件夹模式
-            auto_annotation = paths.get('auto_annotation', True)
-            self.auto_annotation_checkbox.setChecked(auto_annotation)
-            
-            if auto_annotation and paths.get('default_output_dir', ''):
-                # 自动设置标注文件夹为输出目录的子文件夹
-                annotation_dir = os.path.join(paths.get('default_output_dir', ''), 'annotations')
-                self.default_annotation_path.setText(annotation_dir)
-                self.select_default_annotation_btn.setEnabled(False)
-            else:
-                # 使用配置中的标注文件夹或空
-                self.default_annotation_path.setText(paths.get('default_annotation_dir', ''))
-                self.select_default_annotation_btn.setEnabled(True)
-            
             # 加载缺陷类别
             defect_classes = config.get('defect_classes', [])
             self.settings_class_list.clear()
@@ -1887,6 +2087,14 @@ class MainWindow(QMainWindow):
             default_output_dir = paths_config.get('default_output_dir', '')
             default_processed_dir = paths_config.get('default_processed_dir', '')
             default_annotation_dir = paths_config.get('default_annotation_dir', '')
+            auto_annotation = paths_config.get('auto_annotation', True)
+            
+            # 加载批量预测路径配置
+            prediction_paths = config.get('prediction_paths', {})
+            default_model_path = prediction_paths.get('default_model_path', '')
+            default_class_info_path = prediction_paths.get('default_class_info_path', '')
+            default_batch_source_path = prediction_paths.get('default_batch_source_path', '')
+            default_batch_target_path = prediction_paths.get('default_batch_target_path', '')
             
             # 标准化路径格式
             if default_source_dir:
@@ -1897,6 +2105,27 @@ class MainWindow(QMainWindow):
                 default_processed_dir = os.path.normpath(default_processed_dir).replace('\\', '/')
             if default_annotation_dir:
                 default_annotation_dir = os.path.normpath(default_annotation_dir).replace('\\', '/')
+            if default_model_path:
+                default_model_path = os.path.normpath(default_model_path).replace('\\', '/')
+            if default_class_info_path:
+                default_class_info_path = os.path.normpath(default_class_info_path).replace('\\', '/')
+            if default_batch_source_path:
+                default_batch_source_path = os.path.normpath(default_batch_source_path).replace('\\', '/')
+            if default_batch_target_path:
+                default_batch_target_path = os.path.normpath(default_batch_target_path).replace('\\', '/')
+            
+            # 设置UI中的路径
+            self.default_source_path.setText(default_source_dir)
+            self.default_output_path.setText(default_output_dir)
+            self.default_processed_path.setText(default_processed_dir)
+            self.default_annotation_path.setText(default_annotation_dir)
+            self.auto_annotation_checkbox.setChecked(auto_annotation)
+            
+            # 设置批量预测路径
+            self.default_model_path.setText(default_model_path)
+            self.default_class_info_path.setText(default_class_info_path)
+            self.default_batch_source_path.setText(default_batch_source_path)
+            self.default_batch_target_path.setText(default_batch_target_path)
             
             # 设置初始文件夹
             if default_source_dir and os.path.exists(default_source_dir):
@@ -1924,12 +2153,42 @@ class MainWindow(QMainWindow):
                     if hasattr(self, 'train_model_btn'):
                         self.train_model_btn.setEnabled(True)
             
+            # 设置批量预测初始文件夹
+            if default_model_path and os.path.exists(default_model_path):
+                self.model_path = default_model_path
+                if hasattr(self, 'model_path_label'):
+                    self.model_path_label.setText(default_model_path)
+                    
+            if default_class_info_path and os.path.exists(default_class_info_path):
+                self.class_info_path = default_class_info_path
+                if hasattr(self, 'class_info_path_label'):
+                    self.class_info_path_label.setText(default_class_info_path)
+                    
+            if default_batch_source_path and os.path.exists(default_batch_source_path):
+                self.batch_source_folder = default_batch_source_path
+                if hasattr(self, 'batch_source_path_label'):
+                    self.batch_source_path_label.setText(default_batch_source_path)
+                    
+            if default_batch_target_path and os.path.exists(default_batch_target_path):
+                self.batch_target_folder = default_batch_target_path
+                if hasattr(self, 'batch_target_path_label'):
+                    self.batch_target_path_label.setText(default_batch_target_path)
+            
             # 检查是否可以启用开始处理按钮
-            self.check_preprocess_ready()
+            if hasattr(self, 'check_preprocess_ready'):
+                self.check_preprocess_ready()
             
             # 检查是否可以启用标注按钮
             if hasattr(self, 'check_annotation_ready'):
                 self.check_annotation_ready()
+                
+            # 检查批量预测是否准备就绪
+            if hasattr(self, 'check_batch_predict_ready'):
+                self.check_batch_predict_ready()
+                
+            # 检查模型是否准备就绪
+            if hasattr(self, 'check_model_ready'):
+                self.check_model_ready()
                 
         except Exception as e:
             print(f"加载设置时出错: {str(e)}")
@@ -2851,3 +3110,161 @@ class MainWindow(QMainWindow):
                 
         except Exception as e:
             print(f"加载训练参数时出错: {str(e)}")
+
+    # 批量预测相关方法
+    def select_model_file(self):
+        """选择模型文件"""
+        file_name, _ = QFileDialog.getOpenFileName(
+            self, "选择模型文件", "", "模型文件 (*.pth)")
+        if file_name:
+            self.model_path = file_name
+            self.model_path_label.setText(file_name)
+            self.update_status('已选择模型文件')
+            self.check_model_ready()
+    
+    def select_class_info_file(self):
+        """选择类别信息文件"""
+        file_name, _ = QFileDialog.getOpenFileName(
+            self, "选择类别信息文件", "", "JSON文件 (*.json)")
+        if file_name:
+            self.class_info_path = file_name
+            self.class_info_path_label.setText(file_name)
+            self.update_status('已选择类别信息文件')
+            self.check_model_ready()
+    
+    def check_model_ready(self):
+        """检查模型和类别信息是否都已选择"""
+        if hasattr(self, 'model_path') and self.model_path and hasattr(self, 'class_info_path') and self.class_info_path:
+            self.load_model_btn.setEnabled(True)
+        else:
+            self.load_model_btn.setEnabled(False)
+    
+    def load_prediction_model(self):
+        """加载预测模型"""
+        try:
+            self.update_status('正在加载模型...')
+            self.worker.predictor.load_model(self.model_path, self.class_info_path)
+            self.update_status('模型加载成功')
+            self.check_batch_predict_ready()
+        except Exception as e:
+            QMessageBox.critical(self, '错误', f'加载模型时出错: {str(e)}')
+    
+    def select_batch_source_folder(self):
+        """选择批量预测的源图片文件夹"""
+        folder = QFileDialog.getExistingDirectory(self, "选择源图片文件夹")
+        if folder:
+            self.batch_source_folder = folder
+            self.batch_source_path_label.setText(folder)
+            self.update_status('已选择源图片文件夹')
+            self.check_batch_predict_ready()
+    
+    def select_batch_target_folder(self):
+        """选择批量预测的目标文件夹"""
+        folder = QFileDialog.getExistingDirectory(self, "选择目标文件夹")
+        if folder:
+            self.batch_target_folder = folder
+            self.batch_target_path_label.setText(folder)
+            self.update_status('已选择目标文件夹')
+            self.check_batch_predict_ready()
+    
+    def check_batch_predict_ready(self):
+        """检查批量预测是否准备就绪"""
+        if (hasattr(self, 'batch_source_folder') and self.batch_source_folder and 
+            hasattr(self, 'batch_target_folder') and self.batch_target_folder and
+            hasattr(self.worker.predictor, 'model') and self.worker.predictor.model is not None):
+            self.batch_predict_btn.setEnabled(True)
+        else:
+            self.batch_predict_btn.setEnabled(False)
+    
+    def start_batch_predict(self):
+        """开始批量预测"""
+        if not hasattr(self, 'batch_source_folder') or not self.batch_source_folder:
+            QMessageBox.warning(self, '警告', '请先选择源图片文件夹')
+            return
+        if not hasattr(self, 'batch_target_folder') or not self.batch_target_folder:
+            QMessageBox.warning(self, '警告', '请先选择目标文件夹')
+            return
+        
+        # 准备参数
+        params = {
+            'source_folder': self.batch_source_folder,
+            'target_folder': self.batch_target_folder,
+            'confidence_threshold': self.confidence_threshold_spin.value(),
+            'copy_mode': 'copy' if self.copy_radio.isChecked() else 'move',
+            'create_subfolders': self.create_subfolders_checkbox.isChecked()
+        }
+        
+        # 更新UI状态
+        self.batch_predict_btn.setEnabled(False)
+        self.stop_batch_btn.setEnabled(True)
+        self.batch_progress_bar.setValue(0)
+        self.batch_status_label.setText('正在准备批量预测...')
+        self.batch_result_text.clear()
+        
+        # 开始批量预测
+        self.update_status('正在进行批量预测...')
+        self.worker.predictor.batch_predict(params)
+    
+    def stop_batch_predict(self):
+        """停止批量预测"""
+        self.worker.predictor.stop_batch_processing()
+        self.batch_status_label.setText('正在停止批量预测...')
+        self.update_status('正在停止批量预测...')
+    
+    def update_batch_progress(self, value):
+        """更新批量预测进度"""
+        self.batch_progress_bar.setValue(value)
+    
+    def update_batch_status(self, message):
+        """更新批量预测状态"""
+        self.batch_status_label.setText(message)
+    
+    def on_batch_prediction_finished(self, results):
+        """批量预测完成后的处理"""
+        # 更新UI状态
+        self.batch_predict_btn.setEnabled(True)
+        self.stop_batch_btn.setEnabled(False)
+        
+        # 显示结果统计
+        result_text = f"批量预测完成！\n\n"
+        result_text += f"总图片数: {results['total']}\n"
+        result_text += f"已处理: {results['processed']}\n"
+        result_text += f"已分类: {results['classified']}\n"
+        result_text += f"未分类: {results['unclassified']}\n\n"
+        
+        result_text += "各类别统计:\n"
+        for class_name, count in results['class_counts'].items():
+            result_text += f"  - {class_name}: {count}张\n"
+        
+        self.batch_result_text.setText(result_text)
+        self.update_status('批量预测完成')
+
+    def select_default_model_file(self):
+        """选择默认模型文件"""
+        file_name, _ = QFileDialog.getOpenFileName(
+            self, "选择模型文件", "", "模型文件 (*.pth)")
+        if file_name:
+            self.default_model_path.setText(file_name)
+            self.update_status('已选择默认模型文件')
+            
+    def select_default_class_info_file(self):
+        """选择默认类别信息文件"""
+        file_name, _ = QFileDialog.getOpenFileName(
+            self, "选择类别信息文件", "", "JSON文件 (*.json)")
+        if file_name:
+            self.default_class_info_path.setText(file_name)
+            self.update_status('已选择默认类别信息文件')
+            
+    def select_default_batch_source_folder(self):
+        """选择默认批量预测源文件夹"""
+        folder = QFileDialog.getExistingDirectory(self, "选择默认批量预测源文件夹")
+        if folder:
+            self.default_batch_source_path.setText(folder)
+            self.update_status('已选择默认批量预测源文件夹')
+            
+    def select_default_batch_target_folder(self):
+        """选择默认批量预测目标文件夹"""
+        folder = QFileDialog.getExistingDirectory(self, "选择默认批量预测目标文件夹")
+        if folder:
+            self.default_batch_target_path.setText(folder)
+            self.update_status('已选择默认批量预测目标文件夹')
