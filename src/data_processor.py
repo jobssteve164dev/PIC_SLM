@@ -145,7 +145,7 @@ class DataProcessor(QObject):
             A.GaussNoise(p=0.5),
             A.GaussianBlur(p=0.5),
             A.RandomScale(scale_limit=0.3, p=0.5),
-            A.ShiftScaleRotate(shift_limit=0.1, scale_limit=0.1, rotate_limit=45, p=0.5),
+            A.Affine(scale=(0.9, 1.1), translate_percent=(0.1, 0.1), rotate=(-45, 45), p=0.5),
             A.HueSaturationValue(p=0.3),
             A.RandomGamma(p=0.3),
         ]) 

@@ -901,11 +901,8 @@ class AnnotationWidget(QWidget):
             # 设置当前索引
             self.current_index = 0
             
-            # 设置当前行（这可能会触发currentRowChanged信号，从而调用load_image方法）
+            # 设置当前行（这会触发currentRowChanged信号，从而调用load_image方法）
             self.image_list_widget.setCurrentRow(self.current_index)
-            
-            # 为确保图像被加载，显式调用load_image方法
-            self.load_image(self.current_index)
             
             self.status_updated.emit(f"已加载 {len(self.image_files)} 张图像")
             print(f"已加载 {len(self.image_files)} 张图像")
