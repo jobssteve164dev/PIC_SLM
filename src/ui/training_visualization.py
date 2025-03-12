@@ -1,10 +1,16 @@
-from PyQt5.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QComboBox
+from PyQt5.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QComboBox, QSizePolicy
 from PyQt5.QtCore import Qt, pyqtSlot
 from matplotlib.figure import Figure
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
+import matplotlib
 import numpy as np
 import os
 import webbrowser
+
+# 配置matplotlib使用中文字体
+matplotlib.rcParams['font.sans-serif'] = ['SimHei', 'Microsoft YaHei', 'SimSun', 'Arial Unicode MS', 'sans-serif']
+matplotlib.rcParams['axes.unicode_minus'] = False  # 解决负号显示问题
+matplotlib.rcParams['font.size'] = 12  # 设置字体大小
 
 class TrainingVisualizationWidget(QWidget):
     def __init__(self, parent=None):
@@ -39,24 +45,28 @@ class TrainingVisualizationWidget(QWidget):
         control_layout.addStretch()
         layout.addLayout(control_layout)
         
-        # 创建图表
-        self.figure = Figure(figsize=(5, 8))
+        # 创建图表 - 不再指定固定大小，让它自适应
+        self.figure = Figure()
         
         # 损失子图
         self.loss_ax = self.figure.add_subplot(211)
         self.loss_ax.set_title('训练和验证损失')
-        self.loss_ax.set_xlabel('Epoch')
-        self.loss_ax.set_ylabel('Loss')
+        self.loss_ax.set_xlabel('训练轮次')
+        self.loss_ax.set_ylabel('损失值')
         
         # 准确率子图
         self.acc_ax = self.figure.add_subplot(212)
         self.acc_ax.set_title('训练和验证准确率')
-        self.acc_ax.set_xlabel('Epoch')
-        self.acc_ax.set_ylabel('Accuracy')
+        self.acc_ax.set_xlabel('训练轮次')
+        self.acc_ax.set_ylabel('准确率')
         
-        # 创建画布
+        # 创建画布并设置大小策略为扩展
         self.canvas = FigureCanvas(self.figure)
+        self.canvas.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         layout.addWidget(self.canvas)
+        
+        # 设置整个组件的大小策略为扩展
+        self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         
         self.figure.tight_layout()
         
@@ -100,8 +110,8 @@ class TrainingVisualizationWidget(QWidget):
         if metric_option == 0 or metric_option == 1:  # 显示损失
             # 重新设置损失图标题
             self.loss_ax.set_title('训练和验证损失')
-            self.loss_ax.set_xlabel('Epoch')
-            self.loss_ax.set_ylabel('Loss')
+            self.loss_ax.set_xlabel('训练轮次')
+            self.loss_ax.set_ylabel('损失值')
             
             # 绘制损失数据
             if self.train_losses:
@@ -116,8 +126,8 @@ class TrainingVisualizationWidget(QWidget):
         if metric_option == 0 or metric_option == 2:  # 显示准确率
             # 重新设置准确率图标题
             self.acc_ax.set_title('训练和验证准确率')
-            self.acc_ax.set_xlabel('Epoch')
-            self.acc_ax.set_ylabel('Accuracy')
+            self.acc_ax.set_xlabel('训练轮次')
+            self.acc_ax.set_ylabel('准确率')
             
             # 绘制准确率数据
             if self.train_accs:
@@ -130,6 +140,12 @@ class TrainingVisualizationWidget(QWidget):
             self.acc_ax.set_visible(False)
         
         # 更新画布
+        self.figure.tight_layout()
+        self.canvas.draw()
+    
+    def resizeEvent(self, event):
+        """重写resizeEvent以在窗口大小改变时调整图表布局"""
+        super().resizeEvent(event)
         self.figure.tight_layout()
         self.canvas.draw()
         

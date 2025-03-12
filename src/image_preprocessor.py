@@ -21,6 +21,7 @@ class ImagePreprocessor(QObject):
             '中等': self._get_medium_augmentation(),
             '强化': self._get_strong_augmentation()
         }
+        self._stop_preprocessing = False
 
     def preprocess_images(self, params: Dict) -> None:
         """
@@ -40,19 +41,37 @@ class ImagePreprocessor(QObject):
                 - dataset_folder: 数据集输出文件夹
         """
         try:
+            # 重置停止标志
+            self._stop_preprocessing = False
+            
             # 第一步：预处理图片
             self.status_updated.emit('第1步：开始预处理图片...')
             self._preprocess_raw_images(params)
+            
+            # 如果处理被停止，则退出
+            if self._stop_preprocessing:
+                self.status_updated.emit('预处理已停止')
+                return
             
             # 第二步：创建数据集
             self.status_updated.emit('第2步：开始创建数据集...')
             self._create_dataset(params)
             
-            self.status_updated.emit('所有处理完成！')
+            # 如果处理被停止，则退出
+            if self._stop_preprocessing:
+                self.status_updated.emit('预处理已停止')
+                return
+                
+            self.status_updated.emit('预处理完成')
             self.preprocessing_finished.emit()
             
         except Exception as e:
-            self.preprocessing_error.emit(f'处理过程中出错: {str(e)}')
+            self.preprocessing_error.emit(f'预处理过程中出错: {str(e)}')
+            
+    def stop(self):
+        """停止预处理过程"""
+        self._stop_preprocessing = True
+        self.status_updated.emit('正在停止预处理...')
 
     def _preprocess_raw_images(self, params: Dict) -> None:
         """预处理原始图片"""
@@ -79,6 +98,11 @@ class ImagePreprocessor(QObject):
         
         # 处理每个图片
         for i, img_file in enumerate(image_files):
+            # 检查是否需要停止处理
+            if self._stop_preprocessing:
+                self.status_updated.emit('图片预处理已停止')
+                return
+                
             try:
                 # 构建源文件和目标文件路径
                 source_path = os.path.join(source_folder, img_file)
@@ -111,6 +135,10 @@ class ImagePreprocessor(QObject):
         train_ratio = params['train_ratio']
         augmentation_level = params['augmentation_level']
         
+        # 检查是否需要停止处理
+        if self._stop_preprocessing:
+            return
+            
         # 确保数据集文件夹存在
         train_folder = os.path.join(dataset_folder, 'train')
         val_folder = os.path.join(dataset_folder, 'val')
@@ -133,6 +161,11 @@ class ImagePreprocessor(QObject):
             
         self.status_updated.emit(f'划分为 {len(train_images)} 个训练图片和 {len(val_images)} 个验证图片')
         
+        # 检查是否需要停止处理
+        if self._stop_preprocessing:
+            self.status_updated.emit('数据集创建已停止')
+            return
+            
         # 处理训练集
         self._process_dataset_images(
             preprocessed_folder, train_folder, train_images,
@@ -157,6 +190,11 @@ class ImagePreprocessor(QObject):
         total_images = len(images)
         
         for i, image_name in enumerate(images):
+            # 检查是否需要停止处理
+            if self._stop_preprocessing:
+                self.status_updated.emit('数据集处理已停止')
+                return
+                
             try:
                 # 复制原始图片
                 src_path = os.path.join(source_dir, image_name)
@@ -170,6 +208,10 @@ class ImagePreprocessor(QObject):
                     
                     # 生成增强后的图片
                     for j in range(3):  # 每张图片生成3个增强版本
+                        # 检查是否需要停止处理
+                        if self._stop_preprocessing:
+                            return
+                            
                         augmented = aug(image=image)['image']
                         aug_name = f'{os.path.splitext(image_name)[0]}_aug_{j}{os.path.splitext(image_name)[1]}'
                         aug_path = os.path.join(target_dir, aug_name)

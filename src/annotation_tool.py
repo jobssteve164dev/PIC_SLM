@@ -13,6 +13,7 @@ class AnnotationTool(QObject):
     def __init__(self):
         super().__init__()
         # 内嵌UI已经在主窗口中创建，这里不需要额外的初始化
+        self.processes = []  # 存储所有启动的子进程
         
     def start_labelimg(self, image_folder: str, class_names: List[str] = None, output_folder: str = None) -> None:
         """
@@ -49,64 +50,57 @@ class AnnotationTool(QObject):
                 predefined_classes_file = os.path.join(dataset_dir, 'predefined_classes.txt')
                 predefined_classes_file = predefined_classes_file.replace('\\', '/')
                 
-                with open(predefined_classes_file, 'w') as f:
+                with open(predefined_classes_file, 'w', encoding='utf-8') as f:
                     for class_name in class_names:
                         f.write(f"{class_name}\n")
-                self.status_updated.emit(f'已创建预定义类别文件: {predefined_classes_file}')
-            
-            # 启动LabelImg
-            self.status_updated.emit('正在启动LabelImg...')
-            
-            # 尝试直接使用简单的命令行格式
+                        
+            # 构建命令
             cmd = ['labelImg']
             
-            # 添加图片文件夹路径（确保路径使用正斜杠）
-            image_folder = image_folder.replace('\\', '/')
+            # 添加图片文件夹路径
             cmd.append(image_folder)
             
-            # 尝试使用命名参数方式
+            # 添加预定义类别文件路径
             if predefined_classes_file:
-                cmd.append('--predefined_classes_file')
-                cmd.append(predefined_classes_file)
+                cmd.extend(['--predefined_classes_file', predefined_classes_file])
                 
+            # 添加输出文件夹路径
             if output_folder:
-                # 确保输出目录存在并使用正斜杠
-                os.makedirs(output_folder, exist_ok=True)
-                output_folder = output_folder.replace('\\', '/')
-                cmd.append('--outdir')
-                cmd.append(output_folder)
+                cmd.extend(['--output_dir', output_folder])
                 
-            # 打印命令以便调试
-            self.status_updated.emit(f'执行命令: {" ".join(cmd)}')
+            # 设置默认保存格式为YOLO
+            cmd.extend(['--format', 'yolo'])
                 
-            # 启动进程 - 使用shell=False（默认值）让subprocess正确处理参数
-            process = subprocess.Popen(cmd, 
-                                     stdout=subprocess.PIPE, 
-                                     stderr=subprocess.PIPE,
-                                     text=True)
+            # 启动LabelImg
+            self.status_updated.emit('正在启动LabelImg标注工具...')
+            process = subprocess.Popen(cmd,
+                                      stdout=subprocess.PIPE,
+                                      stderr=subprocess.PIPE)
             
-            # 检查是否有错误输出
-            stderr_data = process.stderr.readline()
-            if stderr_data and 'error:' in stderr_data:
-                self.annotation_error.emit(f'启动LabelImg时出错: {stderr_data}')
-                
-                # 尝试使用位置参数方式
-                self.status_updated.emit('尝试使用位置参数方式启动LabelImg...')
-                cmd = ['labelImg', image_folder]
-                
-                if predefined_classes_file:
-                    cmd.append(predefined_classes_file)
-                    
-                if output_folder:
-                    cmd.append(output_folder)
-                    
-                self.status_updated.emit(f'执行命令: {" ".join(cmd)}')
-                subprocess.Popen(cmd)
+            # 保存进程引用
+            self.processes.append(process)
             
-            self.status_updated.emit('LabelImg已启动')
+            self.status_updated.emit('LabelImg标注工具已启动')
             
         except Exception as e:
-            self.annotation_error.emit(f'启动LabelImg时出错: {str(e)}')
+            self.annotation_error.emit(f'启动LabelImg失败: {str(e)}')
+            
+    def stop(self):
+        """停止所有正在运行的标注工具进程"""
+        for process in self.processes:
+            try:
+                if process.poll() is None:  # 检查进程是否仍在运行
+                    process.terminate()  # 尝试正常终止
+                    process.wait(timeout=1)  # 等待进程终止
+                    
+                    # 如果进程仍在运行，强制终止
+                    if process.poll() is None:
+                        process.kill()
+            except Exception as e:
+                print(f"终止进程时出错: {e}")
+        
+        # 清空进程列表
+        self.processes = []
             
     def start_labelme(self, image_folder: str, class_names: List[str] = None, output_folder: str = None) -> None:
         """

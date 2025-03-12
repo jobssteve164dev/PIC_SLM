@@ -5,7 +5,7 @@ from PyQt5.QtWidgets import (QMainWindow, QWidget, QVBoxLayout, QPushButton,
                            QGroupBox, QRadioButton, QButtonGroup, QScrollArea,
                            QSizePolicy, QFrame, QSlider, QLineEdit, QInputDialog,
                            QCheckBox, QStackedWidget, QToolTip, QApplication,
-                           QTextEdit)
+                           QTextEdit, QDialog, QDialogButtonBox, QTextBrowser)
 from PyQt5.QtCore import Qt, pyqtSignal, QSize
 from PyQt5.QtGui import QFont, QPixmap, QImage
 import os
@@ -104,6 +104,11 @@ class MainWindow(QMainWindow):
     def init_ui(self):
         self.setWindowTitle('图片模型训练系统')
         self.setGeometry(100, 100, 1200, 900)
+        
+        # 设置窗口大小调整策略
+        self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        # 允许调整窗口大小
+        self.setMinimumSize(800, 600)
 
         # 创建中心部件和主布局
         central_widget = QWidget()
@@ -118,6 +123,8 @@ class MainWindow(QMainWindow):
 
         # 创建选项卡
         self.tab_widget = QTabWidget()
+        # 设置选项卡的大小策略为自适应
+        self.tab_widget.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         main_layout.addWidget(self.tab_widget)
 
         # 创建数据处理选项卡
@@ -157,23 +164,42 @@ class MainWindow(QMainWindow):
 
         # 进度条
         self.progress_bar = QProgressBar()
+        self.progress_bar.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         main_layout.addWidget(self.progress_bar)
 
         # 状态标签
         self.status_label = QLabel('就绪')
         self.status_label.setStyleSheet('color: green;')
+        self.status_label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         main_layout.addWidget(self.status_label)
 
     def create_data_processing_tab(self, parent):
-        layout = QVBoxLayout(parent)
+        # 创建滚动区域
+        scroll_area = QScrollArea()
+        scroll_area.setWidgetResizable(True)
+        scroll_area.setFrameShape(QFrame.NoFrame)
+        
+        # 创建内容窗口部件
+        content_widget = QWidget()
+        scroll_area.setWidget(content_widget)
+        
+        # 设置父布局为垂直布局，包含滚动区域
+        parent_layout = QVBoxLayout(parent)
+        parent_layout.addWidget(scroll_area)
+        
+        # 内容布局
+        layout = QVBoxLayout(content_widget)
         
         # 1. 源文件夹选择
         source_group = QGroupBox("1. 选择源图片文件夹")
+        source_group.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         source_layout = QVBoxLayout()
         
         source_select_layout = QHBoxLayout()
         self.select_source_btn = QPushButton('选择源文件夹')
         self.source_path_label = QLabel('未选择文件夹')
+        self.source_path_label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
+        self.source_path_label.setWordWrap(True)
         source_select_layout.addWidget(self.select_source_btn)
         source_select_layout.addWidget(self.source_path_label)
         source_layout.addLayout(source_select_layout)
@@ -183,12 +209,15 @@ class MainWindow(QMainWindow):
         
         # 2. 图片预处理选项
         preprocess_group = QGroupBox("2. 图片预处理")
+        preprocess_group.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         preprocess_layout = QVBoxLayout()
         
         # 输出文件夹
         output_layout = QHBoxLayout()
         self.select_output_btn = QPushButton('选择输出根目录')
         self.output_path_label = QLabel('未选择目录')
+        self.output_path_label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
+        self.output_path_label.setWordWrap(True)
         output_layout.addWidget(self.select_output_btn)
         output_layout.addWidget(self.output_path_label)
         preprocess_layout.addLayout(output_layout)
@@ -214,6 +243,13 @@ class MainWindow(QMainWindow):
         self.custom_size_layout.addWidget(self.width_spin)
         self.custom_size_layout.addWidget(QLabel('高:'))
         self.custom_size_layout.addWidget(self.height_spin)
+        
+        # 添加锁定宽高比例的复选框
+        self.lock_aspect_ratio_checkbox = QCheckBox('锁定宽高比')
+        self.lock_aspect_ratio_checkbox.setChecked(True)
+        self.lock_aspect_ratio_checkbox.setToolTip('锁定宽高比例，调整一个值时自动调整另一个值')
+        self.custom_size_layout.addWidget(self.lock_aspect_ratio_checkbox)
+        
         options_layout.addLayout(self.custom_size_layout, 1, 1)
         
         # 图片格式
@@ -227,6 +263,7 @@ class MainWindow(QMainWindow):
         self.brightness_slider = QSlider(Qt.Horizontal)
         self.brightness_slider.setRange(-50, 50)
         self.brightness_slider.setValue(0)
+        self.brightness_slider.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         options_layout.addWidget(self.brightness_slider, 3, 1)
         
         # 对比度调整
@@ -234,6 +271,7 @@ class MainWindow(QMainWindow):
         self.contrast_slider = QSlider(Qt.Horizontal)
         self.contrast_slider.setRange(-50, 50)
         self.contrast_slider.setValue(0)
+        self.contrast_slider.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         options_layout.addWidget(self.contrast_slider, 4, 1)
         
         preprocess_layout.addLayout(options_layout)
@@ -267,6 +305,7 @@ class MainWindow(QMainWindow):
         
         # 处理结果信息
         result_group = QGroupBox("3. 处理结果")
+        result_group.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         result_layout = QVBoxLayout()
         
         self.processed_info_label = QLabel('未处理任何数据')
@@ -281,10 +320,15 @@ class MainWindow(QMainWindow):
         result_group.setLayout(result_layout)
         layout.addWidget(result_group)
         
+        # 添加弹性空间
+        layout.addStretch(1)
+        
         # 绑定事件
         self.select_source_btn.clicked.connect(self.select_source_folder)
         self.select_output_btn.clicked.connect(self.select_output_folder)
         self.size_combo.currentTextChanged.connect(self.on_size_changed)
+        self.width_spin.valueChanged.connect(self.on_width_changed)
+        self.height_spin.valueChanged.connect(self.on_height_changed)
         self.preprocess_btn.clicked.connect(self.preprocess_images)
         self.goto_annotation_btn.clicked.connect(self.goto_annotation_tab)
         
@@ -292,10 +336,25 @@ class MainWindow(QMainWindow):
         self.on_size_changed(self.size_combo.currentText())
 
     def create_annotation_tab(self, parent):
-        layout = QVBoxLayout(parent)
+        # 创建滚动区域
+        scroll_area = QScrollArea()
+        scroll_area.setWidgetResizable(True)
+        scroll_area.setFrameShape(QFrame.NoFrame)
+        
+        # 创建内容窗口部件
+        content_widget = QWidget()
+        scroll_area.setWidget(content_widget)
+        
+        # 设置父布局为垂直布局，包含滚动区域
+        parent_layout = QVBoxLayout(parent)
+        parent_layout.addWidget(scroll_area)
+        
+        # 内容布局
+        layout = QVBoxLayout(content_widget)
         
         # 创建任务类型选择组
         task_group = QGroupBox("任务类型")
+        task_group.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         task_layout = QHBoxLayout()
         
         self.classification_radio = QRadioButton("图像分类")
@@ -310,12 +369,15 @@ class MainWindow(QMainWindow):
         
         # 创建文件夹设置组
         folders_group = QGroupBox("文件夹设置")
+        folders_group.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         folders_layout = QVBoxLayout()
         
         # 待标注的图片文件夹
         folder_layout = QHBoxLayout()
         folder_layout.addWidget(QLabel("待标注的图片文件夹:"))
         self.processed_folder_label = QLabel('未选择文件夹')
+        self.processed_folder_label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
+        self.processed_folder_label.setWordWrap(True)
         folder_layout.addWidget(self.processed_folder_label)
         self.select_processed_btn = QPushButton('选择文件夹')
         folder_layout.addWidget(self.select_processed_btn)
@@ -330,6 +392,8 @@ class MainWindow(QMainWindow):
         annotation_folder_layout = QHBoxLayout()
         annotation_folder_layout.addWidget(QLabel("标注结果保存目录:"))
         self.annotation_folder_label = QLabel('未选择文件夹')
+        self.annotation_folder_label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
+        self.annotation_folder_label.setWordWrap(True)
         annotation_folder_layout.addWidget(self.annotation_folder_label)
         self.select_annotation_folder_btn = QPushButton('选择文件夹')
         annotation_folder_layout.addWidget(self.select_annotation_folder_btn)
@@ -345,6 +409,7 @@ class MainWindow(QMainWindow):
         
         # 标注工具选择
         tools_group = QGroupBox("标注工具")
+        tools_group.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         tools_layout = QVBoxLayout()
         
         self.labelimg_radio = QRadioButton("内置标注工具 (矩形标注)")
@@ -359,10 +424,12 @@ class MainWindow(QMainWindow):
         
         # 标注类别管理
         classes_group = QGroupBox("缺陷类别管理")
+        classes_group.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         classes_layout = QVBoxLayout()
         
         # 类别列表
         self.class_list = QListWidget()
+        self.class_list.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         classes_layout.addWidget(self.class_list)
         
         # 添加/删除类别按钮
@@ -431,11 +498,17 @@ class MainWindow(QMainWindow):
         self.annotation_task_stack.addWidget(classification_page)  # 索引0：分类任务
         self.annotation_task_stack.addWidget(detection_page)  # 索引1：目标检测任务
         
+        # 设置堆叠部件的大小策略
+        self.annotation_task_stack.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        
         # 默认显示分类任务
         self.annotation_task_stack.setCurrentIndex(0)
         
         # 添加到主布局
         layout.addWidget(self.annotation_task_stack)
+        
+        # 添加弹性空间
+        layout.addStretch(1)
         
         # 绑定事件
         self.select_processed_btn.clicked.connect(self.select_processed_folder)
@@ -457,7 +530,21 @@ class MainWindow(QMainWindow):
 
     def create_training_tab(self, parent):
         """创建模型训练选项卡"""
-        layout = QVBoxLayout(parent)
+        # 创建滚动区域
+        scroll_area = QScrollArea()
+        scroll_area.setWidgetResizable(True)
+        scroll_area.setFrameShape(QFrame.NoFrame)
+        
+        # 创建内容窗口部件
+        content_widget = QWidget()
+        scroll_area.setWidget(content_widget)
+        
+        # 设置父布局为垂直布局，包含滚动区域
+        parent_layout = QVBoxLayout(parent)
+        parent_layout.addWidget(scroll_area)
+        
+        # 内容布局
+        layout = QVBoxLayout(content_widget)
         
         # 添加帮助按钮
         help_btn = QPushButton("训练帮助")
@@ -487,6 +574,7 @@ class MainWindow(QMainWindow):
         
         # 任务类型选择
         task_group = QGroupBox("任务类型")
+        task_group.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         task_layout = QVBoxLayout()
         task_description = QLabel("选择要执行的任务类型：")
         task_description.setStyleSheet("color: #666;")
@@ -514,6 +602,7 @@ class MainWindow(QMainWindow):
         
         # 数据选择
         data_group = QGroupBox("数据选择")
+        data_group.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         data_layout = QVBoxLayout()
         data_description = QLabel("选择包含已标注数据的文件夹：")
         data_description.setStyleSheet("color: #666;")
@@ -530,15 +619,16 @@ class MainWindow(QMainWindow):
         folder_layout.addWidget(self.select_annotation_btn)
         
         self.training_annotation_folder_label = QLabel("未选择文件夹")
+        self.training_annotation_folder_label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
+        self.training_annotation_folder_label.setWordWrap(True)
         self.training_annotation_folder_label.setStyleSheet("color: #666;")
         folder_layout.addWidget(self.training_annotation_folder_label)
         
         data_layout.addLayout(folder_layout)
-        data_group.setLayout(data_layout)
-        layout.addWidget(data_group)
         
         # 模型选择
         model_group = QGroupBox("模型选择")
+        model_group.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         model_layout = QVBoxLayout()
         model_description = QLabel("选择要使用的模型架构：")
         model_description.setStyleSheet("color: #666;")
@@ -1106,6 +1196,7 @@ class MainWindow(QMainWindow):
         
         # 训练控制
         control_group = QGroupBox("训练控制")
+        control_group.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         control_layout = QVBoxLayout()
         
         # 训练状态
@@ -1117,6 +1208,7 @@ class MainWindow(QMainWindow):
         self.training_progress_bar = QProgressBar()
         self.training_progress_bar.setRange(0, 100)
         self.training_progress_bar.setValue(0)
+        self.training_progress_bar.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         status_layout.addWidget(self.training_progress_bar)
         
         control_layout.addLayout(status_layout)
@@ -1169,7 +1261,14 @@ class MainWindow(QMainWindow):
         control_group.setLayout(control_layout)
         layout.addWidget(control_group)
         
-        # 连接信号
+        # 设置堆叠部件的大小策略
+        self.model_stack.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        self.params_stack.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        
+        # 添加弹性空间
+        layout.addStretch(1)
+        
+        # 绑定任务类型选择事件
         self.training_classification_radio.toggled.connect(self.toggle_training_task)
         # 不需要为detection_radio再次连接，因为它们是互斥的，一个切换会自动触发另一个
         
@@ -1177,10 +1276,25 @@ class MainWindow(QMainWindow):
         self.toggle_training_task(self.training_classification_radio.isChecked())
 
     def create_prediction_tab(self, parent):
-        layout = QVBoxLayout(parent)
+        # 创建滚动区域
+        scroll_area = QScrollArea()
+        scroll_area.setWidgetResizable(True)
+        scroll_area.setFrameShape(QFrame.NoFrame)
+        
+        # 创建内容窗口部件
+        content_widget = QWidget()
+        scroll_area.setWidget(content_widget)
+        
+        # 设置父布局为垂直布局，包含滚动区域
+        parent_layout = QVBoxLayout(parent)
+        parent_layout.addWidget(scroll_area)
+        
+        # 内容布局
+        layout = QVBoxLayout(content_widget)
         
         # 创建选项卡，分为单张预测和批量预测两个子标签页
         predict_tab_widget = QTabWidget()
+        predict_tab_widget.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         layout.addWidget(predict_tab_widget)
         
         # 单张预测子标签页
@@ -1191,22 +1305,27 @@ class MainWindow(QMainWindow):
         select_image_layout = QHBoxLayout()
         self.select_image_btn = QPushButton('选择图片')
         self.image_path_label = QLabel('未选择图片')
+        self.image_path_label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
+        self.image_path_label.setWordWrap(True)
         select_image_layout.addWidget(self.select_image_btn)
         select_image_layout.addWidget(self.image_path_label)
         single_predict_layout.addLayout(select_image_layout)
 
         # 预测结果显示区域
         result_group = QGroupBox("预测结果")
+        result_group.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         result_layout = QVBoxLayout()
         
         # 图片显示
         self.image_label = QLabel()
         self.image_label.setAlignment(Qt.AlignCenter)
         self.image_label.setMinimumSize(300, 300)
+        self.image_label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         result_layout.addWidget(self.image_label)
         
         # 预测结果列表
         self.result_list = QListWidget()
+        self.result_list.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         result_layout.addWidget(self.result_list)
         
         result_group.setLayout(result_layout)
@@ -1230,11 +1349,14 @@ class MainWindow(QMainWindow):
         
         # 1. 模型选择
         model_group = QGroupBox("1. 选择模型")
+        model_group.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         model_layout = QVBoxLayout()
         
         model_select_layout = QHBoxLayout()
         self.select_model_btn = QPushButton('选择模型文件')
         self.model_path_label = QLabel('未选择模型')
+        self.model_path_label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
+        self.model_path_label.setWordWrap(True)
         model_select_layout.addWidget(self.select_model_btn)
         model_select_layout.addWidget(self.model_path_label)
         model_layout.addLayout(model_select_layout)
@@ -1242,6 +1364,8 @@ class MainWindow(QMainWindow):
         class_info_layout = QHBoxLayout()
         self.select_class_info_btn = QPushButton('选择类别信息文件')
         self.class_info_path_label = QLabel('未选择类别信息')
+        self.class_info_path_label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
+        self.class_info_path_label.setWordWrap(True)
         class_info_layout.addWidget(self.select_class_info_btn)
         class_info_layout.addWidget(self.class_info_path_label)
         model_layout.addLayout(class_info_layout)
@@ -1255,11 +1379,14 @@ class MainWindow(QMainWindow):
         
         # 2. 源文件夹选择
         source_group = QGroupBox("2. 选择源图片文件夹")
+        source_group.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         source_layout = QVBoxLayout()
         
         source_select_layout = QHBoxLayout()
         self.select_batch_source_btn = QPushButton('选择源文件夹')
         self.batch_source_path_label = QLabel('未选择文件夹')
+        self.batch_source_path_label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
+        self.batch_source_path_label.setWordWrap(True)
         source_select_layout.addWidget(self.select_batch_source_btn)
         source_select_layout.addWidget(self.batch_source_path_label)
         source_layout.addLayout(source_select_layout)
@@ -1269,11 +1396,14 @@ class MainWindow(QMainWindow):
         
         # 3. 目标文件夹选择
         target_group = QGroupBox("3. 选择目标文件夹")
+        target_group.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         target_layout = QVBoxLayout()
         
         target_select_layout = QHBoxLayout()
         self.select_batch_target_btn = QPushButton('选择目标文件夹')
         self.batch_target_path_label = QLabel('未选择文件夹')
+        self.batch_target_path_label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
+        self.batch_target_path_label.setWordWrap(True)
         target_select_layout.addWidget(self.select_batch_target_btn)
         target_select_layout.addWidget(self.batch_target_path_label)
         target_layout.addLayout(target_select_layout)
@@ -1346,6 +1476,9 @@ class MainWindow(QMainWindow):
         
         batch_predict_layout.addLayout(buttons_layout)
         
+        # 添加弹性空间
+        batch_predict_layout.addStretch(1)
+        
         # 绑定批量预测事件
         self.select_model_btn.clicked.connect(self.select_model_file)
         self.select_class_info_btn.clicked.connect(self.select_class_info_file)
@@ -1357,6 +1490,9 @@ class MainWindow(QMainWindow):
         
         # 添加批量预测子标签页
         predict_tab_widget.addTab(batch_predict_tab, "批量预测")
+        
+        # 添加弹性空间到主布局
+        layout.addStretch(1)
 
     def select_source_folder(self):
         folder = QFileDialog.getExistingDirectory(self, "选择源图片文件夹")
@@ -1384,13 +1520,45 @@ class MainWindow(QMainWindow):
         if size_text == '自定义':
             self.width_spin.setEnabled(True)
             self.height_spin.setEnabled(True)
+            self.lock_aspect_ratio_checkbox.setEnabled(True)
         else:
             self.width_spin.setEnabled(False)
             self.height_spin.setEnabled(False)
+            self.lock_aspect_ratio_checkbox.setEnabled(False)
             if 'x' in size_text:
                 width, height = size_text.split('x')
                 self.width_spin.setValue(int(width))
                 self.height_spin.setValue(int(height))
+    
+    def on_width_changed(self, new_width):
+        """当宽度改变时，如果锁定了宽高比，则自动调整高度"""
+        if self.lock_aspect_ratio_checkbox.isChecked() and self.size_combo.currentText() == '自定义':
+            # 计算当前宽高比
+            old_width = self.width_spin.value() if new_width == 0 else new_width
+            old_height = self.height_spin.value()
+            if old_width > 0 and old_height > 0:
+                aspect_ratio = old_height / old_width
+                # 根据新宽度和宽高比计算新高度
+                new_height = int(new_width * aspect_ratio)
+                # 暂时断开信号连接，避免循环调用
+                self.height_spin.blockSignals(True)
+                self.height_spin.setValue(new_height)
+                self.height_spin.blockSignals(False)
+    
+    def on_height_changed(self, new_height):
+        """当高度改变时，如果锁定了宽高比，则自动调整宽度"""
+        if self.lock_aspect_ratio_checkbox.isChecked() and self.size_combo.currentText() == '自定义':
+            # 计算当前宽高比
+            old_width = self.width_spin.value()
+            old_height = self.height_spin.value() if new_height == 0 else new_height
+            if old_width > 0 and old_height > 0:
+                aspect_ratio = old_width / old_height
+                # 根据新高度和宽高比计算新宽度
+                new_width = int(new_height * aspect_ratio)
+                # 暂时断开信号连接，避免循环调用
+                self.width_spin.blockSignals(True)
+                self.width_spin.setValue(new_width)
+                self.width_spin.blockSignals(False)
 
     def preprocess_images(self):
         if not self.data_folder or not self.output_folder:
@@ -2563,12 +2731,28 @@ class MainWindow(QMainWindow):
         </ul>
         """
         
-        msg_box = QMessageBox(self)
-        msg_box.setWindowTitle("训练参数和评估指标说明")
-        msg_box.setTextFormat(Qt.RichText)
-        msg_box.setText(help_text)
-        msg_box.setStandardButtons(QMessageBox.Ok)
-        msg_box.exec_()
+        # 创建一个可调整大小的对话框
+        dialog = QDialog(self)
+        dialog.setWindowTitle("训练参数和评估指标说明")
+        dialog.setMinimumSize(600, 400)  # 设置最小尺寸
+        dialog.resize(800, 600)  # 设置初始尺寸
+        
+        # 创建布局
+        layout = QVBoxLayout(dialog)
+        
+        # 创建文本浏览器来显示富文本
+        text_browser = QTextBrowser()
+        text_browser.setHtml(help_text)
+        text_browser.setOpenExternalLinks(True)
+        layout.addWidget(text_browser)
+        
+        # 添加关闭按钮
+        button_box = QDialogButtonBox(QDialogButtonBox.Ok)
+        button_box.accepted.connect(dialog.accept)
+        layout.addWidget(button_box)
+        
+        # 显示对话框
+        dialog.exec_()
 
     def create_tensorboard_tab(self, parent):
         layout = QVBoxLayout(parent)
@@ -3551,12 +3735,28 @@ class MainWindow(QMainWindow):
         </ul>
         """
         
-        msg_box = QMessageBox(self)
-        msg_box.setWindowTitle("训练参数和评估指标说明")
-        msg_box.setTextFormat(Qt.RichText)
-        msg_box.setText(help_text)
-        msg_box.setStandardButtons(QMessageBox.Ok)
-        msg_box.exec_()
+        # 创建一个可调整大小的对话框
+        dialog = QDialog(self)
+        dialog.setWindowTitle("训练参数和评估指标说明")
+        dialog.setMinimumSize(600, 400)  # 设置最小尺寸
+        dialog.resize(800, 600)  # 设置初始尺寸
+        
+        # 创建布局
+        layout = QVBoxLayout(dialog)
+        
+        # 创建文本浏览器来显示富文本
+        text_browser = QTextBrowser()
+        text_browser.setHtml(help_text)
+        text_browser.setOpenExternalLinks(True)
+        layout.addWidget(text_browser)
+        
+        # 添加关闭按钮
+        button_box = QDialogButtonBox(QDialogButtonBox.Ok)
+        button_box.accepted.connect(dialog.accept)
+        layout.addWidget(button_box)
+        
+        # 显示对话框
+        dialog.exec_()
 
     def create_tensorboard_tab(self, parent):
         layout = QVBoxLayout(parent)
@@ -3825,16 +4025,24 @@ class MainWindow(QMainWindow):
         
         # 创建选项卡，分为训练可视化和TensorBoard两个子标签页
         eval_tab_widget = QTabWidget()
+        # 设置选项卡的大小策略为扩展
+        eval_tab_widget.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         layout.addWidget(eval_tab_widget)
         
         # 训练可视化子标签页
         training_viz_tab = QWidget()
+        # 设置训练可视化标签页的大小策略为扩展
+        training_viz_tab.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         training_viz_layout = QVBoxLayout(training_viz_tab)
         
         # 训练可视化组件
         visualization_group = QGroupBox("训练过程可视化")
+        # 设置可视化组的大小策略为扩展
+        visualization_group.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         visualization_layout = QVBoxLayout()
         self.training_visualization = TrainingVisualizationWidget()
+        # 确保训练可视化组件的大小策略为扩展
+        self.training_visualization.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         visualization_layout.addWidget(self.training_visualization)
         visualization_group.setLayout(visualization_layout)
         training_viz_layout.addWidget(visualization_group)

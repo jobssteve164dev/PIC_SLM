@@ -256,20 +256,24 @@ class ModelTrainer(QObject):
                                     import io
                                     from PIL import Image
                                     
+                                    # 设置matplotlib中文字体
+                                    plt.rcParams['font.sans-serif'] = ['SimHei', 'Microsoft YaHei', 'SimSun', 'Arial Unicode MS', 'sans-serif']
+                                    plt.rcParams['axes.unicode_minus'] = False
+                                    
                                     # 计算混淆矩阵
                                     cm = confusion_matrix(all_labels, all_preds)
                                     
                                     # 绘制混淆矩阵
                                     plt.figure(figsize=(10, 8))
                                     plt.imshow(cm, interpolation='nearest', cmap=plt.cm.Blues)
-                                    plt.title('Confusion Matrix')
+                                    plt.title('混淆矩阵')
                                     plt.colorbar()
                                     tick_marks = np.arange(len(class_names))
                                     plt.xticks(tick_marks, class_names, rotation=45)
                                     plt.yticks(tick_marks, class_names)
                                     plt.tight_layout()
-                                    plt.ylabel('True label')
-                                    plt.xlabel('Predicted label')
+                                    plt.ylabel('真实标签')
+                                    plt.xlabel('预测标签')
                                     
                                     # 将matplotlib图像转换为PIL图像
                                     buf = io.BytesIO()
@@ -330,24 +334,38 @@ class ModelTrainer(QObject):
                 model.fc = nn.Linear(model.fc.in_features, num_classes)
             elif model_name == 'EfficientNet-B0':
                 try:
-                    from efficientnet_pytorch import EfficientNet
+                    # 使用条件导入避免IDE警告
+                    if True:  # 这行代码只是为了避免IDE警告
+                        from efficientnet_pytorch import EfficientNet
                     model = EfficientNet.from_pretrained('efficientnet-b0', num_classes=num_classes)
                 except ImportError:
-                    self.status_updated.emit("EfficientNet模块未安装，正在安装...")
-                    subprocess.run([sys.executable, '-m', 'pip', 'install', 'efficientnet-pytorch'], 
-                                  check=True)
-                    from efficientnet_pytorch import EfficientNet
-                    model = EfficientNet.from_pretrained('efficientnet-b0', num_classes=num_classes)
+                    self.status_updated.emit("EfficientNet模块未安装，尝试安装中...")
+                    try:
+                        subprocess.run([sys.executable, '-m', 'pip', 'install', 'efficientnet-pytorch'], 
+                                      check=True)
+                        from efficientnet_pytorch import EfficientNet
+                        model = EfficientNet.from_pretrained('efficientnet-b0', num_classes=num_classes)
+                    except Exception as e:
+                        self.status_updated.emit(f"无法安装EfficientNet: {str(e)}，使用ResNet50替代")
+                        model = models.resnet50(pretrained=True)
+                        model.fc = nn.Linear(model.fc.in_features, num_classes)
             elif model_name == 'EfficientNet-B4':
                 try:
-                    from efficientnet_pytorch import EfficientNet
+                    # 使用条件导入避免IDE警告
+                    if True:  # 这行代码只是为了避免IDE警告
+                        from efficientnet_pytorch import EfficientNet
                     model = EfficientNet.from_pretrained('efficientnet-b4', num_classes=num_classes)
                 except ImportError:
-                    self.status_updated.emit("EfficientNet模块未安装，正在安装...")
-                    subprocess.run([sys.executable, '-m', 'pip', 'install', 'efficientnet-pytorch'], 
-                                  check=True)
-                    from efficientnet_pytorch import EfficientNet
-                    model = EfficientNet.from_pretrained('efficientnet-b4', num_classes=num_classes)
+                    self.status_updated.emit("EfficientNet模块未安装，尝试安装中...")
+                    try:
+                        subprocess.run([sys.executable, '-m', 'pip', 'install', 'efficientnet-pytorch'], 
+                                      check=True)
+                        from efficientnet_pytorch import EfficientNet
+                        model = EfficientNet.from_pretrained('efficientnet-b4', num_classes=num_classes)
+                    except Exception as e:
+                        self.status_updated.emit(f"无法安装EfficientNet: {str(e)}，使用ResNet50替代")
+                        model = models.resnet50(pretrained=True)
+                        model.fc = nn.Linear(model.fc.in_features, num_classes)
             elif model_name == 'MobileNetV2':
                 model = models.mobilenet_v2(pretrained=True)
                 model.classifier[1] = nn.Linear(model.classifier[1].in_features, num_classes)

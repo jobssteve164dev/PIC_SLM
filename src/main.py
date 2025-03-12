@@ -10,6 +10,12 @@ from image_preprocessor import ImagePreprocessor
 from annotation_tool import AnnotationTool
 from config_loader import ConfigLoader
 
+# 配置matplotlib全局字体设置
+import matplotlib
+matplotlib.rcParams['font.sans-serif'] = ['SimHei', 'Microsoft YaHei', 'SimSun', 'Arial Unicode MS', 'sans-serif']
+matplotlib.rcParams['axes.unicode_minus'] = False  # 解决负号显示问题
+matplotlib.rcParams['font.size'] = 12  # 设置字体大小
+
 class Worker(QObject):
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -42,6 +48,45 @@ def main():
     worker = Worker()
     worker.moveToThread(thread)
     thread.start()
+    
+    # 保存线程引用到窗口对象，以便在窗口关闭时正确处理
+    window.worker_thread = thread
+    
+    # 添加closeEvent方法到MainWindow类
+    def closeEvent(self, event):
+        # 停止所有正在进行的操作
+        if hasattr(self, 'worker'):
+            # 停止模型训练
+            if hasattr(self.worker, 'model_trainer'):
+                self.worker.model_trainer.stop()
+            
+            # 停止标注工具进程
+            if hasattr(self.worker, 'annotation_tool'):
+                self.worker.annotation_tool.stop()
+                
+            # 停止预测器的批处理
+            if hasattr(self.worker, 'predictor'):
+                self.worker.predictor.stop_batch_processing()
+                
+            # 停止图像预处理
+            if hasattr(self.worker, 'image_preprocessor'):
+                self.worker.image_preprocessor.stop()
+        
+        # 等待线程结束并退出
+        if hasattr(self, 'worker_thread') and self.worker_thread.isRunning():
+            self.worker_thread.quit()
+            self.worker_thread.wait(3000)  # 等待最多3秒
+            
+            # 如果线程仍在运行，则强制终止
+            if self.worker_thread.isRunning():
+                self.worker_thread.terminate()
+                self.worker_thread.wait()
+        
+        # 接受关闭事件
+        event.accept()
+    
+    # 动态添加closeEvent方法到MainWindow类
+    MainWindow.closeEvent = closeEvent
     
     # 连接信号和槽
     # 图片预处理信号（包含数据集创建）
