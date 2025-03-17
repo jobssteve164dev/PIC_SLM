@@ -162,9 +162,35 @@ class TrainingTab(BaseTab):
         
         folder_layout.addWidget(self.classification_path_edit)
         folder_layout.addWidget(folder_btn)
-        
         folder_group.setLayout(folder_layout)
         main_layout.addWidget(folder_group)
+        
+        # 添加预训练模型选择组
+        pretrained_group = QGroupBox("预训练模型")
+        pretrained_group.setMaximumHeight(70)
+        pretrained_layout = QHBoxLayout()
+        pretrained_layout.setContentsMargins(10, 5, 10, 5)
+        
+        self.classification_use_local_pretrained_checkbox = QCheckBox("使用本地预训练模型")
+        self.classification_use_local_pretrained_checkbox.setChecked(False)
+        self.classification_use_local_pretrained_checkbox.stateChanged.connect(
+            lambda state: self.toggle_pretrained_controls(state == Qt.Checked, is_classification=True)
+        )
+        pretrained_layout.addWidget(self.classification_use_local_pretrained_checkbox)
+        pretrained_layout.addWidget(QLabel("预训练模型:"))
+        self.classification_pretrained_path_edit = QLineEdit()
+        self.classification_pretrained_path_edit.setReadOnly(True)
+        self.classification_pretrained_path_edit.setEnabled(False)
+        self.classification_pretrained_path_edit.setPlaceholderText("选择本地预训练模型文件")
+        pretrained_btn = QPushButton("浏览...")
+        pretrained_btn.setFixedWidth(60)
+        pretrained_btn.setEnabled(False)
+        pretrained_btn.clicked.connect(self.select_pretrained_model)
+        pretrained_layout.addWidget(self.classification_pretrained_path_edit)
+        pretrained_layout.addWidget(pretrained_btn)
+        
+        pretrained_group.setLayout(pretrained_layout)
+        main_layout.addWidget(pretrained_group)
         
         # 创建基础训练参数组
         basic_group = QGroupBox("基础训练参数")
@@ -320,9 +346,35 @@ class TrainingTab(BaseTab):
         
         folder_layout.addWidget(self.detection_path_edit)
         folder_layout.addWidget(folder_btn)
-        
         folder_group.setLayout(folder_layout)
         main_layout.addWidget(folder_group)
+        
+        # 添加预训练模型选择组
+        pretrained_group = QGroupBox("预训练模型")
+        pretrained_group.setMaximumHeight(70)
+        pretrained_layout = QHBoxLayout()
+        pretrained_layout.setContentsMargins(10, 5, 10, 5)
+        
+        self.detection_use_local_pretrained_checkbox = QCheckBox("使用本地预训练模型")
+        self.detection_use_local_pretrained_checkbox.setChecked(False)
+        self.detection_use_local_pretrained_checkbox.stateChanged.connect(
+            lambda state: self.toggle_pretrained_controls(state == Qt.Checked, is_classification=False)
+        )
+        pretrained_layout.addWidget(self.detection_use_local_pretrained_checkbox)
+        pretrained_layout.addWidget(QLabel("预训练模型:"))
+        self.detection_pretrained_path_edit = QLineEdit()
+        self.detection_pretrained_path_edit.setReadOnly(True)
+        self.detection_pretrained_path_edit.setEnabled(False)
+        self.detection_pretrained_path_edit.setPlaceholderText("选择本地预训练模型文件")
+        pretrained_btn = QPushButton("浏览...")
+        pretrained_btn.setFixedWidth(60)
+        pretrained_btn.setEnabled(False)
+        pretrained_btn.clicked.connect(self.select_pretrained_model)
+        pretrained_layout.addWidget(self.detection_pretrained_path_edit)
+        pretrained_layout.addWidget(pretrained_btn)
+        
+        pretrained_group.setLayout(pretrained_layout)
+        main_layout.addWidget(pretrained_group)
         
         # 创建基础训练参数组
         basic_group = QGroupBox("基础训练参数")
@@ -611,6 +663,20 @@ class TrainingTab(BaseTab):
         self.training_status_label.setText(f"训练出错: {error}")
         QMessageBox.critical(self, "训练错误", str(error))
     
+    def select_pretrained_model(self):
+        """选择本地预训练模型文件"""
+        file_path, _ = QFileDialog.getOpenFileName(
+            self,
+            "选择预训练模型文件",
+            "",
+            "模型文件 (*.pth *.pt *.h5 *.hdf5 *.pkl);;所有文件 (*.*)"
+        )
+        if file_path:
+            if self.task_type == "classification":
+                self.classification_pretrained_path_edit.setText(file_path)
+            else:
+                self.detection_pretrained_path_edit.setText(file_path)
+    
     def get_training_params(self):
         """获取当前训练参数"""
         params = {"task_type": self.task_type}
@@ -621,6 +687,11 @@ class TrainingTab(BaseTab):
             if not selected_metrics:
                 selected_metrics = ["accuracy"]  # 默认使用accuracy
                 
+            # 获取预训练模型信息
+            use_local_pretrained = self.classification_use_local_pretrained_checkbox.isChecked()
+            pretrained_path = self.classification_pretrained_path_edit.text() if use_local_pretrained else ""
+            pretrained_model = "" if use_local_pretrained else self.classification_model_combo.currentText()
+                
             params.update({
                 "model": self.classification_model_combo.currentText(),
                 "batch_size": self.classification_batch_size_spin.value(),
@@ -629,6 +700,9 @@ class TrainingTab(BaseTab):
                 "optimizer": self.classification_optimizer_combo.currentText(),
                 "metrics": selected_metrics,
                 "use_pretrained": self.classification_pretrained_checkbox.isChecked(),
+                "use_local_pretrained": use_local_pretrained,
+                "pretrained_path": pretrained_path,
+                "pretrained_model": pretrained_model,  # 添加预训练模型名称
                 "use_augmentation": self.classification_augmentation_checkbox.isChecked()
             })
         else:
@@ -636,6 +710,11 @@ class TrainingTab(BaseTab):
             selected_metrics = [item.text() for item in self.detection_metrics_list.selectedItems()]
             if not selected_metrics:
                 selected_metrics = ["mAP"]  # 默认使用mAP
+                
+            # 获取预训练模型信息
+            use_local_pretrained = self.detection_use_local_pretrained_checkbox.isChecked()
+            pretrained_path = self.detection_pretrained_path_edit.text() if use_local_pretrained else ""
+            pretrained_model = "" if use_local_pretrained else self.detection_model_combo.currentText()
                 
             params.update({
                 "model": self.detection_model_combo.currentText(),
@@ -648,7 +727,27 @@ class TrainingTab(BaseTab):
                 "iou_threshold": self.detection_iou_spin.value(),
                 "conf_threshold": self.detection_conf_spin.value(),
                 "use_pretrained": self.detection_pretrained_checkbox.isChecked(),
+                "use_local_pretrained": use_local_pretrained,
+                "pretrained_path": pretrained_path,
+                "pretrained_model": pretrained_model,  # 添加预训练模型名称
                 "use_augmentation": self.detection_augmentation_checkbox.isChecked()
             })
             
         return params 
+
+    def toggle_pretrained_controls(self, enabled, is_classification=True):
+        """切换预训练模型控件的启用状态"""
+        if is_classification:
+            self.classification_pretrained_path_edit.setEnabled(enabled)
+            # 找到对应的浏览按钮并设置状态
+            for widget in self.classification_widget.findChildren(QPushButton):
+                if widget.text() == "浏览..." and widget.parent() == self.classification_pretrained_path_edit.parent():
+                    widget.setEnabled(enabled)
+                    break
+        else:
+            self.detection_pretrained_path_edit.setEnabled(enabled)
+            # 找到对应的浏览按钮并设置状态
+            for widget in self.detection_widget.findChildren(QPushButton):
+                if widget.text() == "浏览..." and widget.parent() == self.detection_pretrained_path_edit.parent():
+                    widget.setEnabled(enabled)
+                    break 

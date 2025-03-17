@@ -166,6 +166,7 @@ def main():
             learning_rate = params.get('learning_rate', 0.001)
             optimizer = params.get('optimizer', 'Adam')
             use_pretrained = params.get('use_pretrained', True)
+            pretrained_path = params.get('pretrained_path', '')  # 获取本地预训练模型路径
             metrics = params.get('metrics', ['accuracy'])  # 直接使用传入的metrics列表
         else:  # detection
             data_dir = window.training_tab.detection_path_edit.text()
@@ -175,6 +176,7 @@ def main():
             learning_rate = params.get('learning_rate', 0.0005)
             optimizer = params.get('optimizer', 'Adam')
             use_pretrained = params.get('use_pretrained', True)
+            pretrained_path = params.get('pretrained_path', '')  # 获取本地预训练模型路径
             metrics = params.get('metrics', ['mAP'])  # 直接使用传入的metrics列表
             
             # 目标检测特有参数
@@ -192,6 +194,7 @@ def main():
             'task_type': task_type,
             'optimizer': optimizer,
             'use_pretrained': use_pretrained,
+            'pretrained_path': pretrained_path,  # 添加本地预训练模型路径
             'metrics': metrics,
             'use_tensorboard': True
         }
