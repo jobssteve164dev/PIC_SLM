@@ -4,6 +4,7 @@ from PyQt5.QtCore import Qt, pyqtSignal
 from PyQt5.QtGui import QFont
 import os
 import sys
+import json
 
 from .data_processing_tab import DataProcessingTab
 from .annotation_tab import AnnotationTab
@@ -22,6 +23,7 @@ class MainWindow(QMainWindow):
     prediction_started = pyqtSignal()
     image_preprocessing_started = pyqtSignal(dict)
     annotation_started = pyqtSignal(str)
+    create_class_folders_signal = pyqtSignal(str, list)  # 添加创建类别文件夹信号
 
     def __init__(self):
         super().__init__()
@@ -115,6 +117,8 @@ class MainWindow(QMainWindow):
         self.data_processing_tab.status_updated.connect(self.update_status)
         self.data_processing_tab.progress_updated.connect(self.update_progress)
         self.data_processing_tab.image_preprocessing_started.connect(self.on_image_preprocessing_started)
+        # 连接创建类别文件夹信号
+        self.data_processing_tab.create_class_folders_signal.connect(self.on_create_class_folders)
         
         self.annotation_tab.status_updated.connect(self.update_status)
         self.annotation_tab.progress_updated.connect(self.update_progress)
@@ -150,12 +154,24 @@ class MainWindow(QMainWindow):
     def update_progress(self, value):
         """更新进度条"""
         self.progress_bar.setValue(value)
+
+    def preprocessing_finished(self):
+        """处理图像预处理完成后的操作"""
+        # 重新启用预处理按钮
+        if hasattr(self, 'data_processing_tab') and self.data_processing_tab:
+            self.data_processing_tab.enable_preprocess_button()
+        self.update_status("预处理完成！")
         
     def on_image_preprocessing_started(self, params):
-        """图像预处理开始时调用"""
-        # 这里可以添加实际的图像预处理逻辑
-        # 例如，创建一个工作线程来处理图像
+        """当图像预处理开始时的处理函数"""
+        self.update_status("开始图像预处理...")
         self.image_preprocessing_started.emit(params)
+    
+    def on_create_class_folders(self, base_folder, class_names):
+        """创建类别文件夹的处理函数"""
+        self.update_status(f"正在创建类别文件夹: {len(class_names)} 个")
+        # 将信号传递给ImagePreprocessor
+        self.create_class_folders_signal.emit(base_folder, class_names)
     
     def on_annotation_started(self, folder):
         """标注开始时调用"""
@@ -186,55 +202,131 @@ class MainWindow(QMainWindow):
     
     def load_config(self):
         """加载配置"""
-        # 这里可以添加加载配置的逻辑
-        # 例如，从配置文件加载设置
-        pass
+        try:
+            # 获取配置文件路径
+            config_file = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'config.json')
+            
+            # 如果配置文件存在，则加载配置
+            if os.path.exists(config_file):
+                with open(config_file, 'r', encoding='utf-8') as f:
+                    config = json.load(f)
+                
+                # 应用配置
+                self.apply_config(config)
+                
+        except Exception as e:
+            print(f"加载配置失败: {str(e)}")
+            import traceback
+            traceback.print_exc()
 
     def apply_config(self, config):
         """应用配置"""
         # 将配置应用到各个标签页
         
         # 数据处理标签页
-        if 'default_source_folder' in config and config['default_source_folder']:
-            self.data_processing_tab.source_folder = config['default_source_folder']
-            self.data_processing_tab.source_path_edit.setText(config['default_source_folder'])
+        if hasattr(self, 'data_processing_tab'):
+            if 'default_source_folder' in config and config['default_source_folder']:
+                if hasattr(self.data_processing_tab, 'source_path_edit'):
+                    self.data_processing_tab.source_path_edit.setText(config['default_source_folder'])
+                if hasattr(self.data_processing_tab, 'source_folder'):
+                    self.data_processing_tab.source_folder = config['default_source_folder']
+            
+            if 'default_output_folder' in config and config['default_output_folder']:
+                if hasattr(self.data_processing_tab, 'output_path_edit'):
+                    self.data_processing_tab.output_path_edit.setText(config['default_output_folder'])
+                if hasattr(self.data_processing_tab, 'output_folder'):
+                    self.data_processing_tab.output_folder = config['default_output_folder']
+            
+            # 添加默认类别设置应用
+            if 'default_classes' in config and config['default_classes']:
+                if hasattr(self.data_processing_tab, 'defect_classes'):
+                    self.data_processing_tab.defect_classes = config['default_classes'].copy()
+                if hasattr(self.data_processing_tab, 'class_list'):
+                    self.data_processing_tab.class_list.clear()
+                    for class_name in config['default_classes']:
+                        self.data_processing_tab.class_list.addItem(class_name)
+            
+            if hasattr(self.data_processing_tab, 'check_preprocess_ready'):
+                self.data_processing_tab.check_preprocess_ready()
         
-        if 'default_output_folder' in config and config['default_output_folder']:
-            self.data_processing_tab.output_folder = config['default_output_folder']
-            self.data_processing_tab.output_path_edit.setText(config['default_output_folder'])
-        
-        self.data_processing_tab.check_preprocess_ready()
-        
-        # 标注标签页
-        if 'default_processed_folder' in config and config['default_processed_folder']:
-            self.annotation_tab.processed_folder = config['default_processed_folder']
-            self.annotation_tab.processed_path_edit.setText(config['default_processed_folder'])
-        
-        if 'default_classes' in config and config['default_classes']:
-            self.annotation_tab.defect_classes = config['default_classes'].copy()
-            self.annotation_tab.class_list.clear()
-            for class_name in config['default_classes']:
-                self.annotation_tab.class_list.addItem(class_name)
-        
-        self.annotation_tab.check_annotation_ready()
+        # 标注标签页 - 直接调用标注标签页的apply_config方法
+        if hasattr(self, 'annotation_tab') and hasattr(self.annotation_tab, 'apply_config'):
+            self.annotation_tab.apply_config(config)
+        # 兼容旧版本，以防apply_config方法不存在
+        elif hasattr(self, 'annotation_tab'):
+            if 'default_processed_folder' in config and config['default_processed_folder']:
+                if hasattr(self.annotation_tab, 'processed_path_edit'):
+                    self.annotation_tab.processed_path_edit.setText(config['default_processed_folder'])
+                if hasattr(self.annotation_tab, 'processed_folder'):
+                    self.annotation_tab.processed_folder = config['default_processed_folder']
+                if hasattr(self.annotation_tab, 'detection_path_edit'):
+                    self.annotation_tab.detection_path_edit.setText(config['default_processed_folder'])
+            
+            if 'default_annotation_folder' in config and config['default_annotation_folder']:
+                if hasattr(self.annotation_tab, 'output_path_edit'):
+                    self.annotation_tab.output_path_edit.setText(config['default_annotation_folder'])
+                if hasattr(self.annotation_tab, 'annotation_folder'):
+                    self.annotation_tab.annotation_folder = config['default_annotation_folder']
+            
+            if 'default_classes' in config and config['default_classes']:
+                if hasattr(self.annotation_tab, 'defect_classes'):
+                    self.annotation_tab.defect_classes = config['default_classes'].copy()
+                if hasattr(self.annotation_tab, 'class_list'):
+                    self.annotation_tab.class_list.clear()
+                    for class_name in config['default_classes']:
+                        self.annotation_tab.class_list.addItem(class_name)
+                        
+                # 同时更新目标检测类别
+                if hasattr(self.annotation_tab, 'detection_classes'):
+                    self.annotation_tab.detection_classes = config['default_classes'].copy()
+                if hasattr(self.annotation_tab, 'detection_class_list'):
+                    self.annotation_tab.detection_class_list.clear()
+                    for class_name in config['default_classes']:
+                        self.annotation_tab.detection_class_list.addItem(class_name)
+                
+                # 更新标签下拉框
+                if hasattr(self.annotation_tab, 'update_label_combo'):
+                    self.annotation_tab.update_label_combo()
+            
+            # 检查准备状态
+            if hasattr(self.annotation_tab, 'check_annotation_ready'):
+                self.annotation_tab.check_annotation_ready()
+            if hasattr(self.annotation_tab, 'check_detection_ready'):
+                self.annotation_tab.check_detection_ready()
+                
+            # 如果目前是在目标检测界面，尝试加载图像
+            if hasattr(self.annotation_tab, 'stacked_widget') and hasattr(self.annotation_tab, 'load_image_files'):
+                if self.annotation_tab.stacked_widget.currentIndex() == 1:
+                    processed_folder = config.get('default_processed_folder', '')
+                    if processed_folder:
+                        self.annotation_tab.load_image_files(processed_folder)
         
         # 训练标签页
-        if 'default_annotation_folder' in config and config['default_annotation_folder']:
-            self.training_tab.annotation_folder = config['default_annotation_folder']
-            self.training_tab.annotation_path_edit.setText(config['default_annotation_folder'])
-        
-        self.training_tab.check_training_ready()
+        if hasattr(self, 'training_tab'):
+            if 'default_annotation_folder' in config and config['default_annotation_folder']:
+                # 移除原先的代码，现在在TrainingTab类中直接实现
+                if hasattr(self.training_tab, 'annotation_folder'):
+                    self.training_tab.annotation_folder = config['default_annotation_folder']
+            
+            if hasattr(self.training_tab, 'check_training_ready'):
+                self.training_tab.check_training_ready()
         
         # 预测标签页
-        if 'default_model_file' in config and config['default_model_file']:
-            self.prediction_tab.model_file = config['default_model_file']
-            self.prediction_tab.model_path_edit.setText(config['default_model_file'])
-        
-        if 'default_class_info_file' in config and config['default_class_info_file']:
-            self.prediction_tab.class_info_file = config['default_class_info_file']
-            self.prediction_tab.class_info_path_edit.setText(config['default_class_info_file'])
-        
-        self.prediction_tab.check_model_ready()
+        if hasattr(self, 'prediction_tab'):
+            if 'default_model_file' in config and config['default_model_file']:
+                if hasattr(self.prediction_tab, 'model_path_edit'):
+                    self.prediction_tab.model_path_edit.setText(config['default_model_file'])
+                if hasattr(self.prediction_tab, 'model_file'):
+                    self.prediction_tab.model_file = config['default_model_file']
+            
+            if 'default_class_info_file' in config and config['default_class_info_file']:
+                if hasattr(self.prediction_tab, 'class_info_path_edit'):
+                    self.prediction_tab.class_info_path_edit.setText(config['default_class_info_file'])
+                if hasattr(self.prediction_tab, 'class_info_file'):
+                    self.prediction_tab.class_info_file = config['default_class_info_file']
+            
+            if hasattr(self.prediction_tab, 'check_model_ready'):
+                self.prediction_tab.check_model_ready()
     
     def goto_annotation_tab(self):
         """切换到标注选项卡"""

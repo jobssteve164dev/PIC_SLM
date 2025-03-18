@@ -1,7 +1,7 @@
 from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QPushButton, QLabel, QFileDialog,
                            QHBoxLayout, QComboBox, QSpinBox, QGroupBox, QGridLayout,
                            QSizePolicy, QLineEdit, QCheckBox, QDoubleSpinBox, QRadioButton,
-                           QButtonGroup, QToolTip, QFrame)
+                           QButtonGroup, QToolTip, QFrame, QListWidget, QInputDialog, QMessageBox)
 from PyQt5.QtCore import Qt, pyqtSignal, QPoint
 from PyQt5.QtGui import QFont, QIcon
 import os
@@ -12,6 +12,7 @@ class DataProcessingTab(BaseTab):
     
     # 定义信号
     image_preprocessing_started = pyqtSignal(dict)
+    create_class_folders_signal = pyqtSignal(str, list)  # 添加创建类别文件夹信号
     
     def __init__(self, parent=None, main_window=None):
         super().__init__(parent, main_window)
@@ -19,6 +20,7 @@ class DataProcessingTab(BaseTab):
         self.output_folder = ""
         self.resize_width = 224
         self.resize_height = 224
+        self.defect_classes = []  # 初始化类别列表
         self.init_ui()
         
     def init_ui(self):
@@ -51,6 +53,56 @@ class DataProcessingTab(BaseTab):
         
         source_group.setLayout(source_layout)
         main_layout.addWidget(source_group)
+        
+        # 添加类别管理组 - 新增
+        class_group = QGroupBox("图片类别管理")
+        class_layout = QVBoxLayout()
+        
+        # 添加类别提示
+        class_tip = QLabel("请添加需要分类的图片类别，这些类别将用于创建源文件夹中的子文件夹结构。")
+        class_tip.setWordWrap(True)
+        class_tip.setStyleSheet("color: #666666; font-size: 9pt;")
+        class_layout.addWidget(class_tip)
+        
+        # 添加类别列表
+        self.class_list = QListWidget()
+        self.class_list.setMinimumHeight(120)
+        class_layout.addWidget(self.class_list)
+        
+        # 添加类别按钮组
+        btn_layout = QHBoxLayout()
+        
+        # 添加类别按钮
+        add_class_btn = QPushButton("添加类别")
+        add_class_btn.clicked.connect(self.add_defect_class)
+        btn_layout.addWidget(add_class_btn)
+        
+        # 删除类别按钮
+        remove_class_btn = QPushButton("删除类别")
+        remove_class_btn.clicked.connect(self.remove_defect_class)
+        btn_layout.addWidget(remove_class_btn)
+        
+        # 加载默认类别按钮
+        load_default_classes_btn = QPushButton("加载默认类别")
+        load_default_classes_btn.clicked.connect(self.load_default_classes)
+        btn_layout.addWidget(load_default_classes_btn)
+        
+        class_layout.addLayout(btn_layout)
+        
+        # 创建类别文件夹按钮
+        create_folders_btn = QPushButton("在源文件夹中创建类别文件夹")
+        create_folders_btn.setMinimumHeight(30)
+        create_folders_btn.clicked.connect(self.create_class_folders)
+        class_layout.addWidget(create_folders_btn)
+        
+        # 添加说明
+        folder_info = QLabel("创建类别文件夹后，请将原始图片放入相应文件夹中，再开始预处理。")
+        folder_info.setWordWrap(True)
+        folder_info.setStyleSheet("color: #666666; font-size: 9pt;")
+        class_layout.addWidget(folder_info)
+        
+        class_group.setLayout(class_layout)
+        main_layout.addWidget(class_group)
         
         # 创建输出文件夹选择组
         output_group = QGroupBox("输出文件夹")
@@ -198,6 +250,26 @@ class DataProcessingTab(BaseTab):
         intensity_info.setStyleSheet("color: gray; font-size: 9pt;")
         options_layout.addWidget(intensity_info, 7, 2)
         
+        # 添加训练验证集比例控制
+        options_layout.addWidget(QLabel("训练集比例:"), 8, 0)
+        self.train_ratio_spin = QDoubleSpinBox()
+        self.train_ratio_spin.setRange(0.5, 0.9)
+        self.train_ratio_spin.setValue(0.8)
+        self.train_ratio_spin.setSingleStep(0.05)
+        options_layout.addWidget(self.train_ratio_spin, 8, 1)
+        ratio_info = QLabel("(训练集占总数据的比例)")
+        ratio_info.setStyleSheet("color: gray; font-size: 9pt;")
+        options_layout.addWidget(ratio_info, 8, 2)
+        
+        # 添加保持类别平衡选项
+        self.balance_classes_check = QCheckBox("保持类别平衡")
+        self.balance_classes_check.setChecked(True)
+        options_layout.addWidget(self.balance_classes_check, 9, 0, 1, 3)
+        balance_info = QLabel("(确保训练集和验证集中包含所有类别，且每个类别的样本数量均衡)")
+        balance_info.setWordWrap(True)
+        balance_info.setStyleSheet("color: gray; font-size: 9pt;")
+        options_layout.addWidget(balance_info, 10, 0, 1, 3)
+        
         options_group.setLayout(options_layout)
         main_layout.addWidget(options_group)
         
@@ -205,10 +277,15 @@ class DataProcessingTab(BaseTab):
         self.preprocess_btn = QPushButton("开始预处理")
         self.preprocess_btn.clicked.connect(self.preprocess_images)
         self.preprocess_btn.setEnabled(False)
+        self.preprocess_btn.setMinimumWidth(200)  # 设置最小宽度
+        self.preprocess_btn.setMinimumHeight(40)  # 设置最小高度
         main_layout.addWidget(self.preprocess_btn)
         
         # 添加弹性空间
         main_layout.addStretch()
+        
+        # 尝试加载默认类别
+        self.load_default_classes()
     
     def select_source_folder(self):
         """选择源图片文件夹"""
@@ -229,6 +306,72 @@ class DataProcessingTab(BaseTab):
     def check_preprocess_ready(self):
         """检查是否可以开始预处理"""
         self.preprocess_btn.setEnabled(bool(self.source_folder and self.output_folder))
+    
+    def add_defect_class(self):
+        """添加缺陷类别"""
+        class_name, ok = QInputDialog.getText(self, "添加类别", "请输入图片类别名称:")
+        if ok and class_name:
+            # 检查是否已存在
+            if class_name in self.defect_classes:
+                QMessageBox.warning(self, "警告", f"类别 '{class_name}' 已存在!")
+                return
+                
+            self.defect_classes.append(class_name)
+            self.class_list.addItem(class_name)
+    
+    def remove_defect_class(self):
+        """删除缺陷类别"""
+        current_item = self.class_list.currentItem()
+        if current_item:
+            class_name = current_item.text()
+            self.defect_classes.remove(class_name)
+            self.class_list.takeItem(self.class_list.row(current_item))
+    
+    def load_default_classes(self):
+        """从配置加载默认缺陷类别"""
+        try:
+            # 尝试从主窗口获取ConfigLoader实例
+            if hasattr(self.main_window, 'config_loader'):
+                default_classes = self.main_window.config_loader.get_defect_classes()
+                if default_classes:
+                    # 清空当前类别
+                    self.defect_classes = []
+                    self.class_list.clear()
+                    
+                    # 添加默认类别
+                    for class_name in default_classes:
+                        self.defect_classes.append(class_name)
+                        self.class_list.addItem(class_name)
+                    
+                    self.update_status(f"已加载 {len(default_classes)} 个默认类别")
+                else:
+                    self.update_status("未找到默认类别")
+        except Exception as e:
+            self.update_status(f"加载默认类别时出错: {str(e)}")
+    
+    def create_class_folders(self):
+        """在源文件夹中创建类别文件夹"""
+        if not self.source_folder:
+            QMessageBox.warning(self, "警告", "请先选择源图片文件夹!")
+            return
+            
+        if not self.defect_classes:
+            QMessageBox.warning(self, "警告", "请先添加至少一个图片类别!")
+            return
+            
+        # 确认是否创建文件夹
+        reply = QMessageBox.question(self, "确认创建文件夹", 
+                                   f"将在 {self.source_folder} 中创建 {len(self.defect_classes)} 个类别文件夹，是否继续?",
+                                   QMessageBox.Yes | QMessageBox.No)
+        if reply == QMessageBox.No:
+            return
+            
+        # 发出创建文件夹信号
+        self.create_class_folders_signal.emit(self.source_folder, self.defect_classes)
+        
+        # 提示用户完成后续操作
+        QMessageBox.information(self, "文件夹创建成功", 
+                              "类别文件夹已创建，请将原始图片分别放入对应的类别文件夹中，然后开始预处理。")
     
     def on_size_changed(self, size_text):
         """当尺寸选择改变时"""
@@ -291,12 +434,39 @@ class DataProcessingTab(BaseTab):
     
     def preprocess_images(self):
         """开始预处理图像"""
+        # 检查是否有类别文件夹
+        if self.defect_classes and self.balance_classes_check.isChecked():
+            # 检查源文件夹是否包含所有类别子文件夹
+            missing_folders = []
+            for class_name in self.defect_classes:
+                class_folder = os.path.join(self.source_folder, class_name)
+                if not os.path.exists(class_folder) or not os.path.isdir(class_folder):
+                    missing_folders.append(class_name)
+            
+            if missing_folders:
+                reply = QMessageBox.question(self, "缺少类别文件夹", 
+                                           f"以下类别文件夹不存在: {', '.join(missing_folders)}。\n"
+                                           "是否创建这些文件夹并继续？",
+                                           QMessageBox.Yes | QMessageBox.No)
+                if reply == QMessageBox.Yes:
+                    # 创建缺少的文件夹
+                    for class_name in missing_folders:
+                        os.makedirs(os.path.join(self.source_folder, class_name), exist_ok=True)
+                else:
+                    return
+        
         # 收集预处理参数
         params = {
             'source_folder': self.source_folder,
-            'output_folder': self.output_folder,
-            'resize_width': self.resize_width,
-            'resize_height': self.resize_height,
+            'target_folder': self.output_folder,
+            'width': self.resize_width,
+            'height': self.resize_height,
+            'format': 'jpg',
+            'brightness_value': 0,  # 重命名亮度调整值
+            'contrast_value': 0,    # 重命名对比度调整值
+            'train_ratio': self.train_ratio_spin.value(),
+            'augmentation_level': '基础',
+            'dataset_folder': os.path.join(self.output_folder, 'dataset'),
             'keep_aspect_ratio': self.keep_aspect_ratio.isChecked(),
             'augmentation_mode': 'combined' if self.combined_mode_radio.isChecked() else 'separate',
             'flip_horizontal': self.flip_horizontal_check.isChecked(),
@@ -304,15 +474,32 @@ class DataProcessingTab(BaseTab):
             'rotate': self.rotate_check.isChecked(),
             'random_crop': self.random_crop_check.isChecked(),
             'random_scale': self.random_scale_check.isChecked(),
-            'brightness': self.brightness_check.isChecked(),
-            'contrast': self.contrast_check.isChecked(),
+            'brightness': self.brightness_check.isChecked(),  # 这是增强方法开关
+            'contrast': self.contrast_check.isChecked(),      # 这是增强方法开关
             'noise': self.noise_check.isChecked(),
             'blur': self.blur_check.isChecked(),
             'hue': self.hue_check.isChecked(),
-            'augmentation_intensity': self.aug_intensity.value()
+            'augmentation_intensity': self.aug_intensity.value(),
+            'balance_classes': self.balance_classes_check.isChecked(),
+            'class_names': self.defect_classes
         }
         
         # 发出预处理开始信号
         self.image_preprocessing_started.emit(params)
         self.update_status("开始图像预处理...")
-        self.preprocess_btn.setEnabled(False) 
+        self.preprocess_btn.setEnabled(False)
+        
+    def enable_preprocess_button(self):
+        """重新启用预处理按钮"""
+        self.preprocess_btn.setEnabled(True)
+        self.update_status("预处理完成，可以再次开始新的预处理。")
+    
+    def apply_config(self, config):
+        """应用配置信息"""
+        if config:
+            # 应用类别配置
+            if 'classes' in config and config['classes']:
+                self.defect_classes = config['classes'].copy()
+                self.class_list.clear()
+                for class_name in self.defect_classes:
+                    self.class_list.addItem(class_name) 

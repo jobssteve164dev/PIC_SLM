@@ -1,14 +1,18 @@
 import sys
 import os
-from PyQt5.QtWidgets import QApplication, QMessageBox
+import json
+from PyQt5.QtWidgets import QApplication, QMessageBox, QTabWidget, QVBoxLayout, QWidget
 from PyQt5.QtCore import QThread, QObject
 from ui.main_window import MainWindow
+from ui.evaluation_tab import EvaluationTab  # 从ui模块导入EvaluationTab
 from data_processor import DataProcessor
 from model_trainer import ModelTrainer
 from predictor import Predictor
 from image_preprocessor import ImagePreprocessor
 from annotation_tool import AnnotationTool
 from config_loader import ConfigLoader
+import matplotlib.pyplot as plt
+from matplotlib.backends.backend_qt5agg import FigureCanvas
 
 # 配置matplotlib全局字体设置
 import matplotlib
@@ -26,6 +30,59 @@ class Worker(QObject):
         self.annotation_tool = AnnotationTool()
 
 def main():
+    # 检查配置文件
+    config_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'config.json')
+    print(f"配置文件路径: {os.path.abspath(config_path)}")
+    print(f"配置文件是否存在: {os.path.exists(config_path)}")
+    
+    # 确保配置文件存在并包含必要的字段
+    if not os.path.exists(config_path):
+        print("配置文件不存在，创建默认配置")
+        default_config = {
+            'default_source_folder': '',
+            'default_output_folder': '',
+            'default_processed_folder': '',
+            'default_annotation_folder': os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'data', 'annotations'),
+            'default_classes': [],
+            'auto_annotation': False,
+            'default_model_file': '',
+            'default_class_info_file': ''
+        }
+        
+        # 确保目录存在
+        os.makedirs(os.path.dirname(config_path), exist_ok=True)
+        os.makedirs(default_config['default_annotation_folder'], exist_ok=True)
+        
+        # 保存默认配置
+        with open(config_path, 'w', encoding='utf-8') as f:
+            json.dump(default_config, f, ensure_ascii=False, indent=4)
+        
+        print(f"已创建默认配置文件: {config_path}")
+        print(f"默认标注文件夹: {default_config['default_annotation_folder']}")
+    else:
+        try:
+            with open(config_path, 'r', encoding='utf-8') as f:
+                config_content = json.load(f)
+                print(f"配置文件内容: {config_content}")
+                
+                # 检查是否有默认标注文件夹，如果没有则添加
+                if 'default_annotation_folder' not in config_content or not config_content['default_annotation_folder']:
+                    print("配置文件中缺少default_annotation_folder，添加默认值")
+                    config_content['default_annotation_folder'] = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'data', 'annotations')
+                    os.makedirs(config_content['default_annotation_folder'], exist_ok=True)
+                    
+                    # 保存更新后的配置
+                    with open(config_path, 'w', encoding='utf-8') as f:
+                        json.dump(config_content, f, ensure_ascii=False, indent=4)
+                    
+                    print(f"已更新配置文件，添加默认标注文件夹: {config_content['default_annotation_folder']}")
+                
+                print(f"默认标注文件夹: {config_content.get('default_annotation_folder', '未设置')}")
+        except Exception as e:
+            print(f"读取配置文件出错: {str(e)}")
+            import traceback
+            traceback.print_exc()
+    
     # 加载配置
     config_loader = ConfigLoader()
     config = config_loader.get_config() if hasattr(config_loader, 'get_config') else config_loader.load_config()
@@ -41,9 +98,43 @@ def main():
     # 创建主窗口
     window = MainWindow()
     
-    # 应用配置
+    # 创建评估标签页
+    evaluation_tab = EvaluationTab()
+    
+    # 找到window中的QTabWidget
+    # 获取window中的所有子控件
+    for child in window.findChildren(QTabWidget):
+        tab_widget = child
+        tab_widget.addTab(evaluation_tab, "评估")
+        break
+    
+    # 应用配置 - 确保在初始化完成后应用配置
     if config:
+        print("正在应用配置...")
         window.apply_config(config)
+        
+    # 强制应用标注界面的配置，确保目标检测界面路径正确设置
+    if hasattr(window, 'annotation_tab') and hasattr(window.annotation_tab, 'apply_config'):
+        window.annotation_tab.apply_config(config)
+    
+    # 强制应用训练界面的配置，确保训练界面标注文件夹路径正确设置
+    if hasattr(window, 'training_tab'):
+        print(f"训练标签页存在: {window.training_tab}")
+        print(f"训练标签页类型: {type(window.training_tab)}")
+        
+        # 确保训练标签页有apply_config方法
+        if hasattr(window.training_tab, 'apply_config'):
+            print("训练标签页有apply_config方法，正在应用配置...")
+            window.training_tab.apply_config(config)
+            print(f"训练标签页配置应用完成，标注文件夹: {window.training_tab.annotation_folder}")
+            
+            # 检查路径控件是否有文本
+            if hasattr(window.training_tab, 'classification_path_edit'):
+                print(f"分类路径控件文本: {window.training_tab.classification_path_edit.text()}")
+            if hasattr(window.training_tab, 'detection_path_edit'):
+                print(f"检测路径控件文本: {window.training_tab.detection_path_edit.text()}")
+        else:
+            print("警告: 训练标签页没有apply_config方法")
     
     # 创建工作线程
     thread = QThread()
@@ -97,20 +188,38 @@ def main():
     worker.image_preprocessor.progress_updated.connect(window.update_progress)
     worker.image_preprocessor.status_updated.connect(window.update_status)
     worker.image_preprocessor.preprocessing_error.connect(lambda msg: QMessageBox.critical(window, '错误', msg))
+    worker.image_preprocessor.preprocessing_finished.connect(window.preprocessing_finished)
     window.image_preprocessing_started.connect(worker.image_preprocessor.preprocess_images)
+    # 添加创建类别文件夹信号连接
+    window.create_class_folders_signal.connect(worker.image_preprocessor.create_class_folders)
     
     # 标注工具信号
     worker.annotation_tool.status_updated.connect(window.update_status)
     worker.annotation_tool.annotation_error.connect(lambda msg: QMessageBox.critical(window, '错误', msg))
     window.annotation_started.connect(lambda folder: worker.annotation_tool.start_annotation(folder))
+    # 添加验证集文件夹打开信号连接
+    if hasattr(window, 'annotation_tab') and hasattr(window.annotation_tab, 'open_validation_folder_signal'):
+        window.annotation_tab.open_validation_folder_signal.connect(lambda folder: worker.annotation_tool.open_validation_folder(folder))
     
     # 模型训练信号
     worker.model_trainer.progress_updated.connect(window.update_progress)
     worker.model_trainer.status_updated.connect(window.update_status)
     worker.model_trainer.training_error.connect(lambda msg: QMessageBox.critical(window, '错误', msg))
+    worker.model_trainer.training_stopped.connect(window.training_tab.on_training_stopped)
     
-    # 修改训练开始信号连接，添加对任务类型的支持
-    window.training_started.connect(lambda: start_training(window, worker.model_trainer))
+    # 确保评估标签页存在并正确连接
+    if hasattr(window, 'evaluation_tab') and hasattr(window.evaluation_tab, 'update_training_visualization'):
+        print("连接训练可视化信号...")  # 添加调试信息
+        worker.model_trainer.epoch_finished.connect(window.evaluation_tab.update_training_visualization)
+    else:
+        print("警告: 无法连接训练可视化信号，evaluation_tab 或 update_training_visualization 方法不存在")
+    
+    # 添加模型下载失败信号连接
+    if hasattr(window, 'training_tab') and hasattr(window.training_tab, 'on_model_download_failed'):
+        worker.model_trainer.model_download_failed.connect(window.training_tab.on_model_download_failed)
+        
+    # 修改训练开始信号连接，改为在工作线程中执行训练
+    window.training_started.connect(lambda: window.prepare_training_config(worker.model_trainer))
     
     # 如果训练标签页有停止按钮，则连接停止训练信号
     if hasattr(window, 'training_tab') and hasattr(window.training_tab, 'stop_btn'):
@@ -142,15 +251,15 @@ def main():
     # 显示主窗口
     window.show()
     
-    # 定义训练启动函数
-    def start_training(window, model_trainer):
-        """启动模型训练并传递所有必要的参数"""
-        if not hasattr(window, 'training_tab'):
-            QMessageBox.critical(window, '错误', '训练标签页不存在')
+    # 定义准备训练配置函数
+    def prepare_training_config(self, model_trainer):
+        """准备训练配置并发送给工作线程执行"""
+        if not hasattr(self, 'training_tab'):
+            QMessageBox.critical(self, '错误', '训练标签页不存在')
             return
             
         # 获取训练参数
-        params = window.training_tab.get_training_params()
+        params = self.training_tab.get_training_params()
         task_type = params.get('task_type', 'classification')
         
         # 设置模型保存目录
@@ -159,7 +268,7 @@ def main():
         
         # 获取数据目录（根据任务类型选择）
         if task_type == 'classification':
-            data_dir = window.training_tab.classification_path_edit.text()
+            data_dir = self.training_tab.classification_path_edit.text()
             model_name = params.get('model', 'ResNet50')
             batch_size = params.get('batch_size', 32)
             epochs = params.get('epochs', 20)
@@ -169,7 +278,7 @@ def main():
             pretrained_path = params.get('pretrained_path', '')  # 获取本地预训练模型路径
             metrics = params.get('metrics', ['accuracy'])  # 直接使用传入的metrics列表
         else:  # detection
-            data_dir = window.training_tab.detection_path_edit.text()
+            data_dir = self.training_tab.detection_path_edit.text()
             model_name = params.get('model', 'YOLOv5')
             batch_size = params.get('batch_size', 16)
             epochs = params.get('epochs', 50)
@@ -209,9 +318,14 @@ def main():
                 'use_fpn': True         # 默认值
             })
         
-        # 启动训练
-        window.status_bar.showMessage(f"开始{task_type}训练：{model_name}")
+        # 更新UI状态 - 修复：使用update_status方法代替status_bar.showMessage
+        self.update_status(f"开始{task_type}训练：{model_name}")
+        
+        # 使用工作线程启动训练
         model_trainer.train_model_with_config(training_config)
+    
+    # 动态添加prepare_training_config方法到MainWindow类
+    MainWindow.prepare_training_config = prepare_training_config
     
     # 运行应用程序
     sys.exit(app.exec_())

@@ -15,6 +15,64 @@ class AnnotationTool(QObject):
         # 内嵌UI已经在主窗口中创建，这里不需要额外的初始化
         self.processes = []  # 存储所有启动的子进程
         
+    def start_annotation(self, folder: str) -> None:
+        """
+        开始图片分类标注
+        
+        参数:
+            folder: 包含待分类图片的文件夹路径
+        """
+        try:
+            # 检查文件夹是否存在
+            if not os.path.exists(folder):
+                self.annotation_error.emit(f"文件夹不存在: {folder}")
+                return
+                
+            # 构建dataset/train文件夹路径
+            dataset_folder = os.path.join(folder, 'dataset')
+            train_folder = os.path.join(dataset_folder, 'train')
+            
+            # 检查train文件夹是否存在
+            if not os.path.exists(train_folder):
+                self.annotation_error.emit(f"训练集文件夹不存在: {train_folder}")
+                return
+                
+            # 更新状态
+            self.status_updated.emit(f"开始图片分类标注，文件夹: {train_folder}")
+            
+            # 打开train文件夹，让用户可以手动分类图片
+            self.open_folder(train_folder)
+            
+            # 显示提示信息
+            self.status_updated.emit("请将图片拖放到相应的类别文件夹中进行标注。完成后，您还可以打开验证集文件夹进行标注。")
+            
+        except Exception as e:
+            self.annotation_error.emit(f"开始标注时出错: {str(e)}")
+            
+    def open_folder(self, folder_path: str) -> None:
+        """
+        打开文件夹
+        
+        参数:
+            folder_path: 要打开的文件夹路径
+        """
+        try:
+            # 根据操作系统选择合适的命令
+            if sys.platform == 'win32':
+                # Windows
+                subprocess.Popen(f'explorer "{folder_path}"', shell=True)
+            elif sys.platform == 'darwin':
+                # macOS
+                subprocess.Popen(['open', folder_path])
+            else:
+                # Linux
+                subprocess.Popen(['xdg-open', folder_path])
+                
+            self.status_updated.emit(f"已打开文件夹: {folder_path}")
+            
+        except Exception as e:
+            self.annotation_error.emit(f"打开文件夹时出错: {str(e)}")
+            
     def start_labelimg(self, image_folder: str, class_names: List[str] = None, output_folder: str = None) -> None:
         """
         启动LabelImg标注工具
@@ -208,4 +266,30 @@ class AnnotationTool(QObject):
             self.status_updated.emit('标注转换完成')
             
         except Exception as e:
-            self.annotation_error.emit(f'转换标注时出错: {str(e)}') 
+            self.annotation_error.emit(f'转换标注时出错: {str(e)}')
+            
+    def open_validation_folder(self, folder: str) -> None:
+        """
+        打开验证集文件夹进行标注
+        
+        参数:
+            folder: 主数据文件夹路径
+        """
+        try:
+            # 构建dataset/val文件夹路径
+            dataset_folder = os.path.join(folder, 'dataset')
+            val_folder = os.path.join(dataset_folder, 'val')
+            
+            # 检查val文件夹是否存在
+            if not os.path.exists(val_folder):
+                self.annotation_error.emit(f"验证集文件夹不存在: {val_folder}")
+                return
+                
+            # 更新状态
+            self.status_updated.emit(f"打开验证集文件夹进行标注: {val_folder}")
+            
+            # 打开val文件夹
+            self.open_folder(val_folder)
+            
+        except Exception as e:
+            self.annotation_error.emit(f"打开验证集文件夹时出错: {str(e)}") 

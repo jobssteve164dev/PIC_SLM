@@ -337,26 +337,32 @@ class EvaluationTab(BaseTab):
             except Exception as e:
                 QMessageBox.critical(self, "错误", f"停止TensorBoard失败: {str(e)}")
     
-    def update_training_visualization(self, epoch, logs):
+    def update_training_visualization(self, data):
         """更新训练可视化"""
-        if hasattr(self, 'training_visualization'):
-            # 准备数据
-            epoch_results = {
-                'phase': 'train' if 'val_loss' not in logs else 'val',
-                'epoch': epoch,
-                'loss': logs.get('loss', 0) if 'val_loss' not in logs else logs.get('val_loss', 0),
-                'accuracy': logs.get('accuracy', 0) if 'val_accuracy' not in logs else logs.get('val_accuracy', 0)
-            }
-            
-            # 更新可视化
-            self.training_visualization.update_plots(epoch_results)
-            
-            # 更新状态标签
-            phase = "训练" if 'val_loss' not in logs else "验证"
-            loss = logs.get('loss', 0) if 'val_loss' not in logs else logs.get('val_loss', 0)
-            acc = logs.get('accuracy', 0) if 'val_accuracy' not in logs else logs.get('val_accuracy', 0)
-            
-            self.training_status_label.setText(f"轮次 {epoch}: {phase}损失 = {loss:.4f}, {phase}准确率 = {acc:.4f}")
+        try:
+            print(f"收到训练数据更新: {data}")  # 添加调试信息
+            if hasattr(self, 'training_visualization'):
+                # 准备数据
+                epoch_results = {
+                    'phase': data['phase'],
+                    'epoch': data['epoch'],
+                    'loss': float(data['loss']),  # 确保转换为浮点数
+                    'accuracy': float(data['accuracy'])  # 确保转换为浮点数
+                }
+                
+                # 更新可视化
+                self.training_visualization.update_plots(epoch_results)
+                
+                # 更新状态标签
+                phase = "训练" if data['phase'] == 'train' else "验证"
+                loss = data['loss']
+                acc = data['accuracy']
+                
+                self.training_status_label.setText(f"轮次 {data['epoch']}: {phase}损失 = {loss:.4f}, {phase}准确率 = {acc:.4f}")
+        except Exception as e:
+            import traceback
+            print(f"更新训练可视化时出错: {str(e)}")
+            print(traceback.format_exc())
     
     def reset_training_visualization(self):
         """重置训练可视化"""

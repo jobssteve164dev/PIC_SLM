@@ -309,21 +309,23 @@ class SettingsTab(BaseTab):
     
     def save_settings(self):
         """保存设置"""
-        # 收集设置
-        self.config = {
-            'default_source_folder': self.default_source_edit.text(),
-            'default_output_folder': self.default_output_edit.text(),
-            'default_processed_folder': self.default_processed_edit.text(),
-            'default_annotation_folder': self.default_annotation_edit.text(),
-            'default_classes': self.default_classes,
-            'auto_annotation': self.auto_annotation_check.isChecked(),
-            'default_model_file': self.default_model_edit.text(),
-            'default_class_info_file': self.default_class_info_edit.text()
-        }
-        
         try:
+            # 收集设置
+            self.config = {
+                'default_source_folder': self.default_source_edit.text(),
+                'default_output_folder': self.default_output_edit.text(),
+                'default_processed_folder': self.default_processed_edit.text(),
+                'default_annotation_folder': self.default_annotation_edit.text(),
+                'default_classes': self.default_classes,
+                'auto_annotation': self.auto_annotation_check.isChecked(),
+                'default_model_file': self.default_model_edit.text(),
+                'default_class_info_file': self.default_class_info_edit.text()
+            }
+            
             # 保存到配置文件
             config_file = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'config.json')
+            os.makedirs(os.path.dirname(config_file), exist_ok=True)
+            
             with open(config_file, 'w', encoding='utf-8') as f:
                 json.dump(self.config, f, ensure_ascii=False, indent=4)
             
@@ -331,5 +333,8 @@ class SettingsTab(BaseTab):
             self.settings_saved.emit(self.config)
             self.update_status("设置已保存")
             QMessageBox.information(self, "成功", "设置已保存")
+            
         except Exception as e:
-            QMessageBox.critical(self, "错误", f"保存设置失败: {str(e)}") 
+            QMessageBox.critical(self, "错误", f"保存设置失败: {str(e)}")
+            import traceback
+            traceback.print_exc() 

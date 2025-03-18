@@ -1,12 +1,151 @@
 from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QPushButton, QLabel, QFileDialog,
                            QHBoxLayout, QComboBox, QSpinBox, QDoubleSpinBox, QGroupBox, QGridLayout,
                            QSizePolicy, QLineEdit, QCheckBox, QMessageBox, QRadioButton, QButtonGroup,
-                           QStackedWidget, QScrollArea, QListWidget)
-from PyQt5.QtCore import Qt, pyqtSignal
-from PyQt5.QtGui import QFont
+                           QStackedWidget, QScrollArea, QListWidget, QDialog, QTextBrowser)
+from PyQt5.QtCore import Qt, pyqtSignal, QUrl
+from PyQt5.QtGui import QFont, QDesktopServices
 import os
+import sys
+import platform
 from .base_tab import BaseTab
 from .training_help_dialog import TrainingHelpDialog
+import json
+
+class ModelDownloadDialog(QDialog):
+    """模型下载失败时显示的对话框，提供下载链接和文件夹打开按钮"""
+    
+    def __init__(self, model_name, model_link, parent=None):
+        super().__init__(parent)
+        self.model_name = model_name
+        self.model_link = model_link
+        self.init_ui()
+        
+    def init_ui(self):
+        """初始化UI"""
+        self.setWindowTitle("预训练模型下载失败")
+        self.setMinimumWidth(600)
+        self.setMinimumHeight(450)
+        
+        layout = QVBoxLayout(self)
+        
+        # 添加说明标签
+        title_label = QLabel(f"预训练模型 <b>{self.model_name}</b> 下载失败")
+        title_label.setStyleSheet("font-size: 16px; color: #C62828;")
+        layout.addWidget(title_label)
+        
+        # 添加详细说明
+        info_text = QTextBrowser()
+        info_text.setOpenExternalLinks(True)
+        info_text.setStyleSheet("background-color: #F5F5F5; border: 1px solid #E0E0E0;")
+        info_text.setHtml(f"""
+        <h3>预训练模型下载失败</h3>
+        <p>PyTorch无法自动下载预训练模型，可能是由于以下原因：</p>
+        <ul>
+            <li>网络连接问题（如防火墙限制、代理设置等）</li>
+            <li>服务器暂时不可用</li>
+            <li>下载超时</li>
+        </ul>
+        
+        <h3>预训练模型的优势</h3>
+        <p>使用预训练模型可以显著提高训练效果和速度：</p>
+        <ul>
+            <li>缩短训练时间，通常减少50%-90%的训练轮数</li>
+            <li>提高模型精度，特别是在训练数据量较少的情况下</li>
+            <li>更好的泛化能力和特征提取能力</li>
+        </ul>
+        
+        <h3>解决方法</h3>
+        <p>您可以：</p>
+        <ol>
+            <li>手动下载模型文件: <a href="{self.model_link}"><b>{self.model_name}</b> 模型下载链接</a></li>
+            <li>将下载的文件放入PyTorch的模型缓存目录</li>
+        </ol>
+        
+        <h4>模型缓存目录通常位于:</h4>
+        <ul>
+            <li>Windows: <code>%USERPROFILE%\\.cache\\torch\\hub\\checkpoints</code></li>
+            <li>Linux: <code>~/.cache/torch/hub/checkpoints</code></li>
+            <li>macOS: <code>~/Library/Caches/torch/hub/checkpoints</code> 或 <code>~/.cache/torch/hub/checkpoints</code></li>
+        </ul>
+        
+        <p>放置模型文件后，<b>不需要重命名文件</b>，直接将下载的文件放入目录即可。</p>
+        <p>下载完成后，重新开始训练即可使用预训练模型。</p>
+        
+        <p><i>注意：如果不使用预训练模型，当前训练会继续进行，但可能需要更长时间才能达到相同精度。</i></p>
+        """)
+        layout.addWidget(info_text)
+        
+        # 添加按钮
+        button_layout = QHBoxLayout()
+        
+        # 打开下载链接按钮
+        open_link_btn = QPushButton("打开下载链接")
+        open_link_btn.setStyleSheet("background-color: #2196F3; color: white; font-weight: bold; padding: 8px;")
+        open_link_btn.setMinimumWidth(120)
+        open_link_btn.clicked.connect(self.open_download_link)
+        
+        # 打开缓存目录按钮
+        open_cache_btn = QPushButton("打开模型缓存目录")
+        open_cache_btn.setStyleSheet("background-color: #4CAF50; color: white; font-weight: bold; padding: 8px;")
+        open_cache_btn.setMinimumWidth(150)
+        open_cache_btn.clicked.connect(self.open_cache_directory)
+        
+        # 关闭按钮
+        close_btn = QPushButton("继续训练(不使用预训练)")
+        close_btn.setStyleSheet("padding: 8px;")
+        close_btn.clicked.connect(self.accept)
+        
+        button_layout.addWidget(open_link_btn)
+        button_layout.addWidget(open_cache_btn)
+        button_layout.addWidget(close_btn)
+        
+        layout.addLayout(button_layout)
+    
+    def open_download_link(self):
+        """打开模型下载链接"""
+        QDesktopServices.openUrl(QUrl(self.model_link))
+    
+    def open_cache_directory(self):
+        """打开PyTorch模型缓存目录"""
+        try:
+            # 根据不同操作系统找到缓存目录
+            cache_dir = self.get_torch_cache_dir()
+            
+            # 确保目录存在
+            os.makedirs(cache_dir, exist_ok=True)
+            
+            # 打开目录
+            if platform.system() == "Windows":
+                os.startfile(cache_dir)
+            elif platform.system() == "Darwin":  # macOS
+                import subprocess
+                subprocess.run(["open", cache_dir])
+            else:  # Linux
+                import subprocess
+                subprocess.run(["xdg-open", cache_dir])
+            
+        except Exception as e:
+            QMessageBox.warning(self, "无法打开目录", f"无法打开PyTorch缓存目录: {str(e)}")
+    
+    def get_torch_cache_dir(self):
+        """获取PyTorch缓存目录路径"""
+        # 获取用户主目录
+        home_dir = os.path.expanduser("~")
+        
+        # 根据操作系统确定缓存目录
+        if platform.system() == "Windows":
+            cache_dir = os.path.join(os.environ.get("USERPROFILE", home_dir), ".cache", "torch", "hub", "checkpoints")
+        elif platform.system() == "Darwin":  # macOS
+            # 先尝试macOS特有的缓存目录，如果不存在则使用通用的.cache目录
+            macos_cache = os.path.join(home_dir, "Library", "Caches", "torch", "hub", "checkpoints")
+            if os.path.exists(os.path.dirname(macos_cache)):
+                cache_dir = macos_cache
+            else:
+                cache_dir = os.path.join(home_dir, ".cache", "torch", "hub", "checkpoints")
+        else:  # Linux
+            cache_dir = os.path.join(home_dir, ".cache", "torch", "hub", "checkpoints")
+        
+        return cache_dir
 
 class TrainingTab(BaseTab):
     """训练标签页，负责模型训练功能"""
@@ -14,12 +153,74 @@ class TrainingTab(BaseTab):
     # 定义信号
     training_started = pyqtSignal()
     training_progress_updated = pyqtSignal(int, dict)  # 添加训练进度更新信号
+    training_stopped = pyqtSignal()  # 添加训练停止信号
     
     def __init__(self, parent=None, main_window=None):
         super().__init__(parent, main_window)
         self.annotation_folder = ""
         self.task_type = "classification"  # 默认为图片分类任务
         self.init_ui()
+        
+        # 尝试直接从配置文件加载默认标注文件夹
+        try:
+            config_file = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'config.json')
+            print(f"训练标签页直接加载配置文件: {config_file}")
+            if os.path.exists(config_file):
+                with open(config_file, 'r', encoding='utf-8') as f:
+                    config = json.load(f)
+                    if 'default_annotation_folder' in config and config['default_annotation_folder']:
+                        self.annotation_folder = config['default_annotation_folder']
+                        print(f"训练标签页直接设置标注文件夹: {self.annotation_folder}")
+                        
+                        # 设置相应的路径输入框
+                        if hasattr(self, 'classification_path_edit'):
+                            self.classification_path_edit.setText(self.annotation_folder)
+                            print(f"直接设置分类路径输入框: {self.annotation_folder}")
+                        
+                        if hasattr(self, 'detection_path_edit'):
+                            self.detection_path_edit.setText(self.annotation_folder)
+                            print(f"直接设置检测路径输入框: {self.annotation_folder}")
+                        
+                        # 检查是否可以开始训练
+                        self.check_training_ready()
+        except Exception as e:
+            print(f"训练标签页直接加载配置文件出错: {str(e)}")
+            import traceback
+            traceback.print_exc()
+        
+    def apply_config(self, config):
+        """应用配置设置到训练标签页"""
+        try:
+            print(f"训练标签页apply_config被调用，配置内容：{config}")
+            
+            # 加载默认标注文件夹路径
+            if 'default_annotation_folder' in config and config['default_annotation_folder']:
+                print(f"发现默认标注文件夹配置: {config['default_annotation_folder']}")
+                self.annotation_folder = config['default_annotation_folder']
+                
+                # 根据当前任务类型设置相应的路径输入框
+                if hasattr(self, 'classification_path_edit'):
+                    print(f"设置classification_path_edit: {self.annotation_folder}")
+                    self.classification_path_edit.setText(self.annotation_folder)
+                else:
+                    print("classification_path_edit尚未创建")
+                    
+                if hasattr(self, 'detection_path_edit'):
+                    print(f"设置detection_path_edit: {self.annotation_folder}")
+                    self.detection_path_edit.setText(self.annotation_folder)
+                else:
+                    print("detection_path_edit尚未创建")
+                
+                # 检查是否满足开始训练的条件
+                self.check_training_ready()
+            else:
+                print("配置中没有找到default_annotation_folder或为空值")
+                
+            print(f"已应用训练标签页配置，标注文件夹: {self.annotation_folder}")
+        except Exception as e:
+            print(f"应用训练标签页配置时出错: {str(e)}")
+            import traceback
+            traceback.print_exc()
         
     def init_ui(self):
         """初始化UI"""
@@ -155,6 +356,11 @@ class TrainingTab(BaseTab):
         self.classification_path_edit = QLineEdit()
         self.classification_path_edit.setReadOnly(True)
         self.classification_path_edit.setPlaceholderText("请选择包含已标注图片的分类文件夹")
+        
+        # 如果有设置默认标注文件夹，在创建完控件后立即设置
+        if hasattr(self, 'annotation_folder') and self.annotation_folder:
+            self.classification_path_edit.setText(self.annotation_folder)
+            print(f"初始化分类界面时设置路径: {self.annotation_folder}")
         
         folder_btn = QPushButton("浏览...")
         folder_btn.setFixedWidth(60)
@@ -339,6 +545,11 @@ class TrainingTab(BaseTab):
         self.detection_path_edit = QLineEdit()
         self.detection_path_edit.setReadOnly(True)
         self.detection_path_edit.setPlaceholderText("请选择包含目标检测标注的文件夹")
+        
+        # 如果有设置默认标注文件夹，在创建完控件后立即设置
+        if hasattr(self, 'annotation_folder') and self.annotation_folder:
+            self.detection_path_edit.setText(self.annotation_folder)
+            print(f"初始化检测界面时设置路径: {self.annotation_folder}")
         
         folder_btn = QPushButton("浏览...")
         folder_btn.setFixedWidth(60)
@@ -609,9 +820,25 @@ class TrainingTab(BaseTab):
     
     def stop_training(self):
         """停止训练"""
-        self.update_status("正在停止训练...")
-        self.training_status_label.setText("正在停止训练...")
-        # 实际的停止逻辑在main.py中处理
+        reply = QMessageBox.question(
+            self, 
+            "确认停止", 
+            "确定要停止训练吗？",
+            QMessageBox.Yes | QMessageBox.No,
+            QMessageBox.No
+        )
+        
+        if reply == QMessageBox.Yes:
+            self.update_status("正在停止训练...")
+            self.training_status_label.setText("正在停止训练...")
+            
+            # 直接发射停止训练信号
+            if hasattr(self, 'main_window') and hasattr(self.main_window, 'worker') and hasattr(self.main_window.worker, 'model_trainer'):
+                self.main_window.worker.model_trainer.stop()
+                self.training_stopped.emit()  # 发射训练停止信号
+            else:
+                print("无法找到model_trainer对象，停止训练失败")
+                QMessageBox.warning(self, "警告", "无法停止训练，请尝试关闭程序")
     
     def show_training_help(self):
         """显示训练帮助"""
@@ -751,3 +978,29 @@ class TrainingTab(BaseTab):
                 if widget.text() == "浏览..." and widget.parent() == self.detection_pretrained_path_edit.parent():
                     widget.setEnabled(enabled)
                     break 
+
+    def on_model_download_failed(self, model_name, model_link):
+        """处理模型下载失败事件"""
+        dialog = ModelDownloadDialog(model_name, model_link, self)
+        dialog.exec_()
+        
+    def on_training_stopped(self):
+        """训练停止完成时调用"""
+        self.train_btn.setEnabled(True)
+        self.stop_btn.setEnabled(False)
+        self.update_status("训练已停止")
+        self.training_status_label.setText("训练已停止")
+        QMessageBox.information(self, "训练状态", "训练已成功停止")
+
+    def connect_model_trainer_signals(self, model_trainer):
+        """连接模型训练器的信号"""
+        if hasattr(model_trainer, 'model_download_failed'):
+            model_trainer.model_download_failed.connect(self.on_model_download_failed)
+        if hasattr(model_trainer, 'training_finished'):
+            model_trainer.training_finished.connect(self.on_training_finished)
+        if hasattr(model_trainer, 'training_error'):
+            model_trainer.training_error.connect(self.on_training_error)
+        if hasattr(model_trainer, 'epoch_finished'):
+            model_trainer.epoch_finished.connect(self.update_training_progress)
+        if hasattr(model_trainer, 'training_stopped'):
+            model_trainer.training_stopped.connect(self.on_training_stopped) 

@@ -1,7 +1,8 @@
 from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QPushButton, QLabel, QFileDialog,
                            QHBoxLayout, QListWidget, QListWidgetItem, QGroupBox, QGridLayout,
                            QSizePolicy, QLineEdit, QInputDialog, QMessageBox, QRadioButton,
-                           QButtonGroup, QStackedWidget, QComboBox, QScrollArea, QFrame, QSplitter)
+                           QButtonGroup, QStackedWidget, QComboBox, QScrollArea, QFrame, QSplitter,
+                           QCheckBox)
 from PyQt5.QtCore import Qt, pyqtSignal, QPointF, QRectF, QSizeF
 from PyQt5.QtGui import QFont, QPixmap, QImage, QPainter, QPen, QColor, QBrush, QCursor, QKeySequence
 import os
@@ -9,6 +10,7 @@ import glob
 import xml.etree.ElementTree as ET
 from datetime import datetime
 from .base_tab import BaseTab
+import json
 
 class AnnotationCanvas(QWidget):
     """图像标注画布"""
@@ -61,8 +63,24 @@ class AnnotationCanvas(QWidget):
         self.setAttribute(Qt.WA_StyledBackground, True)
         self.setAttribute(Qt.WA_AcceptTouchEvents, True)
         
+        # 设置十字光标
+        self.setCursor(Qt.CrossCursor)
+        
         # 打印调试信息
         print("AnnotationCanvas初始化完成")
+        
+    def enterEvent(self, event):
+        """鼠标进入事件"""
+        # 如果有图像，使用十字光标，否则使用默认光标
+        if self.pixmap and not self.pixmap.isNull():
+            self.setCursor(Qt.CrossCursor)
+        else:
+            self.setCursor(Qt.ArrowCursor)
+        
+    def leaveEvent(self, event):
+        """鼠标离开事件"""
+        # 恢复默认光标
+        self.setCursor(Qt.ArrowCursor)
         
     def set_image(self, image_path):
         """设置要标注的图像"""
@@ -164,7 +182,18 @@ class AnnotationCanvas(QWidget):
                 painter.setPen(pen)
                 painter.setBrush(Qt.NoBrush)
                 
-                rect = QRectF(self.start_point, self.end_point).normalized()
+                # 将图像坐标转换为屏幕坐标
+                start_screen = QPointF(
+                    x + self.start_point.x() * self.scale_factor,
+                    y + self.start_point.y() * self.scale_factor
+                )
+                end_screen = QPointF(
+                    x + self.end_point.x() * self.scale_factor,
+                    y + self.end_point.y() * self.scale_factor
+                )
+                
+                # 使用屏幕坐标绘制矩形
+                rect = QRectF(start_screen, end_screen).normalized()
                 painter.drawRect(rect)
                 
             # 绘制十字箭头控件
@@ -254,10 +283,13 @@ class AnnotationCanvas(QWidget):
                 self.original_rect = self.boxes[clicked_box][0]
                 self.update()
             else:
-                # 开始绘制新标注框
-                self.drawing = True
-                self.start_point = self.screen_to_image_coords(event.pos())
-                self.end_point = self.start_point
+                # 检查点击是否在图像范围内
+                image_rect = self.get_image_rect()
+                if image_rect.contains(event.pos()):
+                    # 开始绘制新标注框
+                    self.drawing = True
+                    self.start_point = self.screen_to_image_coords(event.pos())
+                    self.end_point = self.start_point
                 
         elif event.button() == Qt.RightButton:
             # 开始平移图像
@@ -271,9 +303,12 @@ class AnnotationCanvas(QWidget):
             return
             
         if self.drawing and self.start_point:
-            # 更新标注框大小
-            self.end_point = self.screen_to_image_coords(event.pos())
-            self.update()
+            # 检查是否在图像范围内移动
+            image_rect = self.get_image_rect()
+            if image_rect.contains(event.pos()):
+                # 更新标注框大小
+                self.end_point = self.screen_to_image_coords(event.pos())
+                self.update()
             
         elif self.panning and self.pan_start_point:
             # 平移图像
@@ -503,14 +538,22 @@ class AnnotationCanvas(QWidget):
             
         # 计算图像在屏幕上的位置
         scaled_size = self.pixmap.size() * self.scale_factor
-        x = (self.width() - scaled_size.width()) / 2 + self.offset_x
-        y = (self.height() - scaled_size.height()) / 2 + self.offset_y
+        x_offset = (self.width() - scaled_size.width()) / 2 + self.offset_x
+        y_offset = (self.height() - scaled_size.height()) / 2 + self.offset_y
         
-        # 转换坐标
-        return QPointF(
-            (pos.x() - x) / self.scale_factor,
-            (pos.y() - y) / self.scale_factor
-        )
+        # 计算鼠标位置相对于图像的偏移
+        relative_x = pos.x() - x_offset
+        relative_y = pos.y() - y_offset
+        
+        # 通过缩放因子将屏幕坐标转换为图像坐标
+        image_x = relative_x / self.scale_factor
+        image_y = relative_y / self.scale_factor
+        
+        # 限制坐标在图像范围内
+        image_x = max(0, min(image_x, self.pixmap.width()))
+        image_y = max(0, min(image_y, self.pixmap.height()))
+        
+        return QPointF(image_x, image_y)
         
     def is_pan_control_clicked(self, pos):
         """检查是否点击了平移控件"""
@@ -549,19 +592,55 @@ class AnnotationCanvas(QWidget):
                 
         self.update()
 
+    def get_image_rect(self):
+        """获取图像在屏幕上的矩形区域"""
+        if not self.pixmap or self.pixmap.isNull():
+            return QRectF()
+            
+        # 计算缩放后的图像尺寸
+        scaled_size = self.pixmap.size() * self.scale_factor
+        
+        # 计算居中位置（考虑偏移量）
+        x = (self.width() - scaled_size.width()) / 2 + self.offset_x
+        y = (self.height() - scaled_size.height()) / 2 + self.offset_y
+        
+        return QRectF(x, y, scaled_size.width(), scaled_size.height())
+
 class AnnotationTab(BaseTab):
     """标注标签页，负责图像标注功能"""
     
     # 定义信号
     annotation_started = pyqtSignal(str)
+    open_validation_folder_signal = pyqtSignal(str)
     
     def __init__(self, parent=None, main_window=None):
         super().__init__(parent, main_window)
-        self.processed_folder = ""
-        self.defect_classes = []
-        self.detection_classes = []  # 添加目标检测类别列表
-        self.annotation_canvas = None  # 目标检测标注画布
+        self.defect_classes = []  # 缺陷类别列表
+        self.detection_classes = []  # 目标检测类别列表
+        self.processed_folder = ""  # 处理后的图片文件夹
+        self.detection_folder = ""  # 目标检测图像文件夹
+        self.annotation_folder = ""  # 标注输出文件夹
         self.init_ui()
+        
+        # 尝试从配置文件加载默认路径
+        config_file = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'config.json')
+        print(f"尝试加载配置文件: {config_file}")
+        if os.path.exists(config_file):
+            try:
+                with open(config_file, 'r', encoding='utf-8') as f:
+                    config = json.load(f)
+                    print(f"成功加载配置: {config}")
+                    # 加载默认处理后文件夹和标注文件夹
+                    if 'default_processed_folder' in config and config['default_processed_folder']:
+                        self.processed_folder = config['default_processed_folder']
+                        print(f"设置处理后文件夹: {self.processed_folder}")
+                    if 'default_annotation_folder' in config and config['default_annotation_folder']:
+                        self.annotation_folder = config['default_annotation_folder']
+                        print(f"设置标注文件夹: {self.annotation_folder}")
+            except Exception as e:
+                print(f"加载配置失败: {str(e)}")
+                import traceback
+                traceback.print_exc()
         
     def init_ui(self):
         """初始化UI"""
@@ -619,12 +698,16 @@ class AnnotationTab(BaseTab):
         self.mode_button_group.buttonClicked.connect(self.on_mode_changed)
         
     def init_classification_ui(self):
-        """初始化图片分类标注界面"""
-        layout = QVBoxLayout(self.classification_widget)
+        """初始化图像分类标注界面"""
+        # 创建主布局
+        main_layout = QVBoxLayout(self.classification_widget)
         
-        # 创建处理后文件夹选择组
-        folder_group = QGroupBox("处理后图片文件夹")
-        folder_layout = QGridLayout()
+        # 创建顶部控制面板
+        control_layout = QHBoxLayout()
+        
+        # 图像文件夹选择组
+        folder_group = QGroupBox("处理后的图片文件夹")
+        folder_layout = QHBoxLayout()
         
         self.processed_path_edit = QLineEdit()
         self.processed_path_edit.setReadOnly(True)
@@ -633,20 +716,19 @@ class AnnotationTab(BaseTab):
         folder_btn = QPushButton("浏览...")
         folder_btn.clicked.connect(self.select_processed_folder)
         
-        folder_layout.addWidget(QLabel("文件夹:"), 0, 0)
-        folder_layout.addWidget(self.processed_path_edit, 0, 1)
-        folder_layout.addWidget(folder_btn, 0, 2)
+        folder_layout.addWidget(self.processed_path_edit)
+        folder_layout.addWidget(folder_btn)
         
         folder_group.setLayout(folder_layout)
-        layout.addWidget(folder_group)
+        control_layout.addWidget(folder_group)
         
-        # 创建缺陷类别组
+        # 类别管理组
         class_group = QGroupBox("缺陷类别")
         class_layout = QVBoxLayout()
         
         # 添加类别列表
         self.class_list = QListWidget()
-        self.class_list.setMinimumHeight(150)
+        self.class_list.setMaximumHeight(100)
         class_layout.addWidget(self.class_list)
         
         # 添加按钮组
@@ -660,23 +742,65 @@ class AnnotationTab(BaseTab):
         remove_class_btn.clicked.connect(self.remove_defect_class)
         btn_layout.addWidget(remove_class_btn)
         
-        create_folders_btn = QPushButton("创建分类文件夹")
-        create_folders_btn.clicked.connect(self.create_classification_folders)
-        btn_layout.addWidget(create_folders_btn)
+        # 添加未分类选项
+        self.create_unclassified_checkbox = QCheckBox("创建未分类文件夹")
+        self.create_unclassified_checkbox.setChecked(True)
+        btn_layout.addWidget(self.create_unclassified_checkbox)
         
         class_layout.addLayout(btn_layout)
         class_group.setLayout(class_layout)
-        layout.addWidget(class_group)
+        control_layout.addWidget(class_group)
         
-        # 添加开始标注按钮
-        self.annotation_btn = QPushButton("开始标注")
-        self.annotation_btn.clicked.connect(self.start_annotation)
-        self.annotation_btn.setEnabled(False)
+        main_layout.addLayout(control_layout)
+        
+        # 创建开始标注按钮
+        self.annotation_btn = QPushButton("开始分类标注")
         self.annotation_btn.setMinimumHeight(40)
-        layout.addWidget(self.annotation_btn)
+        self.annotation_btn.clicked.connect(self.start_annotation)
+        self.annotation_btn.setEnabled(False)  # 默认禁用
         
-        # 添加弹性空间
-        layout.addStretch()
+        main_layout.addWidget(self.annotation_btn)
+        
+        # 添加打开验证集文件夹按钮
+        self.val_folder_btn = QPushButton("打开验证集文件夹")
+        self.val_folder_btn.setMinimumHeight(40)
+        self.val_folder_btn.clicked.connect(self.open_validation_folder)
+        self.val_folder_btn.setEnabled(False)  # 默认禁用
+        
+        main_layout.addWidget(self.val_folder_btn)
+        
+        # 添加使用说明
+        help_text = """
+        <b>图像分类标注步骤:</b>
+        <ol>
+            <li>选择处理后的图片文件夹</li>
+            <li>添加需要的缺陷类别</li>
+            <li>点击"开始分类标注"按钮</li>
+            <li>系统将在训练集(train)和验证集(val)文件夹中分别创建类别文件夹</li>
+            <li>在弹出的文件浏览器中，将训练集图片拖放到对应的类别文件夹中</li>
+            <li>点击"打开验证集文件夹"按钮，对验证集图片进行同样的标注</li>
+        </ol>
+        
+        <b>提示:</b>
+        <ul>
+            <li>可以选择是否创建"未分类"文件夹，用于存放暂时无法分类的图片</li>
+            <li>分类完成后，各个缺陷类别的图片将位于对应类别文件夹中，便于后续训练</li>
+            <li>务必确保训练集和验证集都完成了分类标注，以保证模型训练效果</li>
+        </ul>
+        """
+        
+        help_label = QLabel(help_text)
+        help_label.setWordWrap(True)
+        help_label.setTextFormat(Qt.RichText)
+        help_label.setAlignment(Qt.AlignLeft | Qt.AlignTop)
+        
+        main_layout.addWidget(help_label)
+        main_layout.addStretch()
+        
+        # 自动设置默认处理后文件夹路径
+        if self.processed_folder:
+            self.processed_path_edit.setText(self.processed_folder)
+            self.check_annotation_ready()
         
     def init_detection_ui(self):
         """初始化目标检测标注界面"""
@@ -747,15 +871,16 @@ class AnnotationTab(BaseTab):
         
         # 操作按钮
         op_layout = QHBoxLayout()
-        self.save_btn = QPushButton("保存标注")
         self.undo_btn = QPushButton("撤销操作")
-        op_layout.addWidget(self.save_btn)
+        self.reset_view_btn = QPushButton("重置视图")
         op_layout.addWidget(self.undo_btn)
+        op_layout.addWidget(self.reset_view_btn)
         left_layout.addLayout(op_layout)
         
-        # 添加重置视图按钮
-        self.reset_view_btn = QPushButton("重置视图")
-        left_layout.addWidget(self.reset_view_btn)
+        # 添加保存标注按钮（单独一行）
+        self.save_btn = QPushButton("保存标注")
+        self.save_btn.setMinimumHeight(30)  # 设置按钮更高一些
+        left_layout.addWidget(self.save_btn)
         
         # 格式选择
         format_layout = QHBoxLayout()
@@ -827,12 +952,45 @@ class AnnotationTab(BaseTab):
         self.image_files = []
         self.annotation_format = 'voc'  # 默认VOC格式
         
+        # 打印当前实例变量状态，帮助调试
+        print(f"初始化目标检测UI时的路径状态：")
+        print(f"  processed_folder = {self.processed_folder}")
+        print(f"  annotation_folder = {self.annotation_folder}")
+        
+        # 自动设置默认路径
+        if self.processed_folder:
+            print(f"设置detection_path_edit文本为: {self.processed_folder}")
+            self.detection_path_edit.setText(self.processed_folder)
+        
+        if self.annotation_folder:
+            print(f"设置output_path_edit文本为: {self.annotation_folder}")
+            self.output_path_edit.setText(self.annotation_folder)
+            
+        # 如果两个路径都已设置，自动加载图像
+        if self.processed_folder and self.annotation_folder:
+            print(f"自动加载图像文件，文件夹: {self.processed_folder}")
+            self.load_image_files(self.processed_folder)
+            self.check_detection_ready()
+        
     def on_mode_changed(self, button):
         """标注模式改变时调用"""
         if button == self.classification_radio:
             self.stacked_widget.setCurrentIndex(0)
         else:
+            # 切换到目标检测模式时重新应用路径
             self.stacked_widget.setCurrentIndex(1)
+            
+            # 确保在切换到目标检测模式时应用默认路径
+            if self.processed_folder:
+                self.detection_path_edit.setText(self.processed_folder)
+            
+            if self.annotation_folder:
+                self.output_path_edit.setText(self.annotation_folder)
+                
+            # 如果两个路径都已设置但图像列表为空，则尝试加载图像
+            if self.processed_folder and self.annotation_folder and len(self.image_files) == 0:
+                self.load_image_files(self.processed_folder)
+                self.check_detection_ready()
     
     def select_folder(self, title, path_edit, check_callback):
         """通用的文件夹选择方法"""
@@ -879,7 +1037,11 @@ class AnnotationTab(BaseTab):
         self.select_folder(
             "选择图像文件夹",
             self.detection_path_edit,
-            lambda: [self.load_image_files(self.detection_path_edit.text()), self.check_detection_ready()]
+            lambda: [
+                setattr(self, 'detection_folder', self.detection_path_edit.text()),
+                self.load_image_files(self.detection_path_edit.text()), 
+                self.check_detection_ready()
+            ]
         )
     
     def select_output_folder(self):
@@ -887,12 +1049,17 @@ class AnnotationTab(BaseTab):
         self.select_folder(
             "选择标注输出文件夹",
             self.output_path_edit,
-            self.check_detection_ready
+            lambda: [
+                setattr(self, 'annotation_folder', self.output_path_edit.text()),
+                self.check_detection_ready()
+            ]
         )
     
     def check_annotation_ready(self):
         """检查是否可以开始图片分类标注"""
-        self.annotation_btn.setEnabled(bool(self.processed_folder and self.defect_classes))
+        is_ready = bool(self.processed_folder and self.defect_classes)
+        self.annotation_btn.setEnabled(is_ready)
+        self.val_folder_btn.setEnabled(is_ready)  # 同时启用/禁用验证集按钮
     
     def check_detection_ready(self):
         """检查是否可以开始目标检测标注"""
@@ -950,7 +1117,8 @@ class AnnotationTab(BaseTab):
             return
             
         # 创建分类文件夹
-        self.create_classification_folders()
+        if not self.create_classification_folders():
+            return  # 如果创建文件夹失败，终止操作
         
         # 发出标注开始信号
         self.annotation_started.emit(self.processed_folder)
@@ -959,16 +1127,49 @@ class AnnotationTab(BaseTab):
     def create_classification_folders(self):
         """创建分类文件夹"""
         try:
-            # 为每个类别创建文件夹
+            created_count = 0
+            
+            # 指定train和val文件夹路径
+            dataset_folder = os.path.join(self.processed_folder, 'dataset')
+            train_folder = os.path.join(dataset_folder, 'train')
+            val_folder = os.path.join(dataset_folder, 'val')
+            
+            # 检查必要的文件夹是否存在
+            if not os.path.exists(train_folder) or not os.path.exists(val_folder):
+                QMessageBox.warning(self, "警告", "数据集文件夹结构不完整，请先完成数据预处理步骤")
+                return False
+
+            # 在train文件夹中为每个类别创建文件夹
             for class_name in self.defect_classes:
-                class_folder = os.path.join(self.processed_folder, class_name)
-                if not os.path.exists(class_folder):
-                    os.makedirs(class_folder)
+                train_class_folder = os.path.join(train_folder, class_name)
+                if not os.path.exists(train_class_folder):
+                    os.makedirs(train_class_folder)
+                    created_count += 1
+                
+                # 同时在val文件夹中也创建对应的类别文件夹
+                val_class_folder = os.path.join(val_folder, class_name)
+                if not os.path.exists(val_class_folder):
+                    os.makedirs(val_class_folder)
+                    created_count += 1
                     
-            # 创建未分类文件夹
-            unclassified_folder = os.path.join(self.processed_folder, "未分类")
-            if not os.path.exists(unclassified_folder):
-                os.makedirs(unclassified_folder)
+            # 根据复选框状态决定是否创建未分类文件夹
+            if self.create_unclassified_checkbox.isChecked():
+                # 在train和val文件夹中创建未分类文件夹
+                train_unclassified_folder = os.path.join(train_folder, "未分类")
+                if not os.path.exists(train_unclassified_folder):
+                    os.makedirs(train_unclassified_folder)
+                    created_count += 1
+                
+                val_unclassified_folder = os.path.join(val_folder, "未分类")
+                if not os.path.exists(val_unclassified_folder):
+                    os.makedirs(val_unclassified_folder)
+                    created_count += 1
+                
+            # 添加成功提示
+            if created_count > 0:
+                QMessageBox.information(self, "成功", f"已成功创建 {created_count} 个分类文件夹")
+            else:
+                QMessageBox.information(self, "提示", "所有分类文件夹已存在，无需重新创建")
                 
             return True
         except Exception as e:
@@ -1080,4 +1281,77 @@ class AnnotationTab(BaseTab):
         """更新目标检测状态标签"""
         self.detection_status_label.setText(message)
         if hasattr(self, 'main_window'):
-            self.main_window.update_status(message) 
+            self.main_window.update_status(message)
+
+    def apply_config(self, config):
+        """应用配置设置"""
+        try:
+            # 加载默认处理后文件夹和标注文件夹
+            if 'default_processed_folder' in config and config['default_processed_folder']:
+                self.processed_folder = config['default_processed_folder']
+                # 如果处理后文件夹输入框已创建，则设置文本
+                if hasattr(self, 'processed_path_edit'):
+                    self.processed_path_edit.setText(self.processed_folder)
+                # 如果目标检测路径输入框已创建，也设置相同的路径
+                if hasattr(self, 'detection_path_edit'):
+                    self.detection_path_edit.setText(self.processed_folder)
+                    # 如果当前在目标检测模式，加载图像
+                    if self.stacked_widget.currentIndex() == 1:
+                        self.load_image_files(self.processed_folder)
+            
+            # 加载默认标注文件夹
+            if 'default_annotation_folder' in config and config['default_annotation_folder']:
+                self.annotation_folder = config['default_annotation_folder']
+                # 如果标注输出文件夹输入框已创建，则设置文本
+                if hasattr(self, 'output_path_edit'):
+                    self.output_path_edit.setText(self.annotation_folder)
+            
+            # 加载默认类别
+            if 'default_classes' in config and config['default_classes']:
+                # 清除现有类别
+                self.defect_classes = []
+                if hasattr(self, 'class_list'):
+                    self.class_list.clear()
+                
+                # 添加新类别到分类标注
+                for class_name in config['default_classes']:
+                    self.defect_classes.append(class_name)
+                    if hasattr(self, 'class_list'):
+                        self.class_list.addItem(class_name)
+                
+                # 同时添加到目标检测类别
+                self.detection_classes = []
+                if hasattr(self, 'detection_class_list'):
+                    self.detection_class_list.clear()
+                    
+                for class_name in config['default_classes']:
+                    self.detection_classes.append(class_name)
+                    if hasattr(self, 'detection_class_list'):
+                        self.detection_class_list.addItem(class_name)
+                
+                # 更新标签下拉框
+                if hasattr(self, 'label_combo'):
+                    self.update_label_combo()
+            
+            # 检查状态并更新UI
+            if hasattr(self, 'check_annotation_ready'):
+                self.check_annotation_ready()
+            if hasattr(self, 'check_detection_ready'):
+                self.check_detection_ready()
+                
+            return True
+        except Exception as e:
+            print(f"应用配置到标注标签页时出错: {str(e)}")
+            import traceback
+            traceback.print_exc()
+            return False 
+
+    def open_validation_folder(self):
+        """打开验证集文件夹"""
+        if not self.processed_folder:
+            QMessageBox.warning(self, "警告", "请先选择处理后的图片文件夹!")
+            return
+            
+        # 发出打开验证集文件夹信号
+        self.open_validation_folder_signal.emit(self.processed_folder)
+        self.update_status("正在打开验证集文件夹...") 

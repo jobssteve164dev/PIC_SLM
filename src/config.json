@@ -1,0 +1,17 @@
+{
+    "default_source_folder": "E:/PIC_SLM/TEST/SOURCE2",
+    "default_output_folder": "E:/PIC_SLM/TEST/OUTPUT2",
+    "default_processed_folder": "E:/PIC_SLM/TEST/OUTPUT2/dataset",
+    "default_annotation_folder": "E:/PIC_SLM/TEST/OUTPUT2/dataset",
+    "default_classes": [
+        "Missing_hole",
+        "Mouse_bite",
+        "Open_circuit",
+        "Short",
+        "Spur",
+        "Spurious_copper"
+    ],
+    "auto_annotation": false,
+    "default_model_file": "",
+    "default_class_info_file": ""
+}

@@ -1,0 +1,16 @@
+{
+    "model_name": "EfficientNetB0",
+    "num_epochs": 20,
+    "batch_size": 32,
+    "learning_rate": 0.001,
+    "best_accuracy": 0.0,
+    "class_names": [
+        "Missing_hole",
+        "Mouse_bite",
+        "Open_circuit",
+        "Short",
+        "Spur",
+        "Spurious_copper"
+    ],
+    "model_path": "models/saved_models\\EfficientNetB0_final.pth"
+}

@@ -78,70 +78,165 @@ class TrainingVisualizationWidget(QWidget):
     @pyqtSlot(dict)
     def update_plots(self, epoch_results):
         """更新训练图表"""
-        phase = epoch_results['phase']
-        epoch = epoch_results['epoch']
-        loss = epoch_results['loss']
-        accuracy = epoch_results['accuracy']
-        
-        if phase == 'train':
-            if epoch not in self.epochs:
-                self.epochs.append(epoch)
-                self.current_epoch = epoch
-            self.train_losses.append(loss)
-            self.train_accs.append(accuracy)
-            self.status_label.setText(f'Epoch {epoch}: 训练损失 = {loss:.4f}, 训练准确率 = {accuracy:.4f}')
-        else:  # val
-            self.val_losses.append(loss)
-            self.val_accs.append(accuracy)
-            self.status_label.setText(f'Epoch {epoch}: 验证损失 = {loss:.4f}, 验证准确率 = {accuracy:.4f}')
+        try:
+            phase = epoch_results['phase']
+            epoch = epoch_results['epoch']
+            loss = epoch_results['loss']
+            accuracy = epoch_results['accuracy']
             
-        self.update_display()
+            # 确保 epoch 是整数
+            epoch = int(epoch)
+            
+            if phase == 'train':
+                # 如果是新的 epoch，添加到列表中
+                if epoch not in self.epochs:
+                    self.epochs.append(epoch)
+                    self.current_epoch = epoch
+                    self.train_losses.append(loss)
+                    self.train_accs.append(accuracy)
+                else:
+                    # 如果 epoch 已存在，更新对应位置的值
+                    idx = self.epochs.index(epoch)
+                    self.train_losses[idx] = loss
+                    self.train_accs[idx] = accuracy
+                
+                self.status_label.setText(f'Epoch {epoch}: 训练损失 = {loss:.4f}, 训练准确率 = {accuracy:.4f}')
+            
+            elif phase == 'val':
+                # 确保验证数据与训练数据长度匹配
+                while len(self.val_losses) < len(self.epochs):
+                    self.val_losses.append(None)
+                while len(self.val_accs) < len(self.epochs):
+                    self.val_accs.append(None)
+                
+                # 更新最新 epoch 的验证数据
+                if self.epochs:
+                    idx = self.epochs.index(epoch)
+                    if idx < len(self.val_losses):
+                        self.val_losses[idx] = loss
+                        self.val_accs[idx] = accuracy
+                    
+                self.status_label.setText(f'Epoch {epoch}: 验证损失 = {loss:.4f}, 验证准确率 = {accuracy:.4f}')
+            
+            self.update_display()
+            
+        except Exception as e:
+            import traceback
+            print(f"更新训练图表时出错: {str(e)}")
+            print(traceback.format_exc())
+            self.status_label.setText(f'更新图表出错: {str(e)}')
         
     def update_display(self):
         """根据选择的指标更新显示"""
-        # 清除旧图
-        self.loss_ax.clear()
-        self.acc_ax.clear()
-        
-        # 获取当前选择的指标
-        metric_option = self.metric_combo.currentIndex()
-        
-        # 根据选择的指标显示图表
-        if metric_option == 0 or metric_option == 1:  # 显示损失
-            # 重新设置损失图标题
-            self.loss_ax.set_title('训练和验证损失')
-            self.loss_ax.set_xlabel('训练轮次')
-            self.loss_ax.set_ylabel('损失值')
+        try:
+            # 清除旧图
+            self.loss_ax.clear()
+            self.acc_ax.clear()
             
-            # 绘制损失数据
-            if self.train_losses:
-                self.loss_ax.plot(self.epochs, self.train_losses, 'b-', label='训练损失')
-            if self.val_losses:
-                self.loss_ax.plot(self.epochs, self.val_losses, 'r-', label='验证损失')
-            self.loss_ax.legend()
-            self.loss_ax.set_visible(True)
-        else:
-            self.loss_ax.set_visible(False)
-        
-        if metric_option == 0 or metric_option == 2:  # 显示准确率
-            # 重新设置准确率图标题
-            self.acc_ax.set_title('训练和验证准确率')
-            self.acc_ax.set_xlabel('训练轮次')
-            self.acc_ax.set_ylabel('准确率')
+            # 获取当前选择的指标
+            metric_option = self.metric_combo.currentIndex()
             
-            # 绘制准确率数据
-            if self.train_accs:
-                self.acc_ax.plot(self.epochs, self.train_accs, 'b-', label='训练准确率')
-            if self.val_accs:
-                self.acc_ax.plot(self.epochs, self.val_accs, 'r-', label='验证准确率')
-            self.acc_ax.legend()
-            self.acc_ax.set_visible(True)
-        else:
-            self.acc_ax.set_visible(False)
-        
-        # 更新画布
-        self.figure.tight_layout()
-        self.canvas.draw()
+            # 确保所有数据列表长度一致
+            min_len = min(len(self.epochs), len(self.train_losses))
+            epochs = self.epochs[:min_len]
+            train_losses = self.train_losses[:min_len]
+            train_accs = self.train_accs[:min_len]
+            
+            # 设置x轴范围
+            max_epoch = max(epochs) if epochs else 1
+            x_ticks = np.arange(0, max_epoch + 1, max(1, max_epoch // 10))
+            
+            # 根据选择的指标显示图表
+            if metric_option == 0 or metric_option == 1:  # 显示损失
+                self.loss_ax.set_title('训练和验证损失')
+                self.loss_ax.set_xlabel('训练轮次')
+                self.loss_ax.set_ylabel('损失值')
+                
+                # 设置网格
+                self.loss_ax.grid(True, linestyle='--', alpha=0.7)
+                
+                # 绘制损失数据
+                has_loss_data = False
+                if train_losses:
+                    self.loss_ax.plot(epochs, train_losses, 'b-', label='训练损失', marker='o', markersize=4)
+                    has_loss_data = True
+                    
+                    # 设置y轴范围
+                    y_min = min(min(train_losses), min(filter(None, self.val_losses[:min_len])) if any(filter(None, self.val_losses[:min_len])) else min(train_losses))
+                    y_max = max(max(train_losses), max(filter(None, self.val_losses[:min_len])) if any(filter(None, self.val_losses[:min_len])) else max(train_losses))
+                    y_margin = (y_max - y_min) * 0.1
+                    self.loss_ax.set_ylim([max(0, y_min - y_margin), y_max + y_margin])
+                
+                # 只绘制非空的验证损失数据点
+                val_epochs = []
+                val_losses = []
+                for i, loss in enumerate(self.val_losses[:min_len]):
+                    if loss is not None:
+                        val_epochs.append(epochs[i])
+                        val_losses.append(loss)
+                
+                if val_losses:
+                    self.loss_ax.plot(val_epochs, val_losses, 'r-', label='验证损失', marker='o', markersize=4)
+                    has_loss_data = True
+                
+                if has_loss_data:
+                    self.loss_ax.legend(loc='upper right')
+                    self.loss_ax.set_xticks(x_ticks)
+                
+                self.loss_ax.set_visible(True)
+            else:
+                self.loss_ax.set_visible(False)
+            
+            if metric_option == 0 or metric_option == 2:  # 显示准确率
+                self.acc_ax.set_title('训练和验证准确率')
+                self.acc_ax.set_xlabel('训练轮次')
+                self.acc_ax.set_ylabel('准确率')
+                
+                # 设置网格
+                self.acc_ax.grid(True, linestyle='--', alpha=0.7)
+                
+                # 绘制准确率数据
+                has_acc_data = False
+                if train_accs:
+                    self.acc_ax.plot(epochs, train_accs, 'b-', label='训练准确率', marker='o', markersize=4)
+                    has_acc_data = True
+                    
+                    # 设置y轴范围
+                    y_min = min(min(train_accs), min(filter(None, self.val_accs[:min_len])) if any(filter(None, self.val_accs[:min_len])) else min(train_accs))
+                    y_max = max(max(train_accs), max(filter(None, self.val_accs[:min_len])) if any(filter(None, self.val_accs[:min_len])) else max(train_accs))
+                    y_margin = (y_max - y_min) * 0.1
+                    self.acc_ax.set_ylim([max(0, y_min - y_margin), min(1, y_max + y_margin)])
+                
+                # 只绘制非空的验证准确率数据点
+                val_epochs = []
+                val_accs = []
+                for i, acc in enumerate(self.val_accs[:min_len]):
+                    if acc is not None:
+                        val_epochs.append(epochs[i])
+                        val_accs.append(acc)
+                
+                if val_accs:
+                    self.acc_ax.plot(val_epochs, val_accs, 'r-', label='验证准确率', marker='o', markersize=4)
+                    has_acc_data = True
+                
+                if has_acc_data:
+                    self.acc_ax.legend(loc='lower right')
+                    self.acc_ax.set_xticks(x_ticks)
+                
+                self.acc_ax.set_visible(True)
+            else:
+                self.acc_ax.set_visible(False)
+            
+            # 调整布局并刷新画布
+            self.figure.tight_layout()
+            self.canvas.draw()
+            self.canvas.flush_events()  # 强制刷新画布
+            
+        except Exception as e:
+            import traceback
+            print(f"显示训练图表时出错: {str(e)}")
+            print(traceback.format_exc())
+            self.status_label.setText(f'显示图表出错: {str(e)}')
     
     def resizeEvent(self, event):
         """重写resizeEvent以在窗口大小改变时调整图表布局"""
