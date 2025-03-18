@@ -1,7 +1,7 @@
 from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QPushButton, QLabel, QFileDialog,
                            QHBoxLayout, QComboBox, QGroupBox, QGridLayout, QListWidget,
                            QSizePolicy, QLineEdit, QMessageBox, QTableWidget, QTableWidgetItem,
-                           QHeaderView, QStackedWidget)
+                           QHeaderView, QStackedWidget, QListWidgetItem)
 from PyQt5.QtCore import Qt, pyqtSignal
 from PyQt5.QtGui import QFont
 import os
@@ -109,7 +109,7 @@ class EvaluationTab(BaseTab):
         list_layout = QVBoxLayout()
         
         self.model_list = QListWidget()
-        self.model_list.setSelectionMode(QListWidget.ExtendedSelection)
+        self.model_list.setSelectionMode(QListWidget.NoSelection)  # 禁用选择模式，使用复选框代替
         self.model_list.setMinimumHeight(150)
         list_layout.addWidget(self.model_list)
         
@@ -237,7 +237,10 @@ class EvaluationTab(BaseTab):
             for file in os.listdir(self.models_dir):
                 if file.endswith('.h5') or file.endswith('.pb') or file.endswith('.tflite') or file.endswith('.pth'):
                     self.models_list.append(file)
-                    self.model_list.addItem(file)
+                    item = QListWidgetItem(file)
+                    item.setFlags(item.flags() | Qt.ItemIsUserCheckable)  # 添加复选框
+                    item.setCheckState(Qt.Unchecked)  # 默认未选中
+                    self.model_list.addItem(item)
             
             if not self.models_list:
                 QMessageBox.information(self, "提示", "未找到模型文件，请确保目录中包含.h5、.pb、.tflite或.pth文件")
@@ -246,13 +249,16 @@ class EvaluationTab(BaseTab):
     
     def compare_models(self):
         """比较选中的模型"""
-        selected_items = self.model_list.selectedItems()
-        if not selected_items:
+        selected_models = []
+        for i in range(self.model_list.count()):
+            item = self.model_list.item(i)
+            if item.checkState() == Qt.Checked:
+                selected_models.append(item.text())
+        
+        if not selected_models:
             QMessageBox.warning(self, "警告", "请先选择要比较的模型!")
             return
             
-        selected_models = [item.text() for item in selected_items]
-        
         # 清空结果表格
         self.result_table.setRowCount(0)
         

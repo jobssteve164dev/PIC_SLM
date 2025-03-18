@@ -98,16 +98,6 @@ def main():
     # 创建主窗口
     window = MainWindow()
     
-    # 创建评估标签页
-    evaluation_tab = EvaluationTab()
-    
-    # 找到window中的QTabWidget
-    # 获取window中的所有子控件
-    for child in window.findChildren(QTabWidget):
-        tab_widget = child
-        tab_widget.addTab(evaluation_tab, "评估")
-        break
-    
     # 应用配置 - 确保在初始化完成后应用配置
     if config:
         print("正在应用配置...")
