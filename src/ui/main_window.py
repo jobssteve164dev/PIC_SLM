@@ -20,7 +20,7 @@ class MainWindow(QMainWindow):
     # 定义信号
     data_processing_started = pyqtSignal()
     training_started = pyqtSignal()
-    prediction_started = pyqtSignal()
+    prediction_started = pyqtSignal(dict)  # 修改为接收字典参数
     image_preprocessing_started = pyqtSignal(dict)
     annotation_started = pyqtSignal(str)
     create_class_folders_signal = pyqtSignal(str, list)  # 添加创建类别文件夹信号
@@ -185,10 +185,18 @@ class MainWindow(QMainWindow):
         # 这里可以添加实际的训练逻辑
         self.training_started.emit()
 
-    def on_prediction_started(self):
+    def on_prediction_started(self, predict_params):
         """预测开始时调用"""
-        # 这里可以添加实际的预测逻辑
-        self.prediction_started.emit()
+        try:
+            # 使用传入的参数进行预测
+            self.worker.predictor.predict(
+                image_path=predict_params['image_path'],
+                top_k=predict_params['top_k']
+            )
+        except Exception as e:
+            self.update_status(f"预测出错: {str(e)}")
+            import traceback
+            traceback.print_exc()
 
     def on_batch_prediction_started(self, params):
         """批量预测开始时调用"""

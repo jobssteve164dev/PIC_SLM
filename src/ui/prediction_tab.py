@@ -11,7 +11,7 @@ class PredictionTab(BaseTab):
     """预测标签页，负责模型预测功能，包括单张预测和批量预测"""
     
     # 定义信号
-    prediction_started = pyqtSignal()
+    prediction_started = pyqtSignal(dict)
     batch_prediction_started = pyqtSignal(dict)
     batch_prediction_stopped = pyqtSignal()
     
@@ -23,6 +23,7 @@ class PredictionTab(BaseTab):
         self.image_file = ""
         self.input_folder = ""
         self.output_folder = ""
+        self.top_k = 3  # 默认显示前3个类别
         self.init_ui()
         
     def init_ui(self):
@@ -140,6 +141,17 @@ class PredictionTab(BaseTab):
         # 创建图像选择组
         image_group = QGroupBox("图像选择")
         image_layout = QVBoxLayout()
+        
+        # 添加显示类别数量设置
+        top_k_layout = QHBoxLayout()
+        top_k_layout.addWidget(QLabel("显示类别数量:"))
+        self.top_k_spin = QSpinBox()
+        self.top_k_spin.setRange(1, 100)  # 设置范围从1到100
+        self.top_k_spin.setValue(self.top_k)  # 设置默认值
+        self.top_k_spin.valueChanged.connect(self.update_top_k)
+        top_k_layout.addWidget(self.top_k_spin)
+        top_k_layout.addStretch()
+        image_layout.addLayout(top_k_layout)
         
         # 图像选择按钮
         image_btn_layout = QHBoxLayout()
@@ -413,15 +425,21 @@ class PredictionTab(BaseTab):
             QMessageBox.warning(self, "警告", "请先选择图像!")
             return
             
-        # 发出预测开始信号
-        self.prediction_started.emit()
-        self.update_status("开始预测...")
+        # 创建预测参数字典
+        predict_params = {
+            'image_path': self.image_file,
+            'top_k': self.top_k
+        }
         
-        # 这里需要发送预测的信号
-        # 在主窗口中处理
+        # 更新状态并发送预测参数
+        self.update_status("开始预测...")
+        self.prediction_started.emit(predict_params)
     
     def update_prediction_result(self, result):
         """更新预测结果"""
+        # 保存最后的预测结果
+        self.last_prediction_result = result
+        
         if isinstance(result, dict):
             # 格式化结果显示
             result_text = "<h3>预测结果:</h3>"
@@ -429,19 +447,30 @@ class PredictionTab(BaseTab):
             # 检查结果格式
             if 'predictions' in result:
                 # 新格式：包含预测结果列表
-                for pred in result['predictions']:
+                predictions = result['predictions'][:self.top_k]  # 只取前top_k个结果
+                for pred in predictions:
                     class_name = pred.get('class_name', '未知')
                     probability = pred.get('probability', 0)
                     result_text += f"<p>{class_name}: {probability:.2f}%</p>"
             else:
                 # 兼容旧格式
+                # 将字典转换为列表并按概率排序
+                items = []
                 for class_name, prob in result.items():
                     if isinstance(prob, (int, float)):
-                        result_text += f"<p>{class_name}: {prob:.2%}</p>"
+                        items.append((class_name, prob))
                     elif isinstance(prob, (list, tuple)) and len(prob) > 0:
-                        result_text += f"<p>{class_name}: {prob[0]:.2f}%</p>"
+                        items.append((class_name, prob[0]))
                     else:
-                        result_text += f"<p>{class_name}: {prob}</p>"
+                        items.append((class_name, 0))
+                
+                # 按概率降序排序并只取前top_k个
+                items.sort(key=lambda x: x[1], reverse=True)
+                for class_name, prob in items[:self.top_k]:
+                    if isinstance(prob, (int, float)):
+                        result_text += f"<p>{class_name}: {prob:.2%}</p>"
+                    else:
+                        result_text += f"<p>{class_name}: {prob:.2f}%</p>"
             
             self.result_label.setText(result_text)
         else:
@@ -516,4 +545,11 @@ class PredictionTab(BaseTab):
         self.stop_batch_btn.setEnabled(False)
         self.batch_progress_bar.setValue(100)
         self.update_status("批量预测完成")
-        self.update_progress(100) 
+        self.update_progress(100)
+    
+    def update_top_k(self, value):
+        """更新要显示的类别数量"""
+        self.top_k = value
+        # 如果已经有预测结果，重新显示结果
+        if hasattr(self, 'last_prediction_result'):
+            self.update_prediction_result(self.last_prediction_result) 

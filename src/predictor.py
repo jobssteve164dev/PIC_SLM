@@ -104,9 +104,12 @@ class Predictor(QObject):
             print(error_msg)
             self.prediction_error.emit(error_msg)
 
-    def predict(self, image_path: str) -> None:
+    def predict(self, image_path: str, top_k: int = 3) -> None:
         """
         预测单张图片类别
+        Args:
+            image_path: 图片路径
+            top_k: 返回前k个预测结果
         """
         try:
             if self.model is None:
@@ -132,7 +135,7 @@ class Predictor(QObject):
                         outputs = outputs[0]
                     
                     probabilities = torch.nn.functional.softmax(outputs, dim=1)
-                    top_k = min(3, len(self.class_names), probabilities.size(1))
+                    top_k = min(top_k, len(self.class_names), probabilities.size(1))
                     top_prob, top_class = torch.topk(probabilities, top_k)
             except Exception as pred_err:
                 self.prediction_error.emit(f"预测过程出错: {str(pred_err)}")
@@ -169,9 +172,12 @@ class Predictor(QObject):
             traceback_str = traceback.format_exc()
             self.prediction_error.emit(f'预测过程中出错: {str(e)}\n{traceback_str}')
 
-    def predict_image(self, image_path: str) -> Optional[Dict]:
+    def predict_image(self, image_path: str, top_k: int = 3) -> Optional[Dict]:
         """
         预测单张图片类别并返回结果（不发送信号）
+        Args:
+            image_path: 图片路径
+            top_k: 返回前k个预测结果
         """
         try:
             if self.model is None:
@@ -197,7 +203,7 @@ class Predictor(QObject):
                         outputs = outputs[0]
                     
                     probabilities = torch.nn.functional.softmax(outputs, dim=1)
-                    top_k = min(3, len(self.class_names), probabilities.size(1))
+                    top_k = min(top_k, len(self.class_names), probabilities.size(1))
                     top_prob, top_class = torch.topk(probabilities, top_k)
             except Exception as pred_err:
                 print(f"预测过程出错: {str(pred_err)}")
