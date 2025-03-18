@@ -34,48 +34,129 @@ class Predictor(QObject):
         """
         try:
             # 加载类别信息
-            with open(class_info_path, 'r') as f:
+            with open(class_info_path, 'r', encoding='utf-8') as f:
                 class_info = json.load(f)
             self.class_names = class_info['class_names']
+            print(f"类别信息加载成功，类别: {self.class_names}")
 
-            # 加载模型
-            checkpoint = torch.load(model_path, map_location=self.device)
-            num_classes = len(self.class_names)
-            
-            # 创建模型
-            self.model = self._create_model('ResNet50', num_classes)  # 默认使用ResNet50
-            self.model.load_state_dict(checkpoint['model_state_dict'])
-            self.model.to(self.device)
-            self.model.eval()
+            # 1. 尝试直接创建ResNet模型并加载权重
+            try:
+                num_classes = len(self.class_names)
+                # 尝试多种常见的模型架构
+                models_to_try = ['resnet18', 'resnet34', 'resnet50', 'resnet101']
+                
+                for model_arch in models_to_try:
+                    print(f"尝试加载模型架构: {model_arch}")
+                    # 导入对应的模型构建函数
+                    if model_arch == 'resnet18':
+                        from torchvision.models import resnet18
+                        self.model = resnet18(pretrained=False)
+                    elif model_arch == 'resnet34':
+                        from torchvision.models import resnet34
+                        self.model = resnet34(pretrained=False)
+                    elif model_arch == 'resnet50':
+                        from torchvision.models import resnet50
+                        self.model = resnet50(pretrained=False)
+                    elif model_arch == 'resnet101':
+                        from torchvision.models import resnet101
+                        self.model = resnet101(pretrained=False)
+                    
+                    # 修改最后一层以匹配类别数
+                    in_features = self.model.fc.in_features
+                    self.model.fc = nn.Linear(in_features, num_classes)
+                    
+                    # 加载权重
+                    state_dict = torch.load(model_path, map_location=self.device)
+                    
+                    # 尝试多种可能的权重格式
+                    if isinstance(state_dict, dict):
+                        if 'model_state_dict' in state_dict:
+                            state_dict = state_dict['model_state_dict']
+                        elif 'state_dict' in state_dict:
+                            state_dict = state_dict['state_dict']
+                    
+                    # 尝试加载权重
+                    try:
+                        self.model.load_state_dict(state_dict, strict=False)
+                        print(f"成功加载模型: {model_arch}")
+                        break  # 如果加载成功，跳出循环
+                    except Exception as e:
+                        print(f"加载模型 {model_arch} 失败: {str(e)}")
+                        continue  # 尝试下一个模型架构
+                
+                # 检查模型是否加载成功
+                if self.model is None:
+                    raise Exception("所有模型架构尝试均失败")
+                
+                # 将模型移动到正确的设备并设置为评估模式
+                self.model.to(self.device)
+                self.model.eval()
+                print(f"模型加载成功，类别数量: {len(self.class_names)}")
+                
+            except Exception as arch_error:
+                print(f"尝试加载模型架构失败: {str(arch_error)}")
+                raise arch_error
 
         except Exception as e:
-            self.prediction_error.emit(f'加载模型时出错: {str(e)}')
+            import traceback
+            traceback_str = traceback.format_exc()
+            error_msg = f'加载模型时出错: {str(e)}\n{traceback_str}'
+            print(error_msg)
+            self.prediction_error.emit(error_msg)
 
     def predict(self, image_path: str) -> None:
         """
         预测单张图片类别
         """
         try:
+            if self.model is None:
+                self.prediction_error.emit("模型未加载，请先加载模型")
+                return
+                
             # 加载和预处理图片
-            image = Image.open(image_path).convert('RGB')
+            try:
+                image = Image.open(image_path).convert('RGB')
+            except Exception as img_err:
+                self.prediction_error.emit(f"无法加载图像: {str(img_err)}")
+                return
+                
             image_tensor = self.transform(image).unsqueeze(0).to(self.device)
 
             # 预测
-            with torch.no_grad():
-                outputs = self.model(image_tensor)
-                probabilities = torch.nn.functional.softmax(outputs, dim=1)
-                top_prob, top_class = torch.topk(probabilities, 3)
+            try:
+                with torch.no_grad():
+                    outputs = self.model(image_tensor)
+                    # 检查输出格式
+                    if isinstance(outputs, tuple):
+                        # 有些模型返回多个输出，我们取第一个
+                        outputs = outputs[0]
+                    
+                    probabilities = torch.nn.functional.softmax(outputs, dim=1)
+                    top_k = min(3, len(self.class_names), probabilities.size(1))
+                    top_prob, top_class = torch.topk(probabilities, top_k)
+            except Exception as pred_err:
+                self.prediction_error.emit(f"预测过程出错: {str(pred_err)}")
+                return
 
             # 获取预测结果
             predictions = []
-            for i in range(3):
-                class_idx = top_class[0][i].item()
-                prob = top_prob[0][i].item()
-                predictions.append({
-                    'class_name': self.class_names[class_idx],
-                    'probability': prob * 100  # 转换为百分比
-                })
+            for i in range(top_k):
+                try:
+                    class_idx = top_class[0][i].item()
+                    if 0 <= class_idx < len(self.class_names):
+                        prob = top_prob[0][i].item()
+                        predictions.append({
+                            'class_name': self.class_names[class_idx],
+                            'probability': prob * 100  # 转换为百分比
+                        })
+                except Exception as idx_err:
+                    print(f"处理预测结果 {i} 时出错: {str(idx_err)}")
+                    continue
 
+            if not predictions:
+                self.prediction_error.emit("无法获取有效的预测结果")
+                return
+                
             # 发送预测结果
             result = {
                 'predictions': predictions,
@@ -84,40 +165,72 @@ class Predictor(QObject):
             self.prediction_finished.emit(result)
 
         except Exception as e:
-            self.prediction_error.emit(f'预测过程中出错: {str(e)}')
+            import traceback
+            traceback_str = traceback.format_exc()
+            self.prediction_error.emit(f'预测过程中出错: {str(e)}\n{traceback_str}')
 
     def predict_image(self, image_path: str) -> Optional[Dict]:
         """
         预测单张图片类别并返回结果（不发送信号）
         """
         try:
+            if self.model is None:
+                print("模型未加载，请先加载模型")
+                return None
+                
             # 加载和预处理图片
-            image = Image.open(image_path).convert('RGB')
+            try:
+                image = Image.open(image_path).convert('RGB')
+            except Exception as img_err:
+                print(f"无法加载图像: {str(img_err)}")
+                return None
+                
             image_tensor = self.transform(image).unsqueeze(0).to(self.device)
 
             # 预测
-            with torch.no_grad():
-                outputs = self.model(image_tensor)
-                probabilities = torch.nn.functional.softmax(outputs, dim=1)
-                top_prob, top_class = torch.topk(probabilities, 3)
+            try:
+                with torch.no_grad():
+                    outputs = self.model(image_tensor)
+                    # 检查输出格式
+                    if isinstance(outputs, tuple):
+                        # 有些模型返回多个输出，我们取第一个
+                        outputs = outputs[0]
+                    
+                    probabilities = torch.nn.functional.softmax(outputs, dim=1)
+                    top_k = min(3, len(self.class_names), probabilities.size(1))
+                    top_prob, top_class = torch.topk(probabilities, top_k)
+            except Exception as pred_err:
+                print(f"预测过程出错: {str(pred_err)}")
+                return None
 
             # 获取预测结果
             predictions = []
-            for i in range(3):
-                class_idx = top_class[0][i].item()
-                prob = top_prob[0][i].item()
-                predictions.append({
-                    'class_name': self.class_names[class_idx],
-                    'probability': prob * 100  # 转换为百分比
-                })
+            for i in range(top_k):
+                try:
+                    class_idx = top_class[0][i].item()
+                    if 0 <= class_idx < len(self.class_names):
+                        prob = top_prob[0][i].item()
+                        predictions.append({
+                            'class_name': self.class_names[class_idx],
+                            'probability': prob * 100  # 转换为百分比
+                        })
+                except Exception as idx_err:
+                    print(f"处理预测结果 {i} 时出错: {str(idx_err)}")
+                    continue
 
+            if not predictions:
+                print("无法获取有效的预测结果")
+                return None
+                
             return {
                 'predictions': predictions,
                 'image_path': image_path
             }
 
         except Exception as e:
-            print(f'预测图片 {image_path} 时出错: {str(e)}')
+            import traceback
+            traceback_str = traceback.format_exc()
+            print(f'预测图片 {image_path} 时出错: {str(e)}\n{traceback_str}')
             return None
 
     def batch_predict(self, params: Dict) -> None:
@@ -233,9 +346,310 @@ class Predictor(QObject):
     def _create_model(self, model_name: str, num_classes: int) -> nn.Module:
         """创建模型"""
         if model_name == 'ResNet50':
-            model = torch.hub.load('pytorch/vision:v0.10.0', 'resnet50', pretrained=True)
+            from torchvision.models import resnet50
+            model = resnet50(pretrained=False)  # 不使用预训练权重
             model.fc = nn.Linear(model.fc.in_features, num_classes)
         else:
             raise ValueError(f'不支持的模型: {model_name}')
         
         return model 
+
+    def load_model_with_info(self, model_info: Dict) -> None:
+        """
+        根据模型信息加载模型和类别信息
+        
+        参数:
+            model_info: 包含模型信息的字典
+                - model_path: 模型文件路径
+                - class_info_path: 类别信息文件路径
+                - model_type: 模型类型（分类模型或检测模型）
+                - model_arch: 模型架构（ResNet18, ResNet34等）
+        """
+        try:
+            model_path = model_info.get('model_path')
+            class_info_path = model_info.get('class_info_path')
+            model_type = model_info.get('model_type')
+            model_arch = model_info.get('model_arch')
+            
+            print(f"加载模型信息: {model_type} - {model_arch}")
+            print(f"模型路径: {model_path}")
+            print(f"类别信息路径: {class_info_path}")
+            
+            # 加载类别信息
+            with open(class_info_path, 'r', encoding='utf-8') as f:
+                class_info = json.load(f)
+            self.class_names = class_info['class_names']
+            print(f"类别信息加载成功，类别: {self.class_names}")
+            
+            # 根据模型类型和架构加载不同的模型
+            if model_type == "分类模型":
+                self._load_classification_model(model_path, model_arch)
+            elif model_type == "检测模型":
+                self._load_detection_model(model_path, model_arch)
+            else:
+                raise ValueError(f"不支持的模型类型: {model_type}")
+                
+            print(f"模型加载成功: {model_type} - {model_arch}")
+            
+        except Exception as e:
+            import traceback
+            traceback_str = traceback.format_exc()
+            error_msg = f'加载模型时出错: {str(e)}\n{traceback_str}'
+            print(error_msg)
+            self.prediction_error.emit(error_msg)
+            
+    def _load_classification_model(self, model_path: str, model_arch: str) -> None:
+        """加载分类模型"""
+        try:
+            num_classes = len(self.class_names)
+            
+            # 根据架构创建对应的模型
+            if model_arch in ["ResNet18", "ResNet34", "ResNet50", "ResNet101", "ResNet152"]:
+                # ResNet系列模型
+                if model_arch == "ResNet18":
+                    from torchvision.models import resnet18
+                    self.model = resnet18(pretrained=False)
+                    in_features = self.model.fc.in_features
+                elif model_arch == "ResNet34":
+                    from torchvision.models import resnet34
+                    self.model = resnet34(pretrained=False)
+                    in_features = self.model.fc.in_features
+                elif model_arch == "ResNet50":
+                    from torchvision.models import resnet50
+                    self.model = resnet50(pretrained=False)
+                    in_features = self.model.fc.in_features
+                elif model_arch == "ResNet101":
+                    from torchvision.models import resnet101
+                    self.model = resnet101(pretrained=False)
+                    in_features = self.model.fc.in_features
+                elif model_arch == "ResNet152":
+                    from torchvision.models import resnet152
+                    self.model = resnet152(pretrained=False)
+                    in_features = self.model.fc.in_features
+                
+                # 修改分类头
+                self.model.fc = nn.Linear(in_features, num_classes)
+            
+            elif model_arch in ["MobileNetV2", "MobileNetV3"]:
+                # MobileNet系列
+                if model_arch == "MobileNetV2":
+                    from torchvision.models import mobilenet_v2
+                    self.model = mobilenet_v2(pretrained=False)
+                    in_features = self.model.classifier[1].in_features
+                    self.model.classifier[1] = nn.Linear(in_features, num_classes)
+                elif model_arch == "MobileNetV3":
+                    from torchvision.models import mobilenet_v3_large
+                    self.model = mobilenet_v3_large(pretrained=False)
+                    in_features = self.model.classifier[3].in_features
+                    self.model.classifier[3] = nn.Linear(in_features, num_classes)
+            
+            elif model_arch.startswith("EfficientNet"):
+                # EfficientNet系列
+                if model_arch == "EfficientNetB0":
+                    from torchvision.models import efficientnet_b0
+                    self.model = efficientnet_b0(pretrained=False)
+                elif model_arch == "EfficientNetB1":
+                    from torchvision.models import efficientnet_b1
+                    self.model = efficientnet_b1(pretrained=False)
+                
+                # 修改分类头
+                in_features = self.model.classifier[1].in_features
+                self.model.classifier[1] = nn.Linear(in_features, num_classes)
+            
+            elif model_arch in ["VGG16", "VGG19"]:
+                # VGG系列
+                if model_arch == "VGG16":
+                    from torchvision.models import vgg16
+                    self.model = vgg16(pretrained=False)
+                elif model_arch == "VGG19":
+                    from torchvision.models import vgg19
+                    self.model = vgg19(pretrained=False)
+                
+                # 修改分类头
+                in_features = self.model.classifier[6].in_features
+                self.model.classifier[6] = nn.Linear(in_features, num_classes)
+            
+            elif model_arch.startswith("DenseNet"):
+                # DenseNet系列
+                if model_arch == "DenseNet121":
+                    from torchvision.models import densenet121
+                    self.model = densenet121(pretrained=False)
+                    
+                # 修改分类头
+                in_features = self.model.classifier.in_features
+                self.model.classifier = nn.Linear(in_features, num_classes)
+            
+            elif model_arch in ["InceptionV3", "Xception"]:
+                # 其他复杂模型
+                print(f"注意: {model_arch}模型需要特殊的预处理，可能需要调整transform")
+                if model_arch == "InceptionV3":
+                    from torchvision.models import inception_v3
+                    self.model = inception_v3(pretrained=False)
+                    in_features = self.model.fc.in_features
+                    self.model.fc = nn.Linear(in_features, num_classes)
+                else:
+                    # Xception等其他模型可能需要额外的库
+                    raise NotImplementedError(f"{model_arch}模型当前不支持，可能需要额外的库")
+            
+            else:
+                raise ValueError(f"不支持的分类模型架构: {model_arch}")
+                
+            print(f"成功创建模型架构: {model_arch}")
+                
+            # 加载模型权重
+            state_dict = torch.load(model_path, map_location=self.device)
+            
+            # 处理不同格式的模型文件
+            if isinstance(state_dict, dict):
+                if 'model_state_dict' in state_dict:
+                    state_dict = state_dict['model_state_dict']
+                elif 'state_dict' in state_dict:
+                    state_dict = state_dict['state_dict']
+            
+            # 加载权重（使用非严格模式，允许部分权重不匹配）
+            self.model.load_state_dict(state_dict, strict=False)
+            self.model.to(self.device)
+            self.model.eval()
+            
+            print(f"成功加载模型权重: {model_path}")
+            
+        except Exception as e:
+            import traceback
+            traceback_str = traceback.format_exc()
+            error_msg = f"加载分类模型失败: {str(e)}\n{traceback_str}"
+            print(error_msg)
+            raise Exception(error_msg)
+            
+    def _load_detection_model(self, model_path: str, model_arch: str) -> None:
+        """加载检测模型"""
+        try:
+            # YOLO系列模型
+            if model_arch.startswith("YOLO"):
+                if model_arch == "YOLOv5":
+                    # 尝试导入YOLOv5
+                    try:
+                        import yolov5
+                        self.model = yolov5.load(model_path)
+                        print(f"使用yolov5库加载模型: {model_path}")
+                    except ImportError:
+                        raise ImportError("需要安装YOLOv5库: pip install yolov5")
+                elif model_arch == "YOLOv8":
+                    # 尝试导入Ultralytics YOLOv8
+                    try:
+                        from ultralytics import YOLO
+                        self.model = YOLO(model_path)
+                        print(f"使用ultralytics库加载模型: {model_path}")
+                    except ImportError:
+                        raise ImportError("需要安装Ultralytics库: pip install ultralytics")
+                else:
+                    # 其他YOLO版本可能需要不同的库
+                    raise NotImplementedError(f"{model_arch}模型目前不支持，请联系开发者添加支持")
+            
+            # SSD系列模型
+            elif model_arch.startswith("SSD"):
+                # 创建SSD模型
+                try:
+                    from torchvision.models.detection import ssd300_vgg16
+                    
+                    if model_arch == "SSD" or model_arch == "SSD300":
+                        # 加载SSD300模型
+                        self.model = ssd300_vgg16(pretrained=False)
+                        # 修改分类头以匹配类别数量
+                        num_classes = len(self.class_names) + 1  # +1是因为背景类
+                        in_channels = self.model.head.classification_head.in_channels
+                        num_anchors = self.model.head.classification_head.num_anchors
+                        self.model.head.classification_head.cls_logits = nn.Conv2d(
+                            in_channels, num_anchors * num_classes, kernel_size=3, padding=1
+                        )
+                    elif model_arch == "SSD512":
+                        # SSD512可能需要自定义实现
+                        raise NotImplementedError("SSD512模型目前不支持，请联系开发者添加支持")
+                    
+                    # 加载权重
+                    state_dict = torch.load(model_path, map_location=self.device)
+                    if isinstance(state_dict, dict) and 'model_state_dict' in state_dict:
+                        state_dict = state_dict['model_state_dict']
+                    self.model.load_state_dict(state_dict, strict=False)
+                    
+                except ImportError:
+                    raise ImportError("无法导入SSD模型，可能需要安装最新版本的torchvision")
+            
+            # Faster R-CNN和Mask R-CNN
+            elif model_arch in ["Faster R-CNN", "Mask R-CNN"]:
+                try:
+                    if model_arch == "Faster R-CNN":
+                        from torchvision.models.detection import fasterrcnn_resnet50_fpn
+                        self.model = fasterrcnn_resnet50_fpn(pretrained=False)
+                        # 修改分类头以匹配类别数量
+                        num_classes = len(self.class_names) + 1  # +1是因为背景类
+                        in_features = self.model.roi_heads.box_predictor.cls_score.in_features
+                        self.model.roi_heads.box_predictor = FastRCNNPredictor(in_features, num_classes)
+                    
+                    elif model_arch == "Mask R-CNN":
+                        from torchvision.models.detection import maskrcnn_resnet50_fpn
+                        from torchvision.models.detection.mask_rcnn import MaskRCNNPredictor
+                        
+                        self.model = maskrcnn_resnet50_fpn(pretrained=False)
+                        # 修改检测头以匹配类别数量
+                        num_classes = len(self.class_names) + 1  # +1是因为背景类
+                        in_features_box = self.model.roi_heads.box_predictor.cls_score.in_features
+                        self.model.roi_heads.box_predictor = FastRCNNPredictor(in_features_box, num_classes)
+                        
+                        # 修改掩码头
+                        in_features_mask = self.model.roi_heads.mask_predictor.conv5_mask.in_channels
+                        hidden_layer = 256
+                        self.model.roi_heads.mask_predictor = MaskRCNNPredictor(
+                            in_features_mask, hidden_layer, num_classes
+                        )
+                    
+                    # 加载权重
+                    state_dict = torch.load(model_path, map_location=self.device)
+                    if isinstance(state_dict, dict) and 'model_state_dict' in state_dict:
+                        state_dict = state_dict['model_state_dict']
+                    self.model.load_state_dict(state_dict, strict=False)
+                    
+                except ImportError:
+                    raise ImportError("无法导入Faster R-CNN/Mask R-CNN模型，请确保安装了最新版本的torchvision")
+                except NameError:
+                    # 如果FastRCNNPredictor未定义
+                    from torchvision.models.detection.faster_rcnn import FastRCNNPredictor
+                    raise ImportError("请先导入FastRCNNPredictor")
+                        
+            # 其他检测模型
+            elif model_arch in ["RetinaNet", "DETR"]:
+                try:
+                    if model_arch == "RetinaNet":
+                        from torchvision.models.detection import retinanet_resnet50_fpn
+                        self.model = retinanet_resnet50_fpn(pretrained=False)
+                        # 修改分类头以匹配类别数量
+                        num_classes = len(self.class_names)  # RetinaNet不包括背景类
+                        # 这里需要替换分类头...
+                    
+                    elif model_arch == "DETR":
+                        # DETR可能需要单独的库
+                        raise NotImplementedError("DETR模型目前不支持，请联系开发者添加支持")
+                    
+                    # 加载权重
+                    state_dict = torch.load(model_path, map_location=self.device)
+                    if isinstance(state_dict, dict) and 'model_state_dict' in state_dict:
+                        state_dict = state_dict['model_state_dict']
+                    self.model.load_state_dict(state_dict, strict=False)
+                    
+                except ImportError:
+                    raise ImportError(f"无法导入{model_arch}模型，可能需要安装额外的库")
+                
+            else:
+                raise ValueError(f"不支持的检测模型架构: {model_arch}")
+            
+            # 所有模型加载完成后，移动到设备并设置为评估模式
+            self.model.to(self.device)
+            self.model.eval()
+            
+            print(f"成功加载检测模型: {model_arch}")
+            
+        except Exception as e:
+            import traceback
+            traceback_str = traceback.format_exc()
+            error_msg = f"加载检测模型失败: {str(e)}\n{traceback_str}"
+            print(error_msg)
+            raise Exception(error_msg) 

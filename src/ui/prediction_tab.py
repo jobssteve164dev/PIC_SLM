@@ -1,7 +1,7 @@
 from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QPushButton, QLabel, QFileDialog,
                            QHBoxLayout, QGroupBox, QGridLayout, QSizePolicy, QLineEdit, 
                            QMessageBox, QFrame, QStackedWidget, QRadioButton, QButtonGroup,
-                           QProgressBar, QCheckBox, QSpinBox, QDoubleSpinBox)
+                           QProgressBar, QCheckBox, QSpinBox, QDoubleSpinBox, QComboBox)
 from PyQt5.QtCore import Qt, pyqtSignal
 from PyQt5.QtGui import QFont, QPixmap, QImage
 import os
@@ -17,6 +17,7 @@ class PredictionTab(BaseTab):
     
     def __init__(self, parent=None, main_window=None):
         super().__init__(parent, main_window)
+        self.main_window = main_window
         self.model_file = ""
         self.class_info_file = ""
         self.image_file = ""
@@ -62,6 +63,24 @@ class PredictionTab(BaseTab):
         model_group = QGroupBox("模型文件")
         model_layout = QGridLayout()
         
+        # 添加模型类型选择
+        model_layout.addWidget(QLabel("模型类型:"), 0, 0)
+        self.model_type_combo = QComboBox()
+        self.model_type_combo.addItems(["分类模型", "检测模型"])
+        self.model_type_combo.currentIndexChanged.connect(self.switch_model_type)
+        model_layout.addWidget(self.model_type_combo, 0, 1, 1, 1)
+        
+        # 添加模型架构选择
+        model_layout.addWidget(QLabel("模型架构:"), 0, 2)
+        self.model_arch_combo = QComboBox()
+        self.model_arch_combo.addItems([
+            "ResNet18", "ResNet34", "ResNet50", "ResNet101", "ResNet152",
+            "MobileNetV2", "MobileNetV3", "EfficientNetB0", "EfficientNetB1",
+            "VGG16", "VGG19", "DenseNet121", "InceptionV3", "Xception"
+        ])
+        model_layout.addWidget(self.model_arch_combo, 0, 3, 1, 1)
+        
+        # 模型文件选择
         self.model_path_edit = QLineEdit()
         self.model_path_edit.setReadOnly(True)
         self.model_path_edit.setPlaceholderText("请选择训练好的模型文件")
@@ -69,9 +88,9 @@ class PredictionTab(BaseTab):
         model_btn = QPushButton("浏览...")
         model_btn.clicked.connect(self.select_model_file)
         
-        model_layout.addWidget(QLabel("模型文件:"), 0, 0)
-        model_layout.addWidget(self.model_path_edit, 0, 1)
-        model_layout.addWidget(model_btn, 0, 2)
+        model_layout.addWidget(QLabel("模型文件:"), 1, 0)
+        model_layout.addWidget(self.model_path_edit, 1, 1, 1, 2)
+        model_layout.addWidget(model_btn, 1, 3)
         
         # 类别信息文件
         self.class_info_path_edit = QLineEdit()
@@ -81,15 +100,15 @@ class PredictionTab(BaseTab):
         class_info_btn = QPushButton("浏览...")
         class_info_btn.clicked.connect(self.select_class_info_file)
         
-        model_layout.addWidget(QLabel("类别信息:"), 1, 0)
-        model_layout.addWidget(self.class_info_path_edit, 1, 1)
-        model_layout.addWidget(class_info_btn, 1, 2)
+        model_layout.addWidget(QLabel("类别信息:"), 2, 0)
+        model_layout.addWidget(self.class_info_path_edit, 2, 1, 1, 2)
+        model_layout.addWidget(class_info_btn, 2, 3)
         
         # 加载模型按钮
         self.load_model_btn = QPushButton("加载模型")
         self.load_model_btn.clicked.connect(self.load_prediction_model)
         self.load_model_btn.setEnabled(False)
-        model_layout.addWidget(self.load_model_btn, 2, 0, 1, 3)
+        model_layout.addWidget(self.load_model_btn, 3, 0, 1, 4)
         
         model_group.setLayout(model_layout)
         main_layout.addWidget(model_group)
@@ -285,7 +304,7 @@ class PredictionTab(BaseTab):
     
     def select_model_file(self):
         """选择模型文件"""
-        file, _ = QFileDialog.getOpenFileName(self, "选择模型文件", "", "模型文件 (*.h5 *.pb *.tflite *.pt);;所有文件 (*)")
+        file, _ = QFileDialog.getOpenFileName(self, "选择模型文件", "", "模型文件 (*.h5 *.pb *.tflite *.pt *.pth);;所有文件 (*)")
         if file:
             self.model_file = file
             self.model_path_edit.setText(file)
@@ -305,6 +324,23 @@ class PredictionTab(BaseTab):
         self.load_model_btn.setEnabled(is_ready)
         return is_ready
     
+    def switch_model_type(self, index):
+        """切换模型类型"""
+        if index == 0:  # 分类模型
+            self.model_arch_combo.clear()
+            self.model_arch_combo.addItems([
+                "ResNet18", "ResNet34", "ResNet50", "ResNet101", "ResNet152",
+                "MobileNetV2", "MobileNetV3", "EfficientNetB0", "EfficientNetB1",
+                "VGG16", "VGG19", "DenseNet121", "InceptionV3", "Xception"
+            ])
+        else:  # 检测模型
+            self.model_arch_combo.clear()
+            self.model_arch_combo.addItems([
+                "YOLOv5", "YOLOv8", "YOLOv7", "YOLOv6", "YOLOv4", "YOLOv3",
+                "SSD", "SSD512", "SSD300", "Faster R-CNN", "Mask R-CNN",
+                "RetinaNet", "DETR"
+            ])
+            
     def load_prediction_model(self):
         """加载预测模型"""
         if not self.model_file or not self.class_info_file:
@@ -312,15 +348,40 @@ class PredictionTab(BaseTab):
             return
             
         self.update_status("正在加载模型...")
-        # 这里需要发送加载模型的信号
-        # 在主窗口中处理
         
-        # 模拟加载成功
-        self.update_status("模型加载成功")
+        # 获取模型类型和架构
+        model_type = self.model_type_combo.currentText()
+        model_arch = self.model_arch_combo.currentText()
         
-        # 更新单张预测和批量预测按钮状态
-        self.predict_btn.setEnabled(self.image_file != "")
-        self.check_batch_ready()
+        # 发送加载模型的信号
+        try:
+            # 创建模型信息字典
+            model_info = {
+                "model_path": self.model_file,
+                "class_info_path": self.class_info_file,
+                "model_type": model_type,
+                "model_arch": model_arch
+            }
+            
+            # 调用predictor的load_model方法，传入模型信息
+            self.main_window.worker.predictor.load_model_with_info(model_info)
+            
+            # 模型加载成功
+            self.update_status("模型加载成功")
+            
+            # 禁用加载模型按钮，表示模型已加载
+            self.load_model_btn.setEnabled(False)
+            
+            # 如果已经选择了图像，则启用预测按钮
+            if self.image_file:
+                self.predict_btn.setEnabled(True)
+                self.update_status("模型已加载，可以开始预测")
+            else:
+                self.update_status("模型已加载，请选择要预测的图像")
+        except Exception as e:
+            self.update_status(f"模型加载失败: {str(e)}")
+            QMessageBox.critical(self, "错误", f"模型加载失败: {str(e)}")
+            return
     
     def select_image(self):
         """选择图像文件"""
@@ -338,8 +399,9 @@ class PredictionTab(BaseTab):
                 self.original_image_label.setText("无法加载图像")
             
             # 如果模型已加载，则启用预测按钮
-            if self.load_model_btn.isEnabled() == False and self.model_file and self.class_info_file:
+            if not self.load_model_btn.isEnabled() and self.model_file and self.class_info_file:
                 self.predict_btn.setEnabled(True)
+                self.update_status("已选择图像，可以开始预测")
     
     def predict(self):
         """开始单张预测"""
@@ -363,8 +425,23 @@ class PredictionTab(BaseTab):
         if isinstance(result, dict):
             # 格式化结果显示
             result_text = "<h3>预测结果:</h3>"
-            for class_name, prob in result.items():
-                result_text += f"<p>{class_name}: {prob:.2%}</p>"
+            
+            # 检查结果格式
+            if 'predictions' in result:
+                # 新格式：包含预测结果列表
+                for pred in result['predictions']:
+                    class_name = pred.get('class_name', '未知')
+                    probability = pred.get('probability', 0)
+                    result_text += f"<p>{class_name}: {probability:.2f}%</p>"
+            else:
+                # 兼容旧格式
+                for class_name, prob in result.items():
+                    if isinstance(prob, (int, float)):
+                        result_text += f"<p>{class_name}: {prob:.2%}</p>"
+                    elif isinstance(prob, (list, tuple)) and len(prob) > 0:
+                        result_text += f"<p>{class_name}: {prob[0]:.2f}%</p>"
+                    else:
+                        result_text += f"<p>{class_name}: {prob}</p>"
             
             self.result_label.setText(result_text)
         else:
@@ -389,7 +466,7 @@ class PredictionTab(BaseTab):
     
     def check_batch_ready(self):
         """检查批量预测是否准备就绪"""
-        is_ready = (self.model_file and os.path.exists(self.model_file) and
+        is_ready = bool(self.model_file and os.path.exists(self.model_file) and
                    self.class_info_file and os.path.exists(self.class_info_file) and
                    self.input_folder and os.path.exists(self.input_folder) and
                    self.output_folder)

@@ -12,6 +12,6 @@
         "Spurious_copper"
     ],
     "auto_annotation": false,
-    "default_model_file": "",
-    "default_class_info_file": ""
+    "default_model_file": "F:/Qsync/00.AI_PROJECT/图片分类模型训练/C1/models/saved_models/EfficientNetB0_best.pth",
+    "default_class_info_file": "F:/Qsync/00.AI_PROJECT/图片分类模型训练/C1/models/saved_models/class_info.json"
 }

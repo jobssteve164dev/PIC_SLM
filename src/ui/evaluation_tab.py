@@ -235,12 +235,12 @@ class EvaluationTab(BaseTab):
             
             # 查找目录中的所有模型文件
             for file in os.listdir(self.models_dir):
-                if file.endswith('.h5') or file.endswith('.pb') or file.endswith('.tflite'):
+                if file.endswith('.h5') or file.endswith('.pb') or file.endswith('.tflite') or file.endswith('.pth'):
                     self.models_list.append(file)
                     self.model_list.addItem(file)
             
             if not self.models_list:
-                QMessageBox.information(self, "提示", "未找到模型文件，请确保目录中包含.h5、.pb或.tflite文件")
+                QMessageBox.information(self, "提示", "未找到模型文件，请确保目录中包含.h5、.pb、.tflite或.pth文件")
         except Exception as e:
             QMessageBox.critical(self, "错误", f"刷新模型列表失败: {str(e)}")
     

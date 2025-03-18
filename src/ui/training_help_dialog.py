@@ -51,7 +51,66 @@ class TrainingHelpDialog(QDialog):
         return """
         <h2>1. 模型文件说明</h2>
         
-        <h3>1.1 预训练模型</h3>
+        <h3>1.1 模型保存文件夹说明</h3>
+        <p>训练完成后，在 <code>models/saved_models</code> 目录下会生成以下文件：</p>
+        <ul>
+            <li><b>模型权重文件</b>：
+                <ul>
+                    <li><code>model_best.pth</code>：验证集性能最好的模型权重</li>
+                    <li><code>model_final.pth</code>：训练完成时的最终模型权重</li>
+                    <li><code>model_best.onnx</code>：最佳模型的ONNX格式，用于跨平台部署</li>
+                </ul>
+            </li>
+            <li><b>配置文件</b>：
+                <ul>
+                    <li><code>class_info.json</code>：类别信息文件，包含类别名称和对应的索引</li>
+                    <li><code>training_info.json</code>：训练配置和结果信息，包含模型参数、训练参数等</li>
+                </ul>
+            </li>
+            <li><b>训练日志</b>：
+                <ul>
+                    <li><code>tensorboard_logs</code>：TensorBoard日志目录，用于可视化训练过程</li>
+                    <li><code>training_log.txt</code>：训练过程的详细日志记录</li>
+                </ul>
+            </li>
+        </ul>
+        
+        <h3>1.2 文件用途说明</h3>
+        <ul>
+            <li><b>模型权重文件</b>：
+                <ul>
+                    <li>用于模型部署和预测</li>
+                    <li>ONNX格式支持在不同深度学习框架中使用</li>
+                    <li>可以用作后续训练的预训练模型</li>
+                </ul>
+            </li>
+            <li><b>配置文件</b>：
+                <ul>
+                    <li>记录模型结构和训练参数，便于复现实验</li>
+                    <li>保存类别信息，确保预测时类别映射正确</li>
+                    <li>记录训练性能指标，方便模型评估和比较</li>
+                </ul>
+            </li>
+            <li><b>训练日志</b>：
+                <ul>
+                    <li>通过TensorBoard可视化训练过程</li>
+                    <li>分析模型训练效果和优化方向</li>
+                    <li>记录训练过程中的重要事件和错误</li>
+                </ul>
+            </li>
+        </ul>
+        
+        <h3>1.3 使用建议</h3>
+        <ul>
+            <li>建议保留多个训练实验的文件夹，便于比较不同参数的效果</li>
+            <li>重要的模型权重文件建议备份保存</li>
+            <li>可以使用TensorBoard比较不同训练实验的结果</li>
+            <li>模型部署时主要使用<code>model_best.pth</code>或<code>model_best.onnx</code></li>
+        </ul>
+
+        <h2>2. 预训练模型</h2>
+        
+        <h3>2.1 预训练模型</h3>
         <ul>
             <li><b>分类模型</b>：
                 <ul>
@@ -71,7 +130,7 @@ class TrainingHelpDialog(QDialog):
             </li>
         </ul>
         
-        <h3>1.2 模型保存</h3>
+        <h3>2.2 模型保存</h3>
         <ul>
             <li><b>保存内容</b>：
                 <ul>
@@ -89,7 +148,7 @@ class TrainingHelpDialog(QDialog):
             </li>
         </ul>
         
-        <h3>1.3 模型导出</h3>
+        <h3>2.3 模型导出</h3>
         <ul>
             <li><b>导出格式</b>：
                 <ul>
@@ -107,9 +166,9 @@ class TrainingHelpDialog(QDialog):
             </li>
         </ul>
         
-        <h2>2. 训练参数说明</h2>
+        <h2>3. 训练参数说明</h2>
         
-        <h3>2.1 基本训练参数</h3>
+        <h3>3.1 基本训练参数</h3>
         <ul>
             <li><b>批次大小(Batch Size)</b>：
                 <ul>
@@ -137,7 +196,7 @@ class TrainingHelpDialog(QDialog):
             </li>
         </ul>
         
-        <h3>2.2 高级训练参数</h3>
+        <h3>3.2 高级训练参数</h3>
         <ul>
             <li><b>优化器(Optimizer)</b>：
                 <ul>
@@ -162,7 +221,7 @@ class TrainingHelpDialog(QDialog):
             </li>
         </ul>
         
-        <h3>2.3 检测特有参数</h3>
+        <h3>3.3 检测特有参数</h3>
         <ul>
             <li><b>锚框设置(Anchor)</b>：
                 <ul>
@@ -180,9 +239,9 @@ class TrainingHelpDialog(QDialog):
             </li>
         </ul>
         
-        <h2>3. 评估方法说明</h2>
+        <h2>4. 评估方法说明</h2>
         
-        <h3>3.1 分类评估指标</h3>
+        <h3>4.1 分类评估指标</h3>
         <ul>
             <li><b>准确率(Accuracy)</b>：
                 <ul>
@@ -207,7 +266,7 @@ class TrainingHelpDialog(QDialog):
             </li>
         </ul>
         
-        <h3>3.2 检测评估指标</h3>
+        <h3>4.2 检测评估指标</h3>
         <ul>
             <li><b>mAP(mean Average Precision)</b>：
                 <ul>
@@ -225,7 +284,7 @@ class TrainingHelpDialog(QDialog):
             </li>
         </ul>
         
-        <h2>4. 训练过程监控</h2>
+        <h2>5. 训练过程监控</h2>
         <ul>
             <li><b>损失曲线</b>：
                 <ul>
@@ -250,7 +309,7 @@ class TrainingHelpDialog(QDialog):
             </li>
         </ul>
         
-        <h2>5. 常见问题与解决方案</h2>
+        <h2>6. 常见问题与解决方案</h2>
         <ul>
             <li><b>训练不收敛</b>：
                 <ul>

@@ -3,7 +3,7 @@
     "num_epochs": 20,
     "batch_size": 32,
     "learning_rate": 0.001,
-    "best_accuracy": 0.0,
+    "best_accuracy": 0.16666666666666666,
     "class_names": [
         "Missing_hole",
         "Mouse_bite",

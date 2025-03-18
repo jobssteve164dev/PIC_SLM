@@ -239,7 +239,7 @@ class SettingsTab(BaseTab):
     
     def select_default_model_file(self):
         """选择默认模型文件"""
-        file, _ = QFileDialog.getOpenFileName(self, "选择默认模型文件", "", "模型文件 (*.h5 *.pb *.tflite);;所有文件 (*)")
+        file, _ = QFileDialog.getOpenFileName(self, "选择默认模型文件", "", "模型文件 (*.h5 *.pb *.tflite *.pth);;所有文件 (*)")
         if file:
             self.default_model_edit.setText(file)
     

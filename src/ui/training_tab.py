@@ -315,15 +315,28 @@ class TrainingTab(BaseTab):
         help_btn = QPushButton("训练帮助")
         help_btn.clicked.connect(self.show_training_help)
         
+        # 添加打开模型保存文件夹按钮
+        self.open_model_folder_btn = QPushButton("打开模型文件夹")
+        self.open_model_folder_btn.setEnabled(False)  # 默认禁用
+        self.open_model_folder_btn.clicked.connect(self.open_model_folder)
+        
+        # 检查模型文件夹是否存在，如果存在则启用按钮
+        root_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        model_dir = os.path.join(root_dir, "models", "saved_models")
+        if os.path.exists(model_dir) and os.path.isdir(model_dir):
+            self.open_model_folder_btn.setEnabled(True)
+        
         # 设置按钮样式
         self.train_btn.setStyleSheet(button_style)
         self.stop_btn.setStyleSheet(button_style)
         help_btn.setStyleSheet(button_style)
+        self.open_model_folder_btn.setStyleSheet(button_style)
         
         # 添加按钮到布局，设置拉伸因子使其平均分配空间
         button_layout.addWidget(self.train_btn, 1)
         button_layout.addWidget(self.stop_btn, 1)
         button_layout.addWidget(help_btn, 1)
+        button_layout.addWidget(self.open_model_folder_btn, 1)
         
         # 添加训练状态标签
         self.training_status_label = QLabel("等待训练开始...")
@@ -878,14 +891,22 @@ class TrainingTab(BaseTab):
         """训练完成时调用"""
         self.train_btn.setEnabled(True)
         self.stop_btn.setEnabled(False)
+        self.open_model_folder_btn.setEnabled(True)  # 训练完成后启用打开模型文件夹按钮
         self.update_status("训练完成")
         self.update_progress(100)
         self.training_status_label.setText("训练完成")
+        
+        # 检查并创建模型保存目录
+        root_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        model_dir = os.path.join(root_dir, "models", "saved_models")
+        if os.path.exists(model_dir) and os.path.isdir(model_dir):
+            self.open_model_folder_btn.setEnabled(True)
     
     def on_training_error(self, error):
         """训练出错时调用"""
         self.train_btn.setEnabled(True)
         self.stop_btn.setEnabled(False)
+        self.open_model_folder_btn.setEnabled(False)  # 训练出错时禁用打开模型文件夹按钮
         self.update_status(f"训练出错: {error}")
         self.training_status_label.setText(f"训练出错: {error}")
         QMessageBox.critical(self, "训练错误", str(error))
@@ -1004,3 +1025,28 @@ class TrainingTab(BaseTab):
             model_trainer.epoch_finished.connect(self.update_training_progress)
         if hasattr(model_trainer, 'training_stopped'):
             model_trainer.training_stopped.connect(self.on_training_stopped) 
+
+    def open_model_folder(self):
+        """打开模型保存文件夹"""
+        try:
+            # 获取程序根目录
+            root_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+            # 模型保存目录在models/saved_models目录下
+            model_dir = os.path.join(root_dir, "models", "saved_models")
+            
+            if not os.path.exists(model_dir):
+                QMessageBox.warning(self, "警告", "模型保存文件夹不存在，请先完成训练。")
+                return
+                
+            # 打开文件夹
+            if platform.system() == "Windows":
+                os.startfile(model_dir)
+            elif platform.system() == "Darwin":  # macOS
+                import subprocess
+                subprocess.run(["open", model_dir])
+            else:  # Linux
+                import subprocess
+                subprocess.run(["xdg-open", model_dir])
+                
+        except Exception as e:
+            QMessageBox.warning(self, "错误", f"无法打开模型保存文件夹: {str(e)}") 

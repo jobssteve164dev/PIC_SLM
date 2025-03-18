@@ -227,7 +227,7 @@ def main():
     
     # 单张预测信号
     worker.predictor.prediction_error.connect(lambda msg: QMessageBox.critical(window, '错误', msg))
-    window.prediction_started.connect(lambda: worker.predictor.predict())
+    window.prediction_started.connect(lambda: worker.predictor.predict(window.prediction_tab.image_file))
     worker.predictor.prediction_finished.connect(window.update_prediction_result if hasattr(window, 'update_prediction_result') else lambda result: None)
     
     # 批量预测信号 - 连接到prediction_tab而不是batch_prediction_tab
