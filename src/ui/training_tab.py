@@ -357,51 +357,55 @@ class TrainingTab(BaseTab):
         """初始化图片分类训练界面"""
         # 创建主布局
         main_layout = QVBoxLayout(self.classification_widget)
-        main_layout.setSpacing(10)
         main_layout.setContentsMargins(10, 10, 10, 10)
+        main_layout.setSpacing(15)
         
-        # 创建标注文件夹选择组
-        folder_group = QGroupBox("数据集文件夹")
-        folder_group.setMaximumHeight(70)  # 限制文件夹选择组的高度
+        # 创建分类数据文件夹选择组
+        folder_group = QGroupBox("训练数据目录")
         folder_layout = QHBoxLayout()
-        folder_layout.setContentsMargins(10, 5, 10, 5)
+        folder_layout.setContentsMargins(10, 15, 10, 15)
         
+        folder_layout.addWidget(QLabel("数据集路径:"))
         self.classification_path_edit = QLineEdit()
         self.classification_path_edit.setReadOnly(True)
-        self.classification_path_edit.setPlaceholderText("将使用默认输出文件夹中的dataset目录")
-        
-        # 添加刷新按钮
-        refresh_btn = QPushButton("刷新")
-        refresh_btn.setFixedWidth(60)
-        refresh_btn.setToolTip("刷新检测数据集文件夹结构")
-        refresh_btn.clicked.connect(self.select_classification_folder)
+        self.classification_path_edit.setPlaceholderText("请选择包含分类训练数据的文件夹")
+        self.classification_path_edit.setToolTip("选择包含已分类图像的文件夹，文件夹结构应为每个分类在单独的子文件夹中")
         
         folder_layout.addWidget(self.classification_path_edit)
-        folder_layout.addWidget(refresh_btn)
+        
+        browse_btn = QPushButton("浏览...")
+        browse_btn.clicked.connect(self.select_classification_folder)
+        browse_btn.setToolTip("选择包含训练数据的根目录，每个子文件夹代表一个类别")
+        folder_layout.addWidget(browse_btn)
+        
         folder_group.setLayout(folder_layout)
         main_layout.addWidget(folder_group)
         
-        # 添加预训练模型选择组
+        # 创建预训练模型组
         pretrained_group = QGroupBox("预训练模型")
-        pretrained_group.setMaximumHeight(70)
         pretrained_layout = QHBoxLayout()
-        pretrained_layout.setContentsMargins(10, 5, 10, 5)
+        pretrained_layout.setContentsMargins(10, 15, 10, 15)
         
+        # 使用本地预训练模型复选框
         self.classification_use_local_pretrained_checkbox = QCheckBox("使用本地预训练模型")
+        self.classification_use_local_pretrained_checkbox.setToolTip("选择是否使用本地已有的预训练模型文件，而非从网络下载")
         self.classification_use_local_pretrained_checkbox.setChecked(False)
         self.classification_use_local_pretrained_checkbox.stateChanged.connect(
-            lambda state: self.toggle_pretrained_controls(state == Qt.Checked, is_classification=True)
+            lambda state: self.toggle_pretrained_controls(state == Qt.Checked, True)
         )
         pretrained_layout.addWidget(self.classification_use_local_pretrained_checkbox)
+        
         pretrained_layout.addWidget(QLabel("预训练模型:"))
         self.classification_pretrained_path_edit = QLineEdit()
         self.classification_pretrained_path_edit.setReadOnly(True)
         self.classification_pretrained_path_edit.setEnabled(False)
         self.classification_pretrained_path_edit.setPlaceholderText("选择本地预训练模型文件")
+        self.classification_pretrained_path_edit.setToolTip("选择本地已有的预训练模型文件（.pth/.h5/.pb格式）")
         pretrained_btn = QPushButton("浏览...")
         pretrained_btn.setFixedWidth(60)
         pretrained_btn.setEnabled(False)
         pretrained_btn.clicked.connect(self.select_pretrained_model)
+        pretrained_btn.setToolTip("浏览选择本地预训练模型文件")
         pretrained_layout.addWidget(self.classification_pretrained_path_edit)
         pretrained_layout.addWidget(pretrained_btn)
         
@@ -415,71 +419,95 @@ class TrainingTab(BaseTab):
         basic_layout.setSpacing(10)
         
         # 模型选择
-        basic_layout.addWidget(QLabel("模型:"), 0, 0)
+        model_label = QLabel("模型:")
+        model_label.setToolTip("选择用于图像分类的深度学习模型架构")
+        basic_layout.addWidget(model_label, 0, 0)
         self.classification_model_combo = QComboBox()
         self.classification_model_combo.addItems([
             "MobileNetV2", "MobileNetV3", "ResNet18", "ResNet34", "ResNet50", "ResNet101", "ResNet152",
             "EfficientNetB0", "EfficientNetB1", "EfficientNetB2", "EfficientNetB3", "EfficientNetB4",
             "VGG16", "VGG19", "DenseNet121", "DenseNet169", "DenseNet201", "InceptionV3", "Xception"
         ])
+        self.classification_model_combo.setToolTip("选择不同的模型架构：\n- MobileNet系列：轻量级模型，适合移动设备\n- ResNet系列：残差网络，深度较大但训练稳定\n- EfficientNet系列：效率较高的模型\n- VGG系列：经典但参数较多的模型\n- DenseNet系列：密集连接的网络，参数利用率高\n- Inception/Xception：适合复杂特征提取")
         basic_layout.addWidget(self.classification_model_combo, 0, 1)
         
         # 批次大小
-        basic_layout.addWidget(QLabel("批次大小:"), 1, 0)
+        batch_label = QLabel("批次大小:")
+        batch_label.setToolTip("每次模型权重更新时处理的样本数量")
+        basic_layout.addWidget(batch_label, 1, 0)
         self.classification_batch_size_spin = QSpinBox()
         self.classification_batch_size_spin.setRange(1, 256)
         self.classification_batch_size_spin.setValue(32)
+        self.classification_batch_size_spin.setToolTip("批次大小影响训练速度和内存占用：\n- 较大批次：训练更稳定，但需要更多内存\n- 较小批次：内存占用少，但训练可能不稳定\n- 根据GPU内存大小调整，内存不足时请减小该值")
         basic_layout.addWidget(self.classification_batch_size_spin, 1, 1)
         
         # 训练轮数
-        basic_layout.addWidget(QLabel("训练轮数:"), 2, 0)
+        epochs_label = QLabel("训练轮数:")
+        epochs_label.setToolTip("模型训练的完整周期数")
+        basic_layout.addWidget(epochs_label, 2, 0)
         self.classification_epochs_spin = QSpinBox()
         self.classification_epochs_spin.setRange(1, 1000)
         self.classification_epochs_spin.setValue(20)
+        self.classification_epochs_spin.setToolTip("训练轮数决定训练时长：\n- 轮数过少：模型可能欠拟合\n- 轮数过多：可能过拟合，浪费计算资源\n- 搭配早停策略使用效果更佳\n- 使用预训练模型时可适当减少轮数")
         basic_layout.addWidget(self.classification_epochs_spin, 2, 1)
         
         # 学习率
-        basic_layout.addWidget(QLabel("学习率:"), 3, 0)
+        lr_label = QLabel("学习率:")
+        lr_label.setToolTip("模型权重更新的步长大小")
+        basic_layout.addWidget(lr_label, 3, 0)
         self.classification_lr_spin = QDoubleSpinBox()
         self.classification_lr_spin.setRange(0.00001, 0.1)
         self.classification_lr_spin.setSingleStep(0.0001)
         self.classification_lr_spin.setDecimals(5)
         self.classification_lr_spin.setValue(0.001)
+        self.classification_lr_spin.setToolTip("学习率是最重要的超参数之一：\n- 太大：训练不稳定，可能无法收敛\n- 太小：训练缓慢，可能陷入局部最优\n- 典型值：0.1 (SGD), 0.001 (Adam)\n- 微调预训练模型时使用较小学习率(0.0001)")
         basic_layout.addWidget(self.classification_lr_spin, 3, 1)
         
         # 学习率调度器
-        basic_layout.addWidget(QLabel("学习率调度:"), 4, 0)
+        lr_sched_label = QLabel("学习率调度:")
+        lr_sched_label.setToolTip("学习率随训练进程自动调整的策略")
+        basic_layout.addWidget(lr_sched_label, 4, 0)
         self.classification_lr_scheduler_combo = QComboBox()
         self.classification_lr_scheduler_combo.addItems([
             "StepLR", "CosineAnnealingLR", "ReduceLROnPlateau", "OneCycleLR", "CyclicLR"
         ])
+        self.classification_lr_scheduler_combo.setToolTip("学习率调度策略：\n- StepLR：按固定间隔降低学习率\n- CosineAnnealingLR：余弦周期性调整学习率\n- ReduceLROnPlateau：当指标不再改善时降低学习率\n- OneCycleLR：先增大再减小学习率，适合较短训练\n- CyclicLR：在两个界限间循环调整学习率")
         basic_layout.addWidget(self.classification_lr_scheduler_combo, 4, 1)
         
         # 优化器
-        basic_layout.addWidget(QLabel("优化器:"), 5, 0)
+        optimizer_label = QLabel("优化器:")
+        optimizer_label.setToolTip("控制模型权重如何根据梯度更新")
+        basic_layout.addWidget(optimizer_label, 5, 0)
         self.classification_optimizer_combo = QComboBox()
         self.classification_optimizer_combo.addItems([
             "Adam", "SGD", "RMSprop", "Adagrad", "AdamW", "RAdam", "AdaBelief"
         ])
+        self.classification_optimizer_combo.setToolTip("不同的优化算法：\n- Adam：自适应算法，适用大多数情况\n- SGD：经典算法，配合动量可获得良好结果\n- RMSprop：类似于带衰减的AdaGrad\n- AdamW：修正Adam的权重衰减\n- RAdam：带修正的Adam，收敛更稳定\n- AdaBelief：最新优化器，通常更稳定")
         basic_layout.addWidget(self.classification_optimizer_combo, 5, 1)
         
         # 权重衰减
-        basic_layout.addWidget(QLabel("权重衰减:"), 6, 0)
+        wd_label = QLabel("权重衰减:")
+        wd_label.setToolTip("L2正则化参数，控制模型复杂度")
+        basic_layout.addWidget(wd_label, 6, 0)
         self.classification_weight_decay_spin = QDoubleSpinBox()
         self.classification_weight_decay_spin.setRange(0, 0.1)
         self.classification_weight_decay_spin.setSingleStep(0.0001)
         self.classification_weight_decay_spin.setDecimals(5)
         self.classification_weight_decay_spin.setValue(0.0001)
+        self.classification_weight_decay_spin.setToolTip("权重衰减可防止过拟合：\n- 较大值：模型更简单，泛化能力可能更强\n- 较小值：允许模型更复杂，拟合能力更强\n- 典型值：0.0001-0.001\n- 数据较少时可适当增大")
         basic_layout.addWidget(self.classification_weight_decay_spin, 6, 1)
         
         # 评估指标
-        basic_layout.addWidget(QLabel("评估指标:"), 7, 0)
+        metrics_label = QLabel("评估指标:")
+        metrics_label.setToolTip("用于评估模型性能的指标")
+        basic_layout.addWidget(metrics_label, 7, 0)
         self.classification_metrics_list = QListWidget()
         self.classification_metrics_list.setSelectionMode(QListWidget.MultiSelection)
         self.classification_metrics_list.addItems([
             "accuracy", "precision", "recall", "f1_score", "confusion_matrix",
             "roc_auc", "average_precision", "top_k_accuracy", "balanced_accuracy"
         ])
+        self.classification_metrics_list.setToolTip("选择用于评估模型的指标：\n- accuracy：准确率，适用于平衡数据集\n- precision：精确率，关注减少假阳性\n- recall：召回率，关注减少假阴性\n- f1_score：精确率和召回率的调和平均\n- confusion_matrix：混淆矩阵\n- roc_auc：ROC曲线下面积\n- balanced_accuracy：平衡准确率，适用于不平衡数据集")
         # 默认选中accuracy
         self.classification_metrics_list.setCurrentRow(0)
         basic_layout.addWidget(self.classification_metrics_list, 7, 1)
@@ -487,11 +515,13 @@ class TrainingTab(BaseTab):
         # 使用预训练权重
         self.classification_pretrained_checkbox = QCheckBox("使用预训练权重")
         self.classification_pretrained_checkbox.setChecked(True)
+        self.classification_pretrained_checkbox.setToolTip("使用在大型数据集(如ImageNet)上预训练的模型权重：\n- 加快训练速度\n- 提高模型性能\n- 尤其在训练数据较少时效果显著\n- 需要网络连接下载权重文件")
         basic_layout.addWidget(self.classification_pretrained_checkbox, 8, 0, 1, 2)
         
         # 数据增强
         self.classification_augmentation_checkbox = QCheckBox("使用数据增强")
         self.classification_augmentation_checkbox.setChecked(True)
+        self.classification_augmentation_checkbox.setToolTip("通过随机变换（旋转、裁剪、翻转等）增加训练数据多样性：\n- 减少过拟合\n- 提高模型泛化能力\n- 尤其在训练数据较少时非常有效")
         basic_layout.addWidget(self.classification_augmentation_checkbox, 9, 0, 1, 2)
         
         basic_group.setLayout(basic_layout)
@@ -504,36 +534,51 @@ class TrainingTab(BaseTab):
         advanced_layout.setSpacing(10)
         
         # 早停
-        advanced_layout.addWidget(QLabel("启用早停:"), 0, 0)
+        early_stop_label = QLabel("启用早停:")
+        early_stop_label.setToolTip("当验证指标不再改善时自动停止训练")
+        advanced_layout.addWidget(early_stop_label, 0, 0)
         self.classification_early_stopping_checkbox = QCheckBox("启用早停")
         self.classification_early_stopping_checkbox.setChecked(True)
+        self.classification_early_stopping_checkbox.setToolTip("当验证指标在一定轮数内不再改善时停止训练：\n- 减少过拟合风险\n- 节省训练时间\n- 自动选择最佳模型")
         advanced_layout.addWidget(self.classification_early_stopping_checkbox, 0, 1)
         
         # 早停耐心值
-        advanced_layout.addWidget(QLabel("早停耐心值:"), 0, 2)
+        patience_label = QLabel("早停耐心值:")
+        patience_label.setToolTip("早停前允许的不改善轮数")
+        advanced_layout.addWidget(patience_label, 0, 2)
         self.classification_early_stopping_patience_spin = QSpinBox()
         self.classification_early_stopping_patience_spin.setRange(1, 50)
         self.classification_early_stopping_patience_spin.setValue(10)
+        self.classification_early_stopping_patience_spin.setToolTip("在停止训练前容忍的无改善轮数：\n- 较大值：更有耐心，可能训练更久\n- 较小值：更积极停止，可能过早停止\n- 典型值：5-15轮")
         advanced_layout.addWidget(self.classification_early_stopping_patience_spin, 0, 3)
         
         # 梯度裁剪
-        advanced_layout.addWidget(QLabel("启用梯度裁剪:"), 1, 0)
+        grad_clip_label = QLabel("启用梯度裁剪:")
+        grad_clip_label.setToolTip("限制梯度大小以稳定训练")
+        advanced_layout.addWidget(grad_clip_label, 1, 0)
         self.classification_gradient_clipping_checkbox = QCheckBox("启用梯度裁剪")
         self.classification_gradient_clipping_checkbox.setChecked(False)
+        self.classification_gradient_clipping_checkbox.setToolTip("限制梯度的最大范数，防止梯度爆炸：\n- 稳定训练过程\n- 尤其适用于循环神经网络\n- 可以使用更大的学习率")
         advanced_layout.addWidget(self.classification_gradient_clipping_checkbox, 1, 1)
         
         # 梯度裁剪阈值
-        advanced_layout.addWidget(QLabel("梯度裁剪阈值:"), 1, 2)
+        clip_value_label = QLabel("梯度裁剪阈值:")
+        clip_value_label.setToolTip("梯度裁剪的最大范数值")
+        advanced_layout.addWidget(clip_value_label, 1, 2)
         self.classification_gradient_clipping_value_spin = QDoubleSpinBox()
         self.classification_gradient_clipping_value_spin.setRange(0.1, 10.0)
         self.classification_gradient_clipping_value_spin.setSingleStep(0.1)
         self.classification_gradient_clipping_value_spin.setValue(1.0)
+        self.classification_gradient_clipping_value_spin.setToolTip("梯度范数的最大允许值：\n- 较小值：裁剪更积极，训练更稳定但可能较慢\n- 较大值：裁剪更宽松\n- 典型值：1.0-5.0")
         advanced_layout.addWidget(self.classification_gradient_clipping_value_spin, 1, 3)
         
         # 混合精度训练
-        advanced_layout.addWidget(QLabel("启用混合精度训练:"), 2, 0)
+        mixed_precision_label = QLabel("启用混合精度训练:")
+        mixed_precision_label.setToolTip("使用FP16和FP32混合精度加速训练")
+        advanced_layout.addWidget(mixed_precision_label, 2, 0)
         self.classification_mixed_precision_checkbox = QCheckBox("启用混合精度训练")
         self.classification_mixed_precision_checkbox.setChecked(True)
+        self.classification_mixed_precision_checkbox.setToolTip("使用FP16和FP32混合精度：\n- 加速训练(最高2倍)\n- 减少内存占用\n- 几乎不影响精度\n- 需要支持FP16的GPU")
         advanced_layout.addWidget(self.classification_mixed_precision_checkbox, 2, 1)
         
         advanced_group.setLayout(advanced_layout)
@@ -543,88 +588,55 @@ class TrainingTab(BaseTab):
         """初始化目标检测训练界面"""
         # 创建主布局
         main_layout = QVBoxLayout(self.detection_widget)
-        main_layout.setSpacing(10)
         main_layout.setContentsMargins(10, 10, 10, 10)
+        main_layout.setSpacing(15)
         
-        # 创建标注文件夹选择组
-        folder_group = QGroupBox("数据集文件夹")
-        folder_group.setMaximumHeight(70)  # 限制文件夹选择组的高度
+        # 创建检测数据文件夹选择组
+        folder_group = QGroupBox("训练数据目录")
         folder_layout = QHBoxLayout()
-        folder_layout.setContentsMargins(10, 5, 10, 5)
+        folder_layout.setContentsMargins(10, 15, 10, 15)
         
+        folder_layout.addWidget(QLabel("数据集路径:"))
         self.detection_path_edit = QLineEdit()
         self.detection_path_edit.setReadOnly(True)
-        self.detection_path_edit.setPlaceholderText("将使用默认输出文件夹中的detection_data目录")
-        
-        # 添加刷新按钮
-        refresh_btn = QPushButton("刷新")
-        refresh_btn.setFixedWidth(60)
-        refresh_btn.setToolTip("刷新检测数据集文件夹结构")
-        refresh_btn.clicked.connect(self.select_detection_folder)
+        self.detection_path_edit.setPlaceholderText("请选择包含目标检测训练数据的文件夹")
+        self.detection_path_edit.setToolTip("选择包含目标检测数据的文件夹，需要标注文件（YOLO或COCO格式）和图像文件")
         
         folder_layout.addWidget(self.detection_path_edit)
-        folder_layout.addWidget(refresh_btn)
+        
+        browse_btn = QPushButton("浏览...")
+        browse_btn.clicked.connect(self.select_detection_folder)
+        browse_btn.setToolTip("选择包含已标注目标检测数据的文件夹，包括图像和标注文件")
+        folder_layout.addWidget(browse_btn)
+        
         folder_group.setLayout(folder_layout)
         main_layout.addWidget(folder_group)
         
-        # 添加数据结构说明组
-        data_structure_group = QGroupBox("数据结构说明")
-        data_structure_layout = QVBoxLayout()
-        
-        # 添加说明标签
-        structure_info_label = QLabel(
-            "目标检测训练需要特定的数据结构，您可以在<b>图像标注</b>标签页中使用<b>训练数据准备</b>功能生成。"
-        )
-        structure_info_label.setWordWrap(True)
-        structure_info_label.setStyleSheet("color: #333; font-size: 12px;")
-        data_structure_layout.addWidget(structure_info_label)
-        
-        # 目录结构示例
-        structure_label = QLabel(
-            "所需结构:\n"
-            "detection_data/\n"
-            "├── images/\n"
-            "│   ├── train/  (训练图像)\n"
-            "│   └── val/    (验证图像)\n"
-            "└── labels/\n"
-            "    ├── train/  (训练标注文件)\n"
-            "    └── val/    (验证标注文件)\n"
-            "\n"
-            "以及类别映射文件 classes.txt"
-        )
-        structure_label.setStyleSheet("background-color: #f0f0f0; padding: 5px; font-family: monospace;")
-        data_structure_layout.addWidget(structure_label)
-        
-        # 添加立即前往按钮
-        goto_annotation_btn = QPushButton("前往图像标注页面生成数据结构")
-        goto_annotation_btn.setStyleSheet("background-color: #2196F3; color: white;")
-        goto_annotation_btn.clicked.connect(self.goto_annotation_tab)
-        data_structure_layout.addWidget(goto_annotation_btn)
-        
-        data_structure_group.setLayout(data_structure_layout)
-        main_layout.addWidget(data_structure_group)
-        
-        # 添加预训练模型选择组
+        # 创建预训练模型组
         pretrained_group = QGroupBox("预训练模型")
-        pretrained_group.setMaximumHeight(70)
         pretrained_layout = QHBoxLayout()
-        pretrained_layout.setContentsMargins(10, 5, 10, 5)
+        pretrained_layout.setContentsMargins(10, 15, 10, 15)
         
+        # 使用本地预训练模型复选框
         self.detection_use_local_pretrained_checkbox = QCheckBox("使用本地预训练模型")
+        self.detection_use_local_pretrained_checkbox.setToolTip("选择是否使用本地已有的预训练模型文件，而非从网络下载")
         self.detection_use_local_pretrained_checkbox.setChecked(False)
         self.detection_use_local_pretrained_checkbox.stateChanged.connect(
-            lambda state: self.toggle_pretrained_controls(state == Qt.Checked, is_classification=False)
+            lambda state: self.toggle_pretrained_controls(state == Qt.Checked, False)
         )
         pretrained_layout.addWidget(self.detection_use_local_pretrained_checkbox)
+        
         pretrained_layout.addWidget(QLabel("预训练模型:"))
         self.detection_pretrained_path_edit = QLineEdit()
         self.detection_pretrained_path_edit.setReadOnly(True)
         self.detection_pretrained_path_edit.setEnabled(False)
         self.detection_pretrained_path_edit.setPlaceholderText("选择本地预训练模型文件")
+        self.detection_pretrained_path_edit.setToolTip("选择本地已有的预训练目标检测模型文件（.pth/.weights/.pt格式）")
         pretrained_btn = QPushButton("浏览...")
         pretrained_btn.setFixedWidth(60)
         pretrained_btn.setEnabled(False)
         pretrained_btn.clicked.connect(self.select_pretrained_model)
+        pretrained_btn.setToolTip("浏览选择本地预训练目标检测模型文件")
         pretrained_layout.addWidget(self.detection_pretrained_path_edit)
         pretrained_layout.addWidget(pretrained_btn)
         
@@ -638,113 +650,164 @@ class TrainingTab(BaseTab):
         basic_layout.setSpacing(10)
         
         # 检测模型选择
-        basic_layout.addWidget(QLabel("检测模型:"), 0, 0)
+        model_label = QLabel("检测模型:")
+        model_label.setToolTip("选择用于目标检测的深度学习模型架构")
+        basic_layout.addWidget(model_label, 0, 0)
         self.detection_model_combo = QComboBox()
         self.detection_model_combo.addItems([
             "YOLOv5", "YOLOv8", "YOLOv7", "YOLOv6", "YOLOv4", "YOLOv3",
             "SSD", "SSD512", "SSD300", "Faster R-CNN", "Mask R-CNN",
             "RetinaNet", "DETR", "Swin Transformer", "DINO", "Deformable DETR"
         ])
+        self.detection_model_combo.setToolTip("选择不同的目标检测模型：\n- YOLO系列：单阶段检测器，速度快精度适中\n- SSD系列：单阶段多尺度检测器\n- Faster/Mask R-CNN：两阶段检测器，精度高\n- DETR系列：基于Transformer的端到端检测器\n- 不同模型在速度和精度上有权衡")
         basic_layout.addWidget(self.detection_model_combo, 0, 1)
         
         # 批次大小
-        basic_layout.addWidget(QLabel("批次大小:"), 1, 0)
+        batch_label = QLabel("批次大小:")
+        batch_label.setToolTip("每次模型权重更新时处理的样本数量")
+        basic_layout.addWidget(batch_label, 1, 0)
         self.detection_batch_size_spin = QSpinBox()
         self.detection_batch_size_spin.setRange(1, 128)
         self.detection_batch_size_spin.setValue(16)
+        self.detection_batch_size_spin.setToolTip("目标检测训练的批次大小：\n- 检测模型通常需要更大内存\n- 典型值：8-16（普通GPU）\n- 内存不足时请减小该值\n- 较小值也可能提高精度但训练更慢")
         basic_layout.addWidget(self.detection_batch_size_spin, 1, 1)
         
         # 训练轮数
-        basic_layout.addWidget(QLabel("训练轮数:"), 2, 0)
+        epochs_label = QLabel("训练轮数:")
+        epochs_label.setToolTip("模型训练的完整周期数")
+        basic_layout.addWidget(epochs_label, 2, 0)
         self.detection_epochs_spin = QSpinBox()
         self.detection_epochs_spin.setRange(1, 1000)
         self.detection_epochs_spin.setValue(50)
+        self.detection_epochs_spin.setToolTip("检测模型训练轮数：\n- 检测模型通常需要更多轮数收敛\n- 典型值：50-100轮\n- 使用预训练时可减少到30-50轮\n- 搭配早停策略效果更佳")
         basic_layout.addWidget(self.detection_epochs_spin, 2, 1)
         
         # 学习率
-        basic_layout.addWidget(QLabel("学习率:"), 3, 0)
+        lr_label = QLabel("学习率:")
+        lr_label.setToolTip("模型权重更新的步长大小")
+        basic_layout.addWidget(lr_label, 3, 0)
         self.detection_lr_spin = QDoubleSpinBox()
         self.detection_lr_spin.setRange(0.00001, 0.01)
         self.detection_lr_spin.setSingleStep(0.0001)
         self.detection_lr_spin.setDecimals(5)
         self.detection_lr_spin.setValue(0.0005)
+        self.detection_lr_spin.setToolTip("检测模型学习率：\n- 通常比分类模型小一个数量级\n- 典型值：0.0005-0.001\n- 训练不稳定时可减小\n- 微调预训练模型时使用更小值(0.00005)")
         basic_layout.addWidget(self.detection_lr_spin, 3, 1)
         
         # 学习率调度器
-        basic_layout.addWidget(QLabel("学习率调度:"), 4, 0)
+        lr_sched_label = QLabel("学习率调度:")
+        lr_sched_label.setToolTip("学习率随训练进程自动调整的策略")
+        basic_layout.addWidget(lr_sched_label, 4, 0)
         self.detection_lr_scheduler_combo = QComboBox()
         self.detection_lr_scheduler_combo.addItems([
             "StepLR", "CosineAnnealingLR", "ReduceLROnPlateau", "OneCycleLR", "CyclicLR",
             "WarmupCosineLR", "LinearWarmup"
         ])
+        self.detection_lr_scheduler_combo.setToolTip("目标检测特有的学习率调度：\n- WarmupCosineLR：先预热再余弦衰减，YOLO常用\n- LinearWarmup：线性预热，目标检测常用\n- ReduceLROnPlateau：性能平台时降低学习率\n- CosineAnnealingLR：余弦周期调整")
         basic_layout.addWidget(self.detection_lr_scheduler_combo, 4, 1)
         
         # 优化器
-        basic_layout.addWidget(QLabel("优化器:"), 5, 0)
+        optimizer_label = QLabel("优化器:")
+        optimizer_label.setToolTip("控制模型权重如何根据梯度更新")
+        basic_layout.addWidget(optimizer_label, 5, 0)
         self.detection_optimizer_combo = QComboBox()
         self.detection_optimizer_combo.addItems([
             "Adam", "SGD", "AdamW", "RAdam", "AdaBelief", "Lion"
         ])
+        self.detection_optimizer_combo.setToolTip("检测模型优化器：\n- SGD：YOLO推荐使用，配合动量和预热\n- Adam：稳定但可能精度略低\n- AdamW：带修正权重衰减的Adam\n- Lion：新型高效优化器，可节省显存")
         basic_layout.addWidget(self.detection_optimizer_combo, 5, 1)
         
         # 权重衰减
-        basic_layout.addWidget(QLabel("权重衰减:"), 6, 0)
+        wd_label = QLabel("权重衰减:")
+        wd_label.setToolTip("L2正则化参数，控制模型复杂度")
+        basic_layout.addWidget(wd_label, 6, 0)
         self.detection_weight_decay_spin = QDoubleSpinBox()
         self.detection_weight_decay_spin.setRange(0, 0.1)
         self.detection_weight_decay_spin.setSingleStep(0.0001)
         self.detection_weight_decay_spin.setDecimals(5)
         self.detection_weight_decay_spin.setValue(0.0005)
+        self.detection_weight_decay_spin.setToolTip("检测模型权重衰减：\n- YOLO系列通常使用0.0005\n- Faster R-CNN使用0.0001\n- 数据量小时可适当增大\n- 过大可能导致欠拟合")
         basic_layout.addWidget(self.detection_weight_decay_spin, 6, 1)
         
         # 评估指标
-        basic_layout.addWidget(QLabel("评估指标:"), 7, 0)
+        metrics_label = QLabel("评估指标:")
+        metrics_label.setToolTip("用于评估检测模型性能的指标")
+        basic_layout.addWidget(metrics_label, 7, 0)
         self.detection_metrics_list = QListWidget()
         self.detection_metrics_list.setSelectionMode(QListWidget.MultiSelection)
         self.detection_metrics_list.addItems([
-            "mAP", "mAP50", "mAP75", "mAP50-95", "precision", "recall", "f1_score",
-            "confusion_matrix", "per_class_metrics", "coco_metrics"
+            "mAP", "mAP50", "mAP75", "precision", "recall", "f1_score", 
+            "box_loss", "class_loss", "obj_loss"
         ])
+        self.detection_metrics_list.setToolTip("检测模型评估指标：\n- mAP：不同IOU阈值下的平均精度，主要指标\n- mAP50：IOU阈值为0.5的平均精度\n- mAP75：IOU阈值为0.75的平均精度，更严格\n- precision/recall：精确率/召回率\n- f1_score：精确率和召回率的调和平均值\n- 各种loss：用于诊断训练问题")
         # 默认选中mAP
         self.detection_metrics_list.setCurrentRow(0)
         basic_layout.addWidget(self.detection_metrics_list, 7, 1)
         
         # 输入分辨率
-        basic_layout.addWidget(QLabel("输入分辨率:"), 8, 0)
+        resolution_label = QLabel("输入分辨率:")
+        resolution_label.setToolTip("模型训练和推理的图像尺寸")
+        basic_layout.addWidget(resolution_label, 8, 0)
         self.detection_resolution_combo = QComboBox()
         self.detection_resolution_combo.addItems([
-            "416x416", "640x640", "512x512", "800x800", "1024x1024",
-            "1280x1280", "1536x1536", "1920x1920"
+            "416x416", "512x512", "640x640", "768x768", "1024x1024", "1280x1280"
         ])
+        self.detection_resolution_combo.setToolTip("输入分辨率影响速度和精度：\n- 更大分辨率：更高精度，尤其对小物体\n- 更小分辨率：更快速度，适合实时应用\n- 640x640是YOLO常用分辨率\n- 根据目标大小和GPU内存选择")
+        self.detection_resolution_combo.setCurrentText("640x640")
         basic_layout.addWidget(self.detection_resolution_combo, 8, 1)
         
         # IOU阈值
-        basic_layout.addWidget(QLabel("IOU阈值:"), 9, 0)
+        iou_label = QLabel("IOU阈值:")
+        iou_label.setToolTip("交并比阈值，用于训练和非极大值抑制")
+        basic_layout.addWidget(iou_label, 9, 0)
         self.detection_iou_spin = QDoubleSpinBox()
         self.detection_iou_spin.setRange(0.1, 0.9)
         self.detection_iou_spin.setSingleStep(0.05)
         self.detection_iou_spin.setDecimals(2)
         self.detection_iou_spin.setValue(0.5)
+        self.detection_iou_spin.setToolTip("IOU(交并比)阈值：\n- 训练中用于正负样本分配\n- 推理中用于NMS筛选\n- 较高值：更严格的重叠判定\n- 较低值：更宽松的重叠判定\n- 典型值：0.5或0.45")
         basic_layout.addWidget(self.detection_iou_spin, 9, 1)
         
         # 置信度阈值
-        basic_layout.addWidget(QLabel("置信度阈值:"), 10, 0)
+        conf_label = QLabel("置信度阈值:")
+        conf_label.setToolTip("检测结果的最小置信度分数")
+        basic_layout.addWidget(conf_label, 10, 0)
         self.detection_conf_spin = QDoubleSpinBox()
-        self.detection_conf_spin.setRange(0.05, 0.95)
+        self.detection_conf_spin.setRange(0.01, 0.99)
         self.detection_conf_spin.setSingleStep(0.05)
         self.detection_conf_spin.setDecimals(2)
         self.detection_conf_spin.setValue(0.25)
+        self.detection_conf_spin.setToolTip("置信度阈值：\n- 推理时保留的最小目标置信度\n- 较高值：减少假阳性，但可能漏检\n- 较低值：提高召回率，但增加假阳性\n- 典型值：0.25-0.45\n- 可根据应用场景调整")
         basic_layout.addWidget(self.detection_conf_spin, 10, 1)
         
+        # Multi-scale 训练
+        ms_label = QLabel("多尺度训练:")
+        ms_label.setToolTip("在训练中随机调整输入图像尺寸")
+        basic_layout.addWidget(ms_label, 11, 0)
+        self.detection_multiscale_checkbox = QCheckBox("启用多尺度训练")
+        self.detection_multiscale_checkbox.setChecked(True)
+        self.detection_multiscale_checkbox.setToolTip("多尺度训练增强模型泛化能力：\n- 在训练中随机调整输入图像大小\n- 提高模型对不同尺寸目标的适应性\n- 可能增加训练时间\n- YOLO模型常用技术")
+        basic_layout.addWidget(self.detection_multiscale_checkbox, 11, 1)
+        
+        # Mosaic 数据增强
+        mosaic_label = QLabel("马赛克增强:")
+        mosaic_label.setToolTip("YOLO系列特有的数据增强方法")
+        basic_layout.addWidget(mosaic_label, 12, 0)
+        self.detection_mosaic_checkbox = QCheckBox("启用马赛克增强")
+        self.detection_mosaic_checkbox.setChecked(True)
+        self.detection_mosaic_checkbox.setToolTip("马赛克数据增强：\n- 将4张图像拼接成1张\n- 大幅增加目标数量和上下文变化\n- 显著提高小目标检测性能\n- YOLOv5之后广泛使用的增强方法")
+        basic_layout.addWidget(self.detection_mosaic_checkbox, 12, 1)
+        
         # 使用预训练权重
-        basic_layout.addWidget(QLabel("使用预训练权重:"), 11, 0, 1, 2)
         self.detection_pretrained_checkbox = QCheckBox("使用预训练权重")
         self.detection_pretrained_checkbox.setChecked(True)
+        self.detection_pretrained_checkbox.setToolTip("使用在COCO等大型数据集上预训练的模型：\n- 加快检测模型收敛速度\n- 显著提高最终精度\n- 尤其在训练数据较少时更有效\n- YOLO和大多数检测模型都支持")
         basic_layout.addWidget(self.detection_pretrained_checkbox, 11, 2)
         
-        # 数据增强
-        basic_layout.addWidget(QLabel("使用数据增强:"), 12, 0, 1, 2)
+        # 常规数据增强
         self.detection_augmentation_checkbox = QCheckBox("使用数据增强")
         self.detection_augmentation_checkbox.setChecked(True)
+        self.detection_augmentation_checkbox.setToolTip("常规数据增强：\n- 翻转、旋转、色彩变换等\n- 减少过拟合，提高泛化能力\n- 检测任务中一般都需要启用\n- 需要bbox坐标同步转换")
         basic_layout.addWidget(self.detection_augmentation_checkbox, 12, 2)
         
         basic_group.setLayout(basic_layout)
@@ -757,49 +820,61 @@ class TrainingTab(BaseTab):
         advanced_layout.setSpacing(10)
         
         # 早停
-        advanced_layout.addWidget(QLabel("启用早停:"), 0, 0)
+        early_stop_label = QLabel("启用早停:")
+        early_stop_label.setToolTip("当验证指标不再改善时自动停止训练")
+        advanced_layout.addWidget(early_stop_label, 0, 0)
         self.detection_early_stopping_checkbox = QCheckBox("启用早停")
         self.detection_early_stopping_checkbox.setChecked(True)
+        self.detection_early_stopping_checkbox.setToolTip("当mAP在一定轮数内不再提高时停止训练：\n- 避免不必要的训练时间\n- 减少过拟合风险\n- 自动保存最佳模型")
         advanced_layout.addWidget(self.detection_early_stopping_checkbox, 0, 1)
         
         # 早停耐心值
-        advanced_layout.addWidget(QLabel("早停耐心值:"), 0, 2)
+        patience_label = QLabel("早停耐心值:")
+        patience_label.setToolTip("早停前允许的不改善轮数")
+        advanced_layout.addWidget(patience_label, 0, 2)
         self.detection_early_stopping_patience_spin = QSpinBox()
         self.detection_early_stopping_patience_spin.setRange(1, 50)
         self.detection_early_stopping_patience_spin.setValue(10)
+        self.detection_early_stopping_patience_spin.setToolTip("目标检测早停耐心值：\n- 检测模型可能需要更大耐心值\n- 典型值：10-15轮\n- 过小可能过早停止\n- 过大则失去早停意义")
         advanced_layout.addWidget(self.detection_early_stopping_patience_spin, 0, 3)
         
         # 梯度裁剪
-        advanced_layout.addWidget(QLabel("启用梯度裁剪:"), 1, 0)
+        grad_clip_label = QLabel("启用梯度裁剪:")
+        grad_clip_label.setToolTip("限制梯度大小以稳定训练")
+        advanced_layout.addWidget(grad_clip_label, 1, 0)
         self.detection_gradient_clipping_checkbox = QCheckBox("启用梯度裁剪")
         self.detection_gradient_clipping_checkbox.setChecked(False)
+        self.detection_gradient_clipping_checkbox.setToolTip("目标检测中的梯度裁剪：\n- 大型检测模型更容易出现梯度不稳定\n- 预防梯度爆炸和训练不稳定\n- 尤其在高学习率时有用\n- Faster R-CNN等常用技术")
         advanced_layout.addWidget(self.detection_gradient_clipping_checkbox, 1, 1)
         
         # 梯度裁剪阈值
-        advanced_layout.addWidget(QLabel("梯度裁剪阈值:"), 1, 2)
+        clip_value_label = QLabel("梯度裁剪阈值:")
+        clip_value_label.setToolTip("梯度裁剪的最大范数值")
+        advanced_layout.addWidget(clip_value_label, 1, 2)
         self.detection_gradient_clipping_value_spin = QDoubleSpinBox()
         self.detection_gradient_clipping_value_spin.setRange(0.1, 10.0)
         self.detection_gradient_clipping_value_spin.setSingleStep(0.1)
         self.detection_gradient_clipping_value_spin.setValue(1.0)
+        self.detection_gradient_clipping_value_spin.setToolTip("检测模型梯度裁剪阈值：\n- 两阶段检测器常用值：10.0\n- YOLO常用值：4.0\n- 训练不稳定时可降低该值\n- 精调时通常使用较小值")
         advanced_layout.addWidget(self.detection_gradient_clipping_value_spin, 1, 3)
         
         # 混合精度训练
-        advanced_layout.addWidget(QLabel("启用混合精度训练:"), 2, 0)
+        mixed_precision_label = QLabel("启用混合精度训练:")
+        mixed_precision_label.setToolTip("使用FP16和FP32混合精度加速训练")
+        advanced_layout.addWidget(mixed_precision_label, 2, 0)
         self.detection_mixed_precision_checkbox = QCheckBox("启用混合精度训练")
         self.detection_mixed_precision_checkbox.setChecked(True)
+        self.detection_mixed_precision_checkbox.setToolTip("目标检测模型混合精度训练：\n- 检测模型受益更大，加速可达2倍\n- 减少50%GPU内存使用\n- 几乎不影响最终精度\n- 建议所有支持FP16的GPU都启用")
         advanced_layout.addWidget(self.detection_mixed_precision_checkbox, 2, 1)
         
-        # 多GPU训练
-        advanced_layout.addWidget(QLabel("启用多GPU训练:"), 2, 2)
-        self.detection_multi_gpu_checkbox = QCheckBox("启用多GPU训练")
-        self.detection_multi_gpu_checkbox.setChecked(False)
-        advanced_layout.addWidget(self.detection_multi_gpu_checkbox, 2, 3)
-        
-        # 分布式训练
-        advanced_layout.addWidget(QLabel("启用分布式训练:"), 2, 4)
-        self.detection_distributed_checkbox = QCheckBox("启用分布式训练")
-        self.detection_distributed_checkbox.setChecked(False)
-        advanced_layout.addWidget(self.detection_distributed_checkbox, 2, 5)
+        # EMA - 指数移动平均
+        ema_label = QLabel("启用EMA:")
+        ema_label.setToolTip("使用权重的指数移动平均提高稳定性")
+        advanced_layout.addWidget(ema_label, 2, 2)
+        self.detection_ema_checkbox = QCheckBox("启用指数移动平均")
+        self.detection_ema_checkbox.setChecked(True)
+        self.detection_ema_checkbox.setToolTip("模型权重的指数移动平均：\n- 产生更平滑和稳定的模型\n- 提高测试精度和泛化能力\n- YOLO默认开启此功能\n- 几乎不增加计算负担")
+        advanced_layout.addWidget(self.detection_ema_checkbox, 2, 3)
         
         advanced_group.setLayout(advanced_layout)
         main_layout.addWidget(advanced_group)
