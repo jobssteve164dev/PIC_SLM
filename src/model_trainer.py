@@ -342,13 +342,15 @@ class TrainingThread(QThread):
                 if phase == 'val' and epoch_acc > best_acc:
                     best_acc = epoch_acc
                     # 保存最佳模型
-                    model_save_path = os.path.join(model_save_dir, f'{model_name}_best.pth')
+                    model_note = self.config.get('model_note', '')
+                    model_file_suffix = f"_{model_note}" if model_note else ""
+                    model_save_path = os.path.join(model_save_dir, f'{model_name}{model_file_suffix}_best.pth')
                     torch.save(self.model.state_dict(), model_save_path)
                     self.status_updated.emit(f'保存最佳模型，Epoch {epoch+1}, Acc: {best_acc:.4f}')
                     
                     # 导出ONNX模型
                     try:
-                        onnx_save_path = os.path.join(model_save_dir, f'{model_name}_best.onnx')
+                        onnx_save_path = os.path.join(model_save_dir, f'{model_name}{model_file_suffix}_best.onnx')
                         sample_input = torch.randn(1, 3, 224, 224).to(self.device)
                         torch.onnx.export(
                             self.model, 
@@ -365,7 +367,9 @@ class TrainingThread(QThread):
                         self.status_updated.emit(f'导出ONNX模型时出错: {str(e)}')
 
             # 保存最终模型
-            final_model_path = os.path.join(model_save_dir, f'{model_name}_final.pth')
+            model_note = self.config.get('model_note', '')
+            model_file_suffix = f"_{model_note}" if model_note else ""
+            final_model_path = os.path.join(model_save_dir, f'{model_name}{model_file_suffix}_final.pth')
             torch.save(self.model.state_dict(), final_model_path)
             self.status_updated.emit(f'保存最终模型: {final_model_path}')
             
@@ -1002,13 +1006,15 @@ class ModelTrainer(QObject):
                 if phase == 'val' and epoch_acc > best_acc:
                     best_acc = epoch_acc
                     # 保存最佳模型
-                    model_save_path = os.path.join(model_save_dir, f'{model_name}_best.pth')
+                    model_note = self.config.get('model_note', '')
+                    model_file_suffix = f"_{model_note}" if model_note else ""
+                    model_save_path = os.path.join(model_save_dir, f'{model_name}{model_file_suffix}_best.pth')
                     torch.save(self.model.state_dict(), model_save_path)
                     self.status_updated.emit(f'保存最佳模型，Epoch {epoch+1}, Acc: {best_acc:.4f}')
                     
                     # 导出ONNX模型
                     try:
-                        onnx_save_path = os.path.join(model_save_dir, f'{model_name}_best.onnx')
+                        onnx_save_path = os.path.join(model_save_dir, f'{model_name}{model_file_suffix}_best.onnx')
                         sample_input = torch.randn(1, 3, 224, 224).to(self.device)
                         torch.onnx.export(
                             self.model, 
@@ -1025,7 +1031,9 @@ class ModelTrainer(QObject):
                         self.status_updated.emit(f'导出ONNX模型时出错: {str(e)}')
 
             # 保存最终模型
-            final_model_path = os.path.join(model_save_dir, f'{model_name}_final.pth')
+            model_note = self.config.get('model_note', '')
+            model_file_suffix = f"_{model_note}" if model_note else ""
+            final_model_path = os.path.join(model_save_dir, f'{model_name}{model_file_suffix}_final.pth')
             torch.save(self.model.state_dict(), final_model_path)
             self.status_updated.emit(f'保存最终模型: {final_model_path}')
             

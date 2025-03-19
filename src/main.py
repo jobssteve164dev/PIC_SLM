@@ -341,7 +341,8 @@ def main():
             'use_pretrained': use_pretrained,
             'pretrained_path': pretrained_path,  # 添加本地预训练模型路径
             'metrics': metrics,
-            'use_tensorboard': True
+            'use_tensorboard': True,
+            'model_note': params.get('model_note', '')  # 添加模型命名备注
         }
         
         # 添加任务特有参数

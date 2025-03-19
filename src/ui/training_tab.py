@@ -581,6 +581,15 @@ class TrainingTab(BaseTab):
         self.classification_mixed_precision_checkbox.setToolTip("使用FP16和FP32混合精度：\n- 加速训练(最高2倍)\n- 减少内存占用\n- 几乎不影响精度\n- 需要支持FP16的GPU")
         advanced_layout.addWidget(self.classification_mixed_precision_checkbox, 2, 1)
         
+        # 模型命名备注
+        model_note_label = QLabel("模型命名备注:")
+        model_note_label.setToolTip("添加到训练输出模型文件名中的备注")
+        advanced_layout.addWidget(model_note_label, 3, 0)
+        self.classification_model_note_edit = QLineEdit()
+        self.classification_model_note_edit.setPlaceholderText("可选: 添加模型命名备注")
+        self.classification_model_note_edit.setToolTip("这个备注将添加到输出模型文件名中，方便识别不同训练的模型")
+        advanced_layout.addWidget(self.classification_model_note_edit, 3, 1, 1, 3)
+        
         advanced_group.setLayout(advanced_layout)
         main_layout.addWidget(advanced_group)
 
@@ -875,6 +884,15 @@ class TrainingTab(BaseTab):
         self.detection_ema_checkbox.setChecked(True)
         self.detection_ema_checkbox.setToolTip("模型权重的指数移动平均：\n- 产生更平滑和稳定的模型\n- 提高测试精度和泛化能力\n- YOLO默认开启此功能\n- 几乎不增加计算负担")
         advanced_layout.addWidget(self.detection_ema_checkbox, 2, 3)
+        
+        # 模型命名备注
+        model_note_label = QLabel("模型命名备注:")
+        model_note_label.setToolTip("添加到训练输出模型文件名中的备注")
+        advanced_layout.addWidget(model_note_label, 3, 0)
+        self.detection_model_note_edit = QLineEdit()
+        self.detection_model_note_edit.setPlaceholderText("可选: 添加模型命名备注")
+        self.detection_model_note_edit.setToolTip("这个备注将添加到输出模型文件名中，方便识别不同训练的模型")
+        advanced_layout.addWidget(self.detection_model_note_edit, 3, 1, 1, 3)
         
         advanced_group.setLayout(advanced_layout)
         main_layout.addWidget(advanced_group)
@@ -1192,6 +1210,9 @@ class TrainingTab(BaseTab):
             use_local_pretrained = self.classification_use_local_pretrained_checkbox.isChecked()
             pretrained_path = self.classification_pretrained_path_edit.text() if use_local_pretrained else ""
             pretrained_model = "" if use_local_pretrained else self.classification_model_combo.currentText()
+            
+            # 获取模型命名备注
+            model_note = self.classification_model_note_edit.text().strip()
                 
             params.update({
                 "model": self.classification_model_combo.currentText(),
@@ -1204,7 +1225,8 @@ class TrainingTab(BaseTab):
                 "use_local_pretrained": use_local_pretrained,
                 "pretrained_path": pretrained_path,
                 "pretrained_model": pretrained_model,  # 添加预训练模型名称
-                "use_augmentation": self.classification_augmentation_checkbox.isChecked()
+                "use_augmentation": self.classification_augmentation_checkbox.isChecked(),
+                "model_note": model_note  # 添加模型命名备注
             })
         else:
             # 获取所有选中的评估指标
@@ -1216,6 +1238,9 @@ class TrainingTab(BaseTab):
             use_local_pretrained = self.detection_use_local_pretrained_checkbox.isChecked()
             pretrained_path = self.detection_pretrained_path_edit.text() if use_local_pretrained else ""
             pretrained_model = "" if use_local_pretrained else self.detection_model_combo.currentText()
+            
+            # 获取模型命名备注
+            model_note = self.detection_model_note_edit.text().strip()
                 
             params.update({
                 "model": self.detection_model_combo.currentText(),
@@ -1231,7 +1256,8 @@ class TrainingTab(BaseTab):
                 "use_local_pretrained": use_local_pretrained,
                 "pretrained_path": pretrained_path,
                 "pretrained_model": pretrained_model,  # 添加预训练模型名称
-                "use_augmentation": self.detection_augmentation_checkbox.isChecked()
+                "use_augmentation": self.detection_augmentation_checkbox.isChecked(),
+                "model_note": model_note  # 添加模型命名备注
             })
             
         return params 
