@@ -2,7 +2,7 @@ from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QPushButton, QLabel, QFileDia
                            QHBoxLayout, QListWidget, QListWidgetItem, QGroupBox, QGridLayout,
                            QSizePolicy, QLineEdit, QInputDialog, QMessageBox, QRadioButton,
                            QButtonGroup, QStackedWidget, QComboBox, QScrollArea, QFrame, QSplitter,
-                           QCheckBox)
+                           QCheckBox, QDoubleSpinBox)
 from PyQt5.QtCore import Qt, pyqtSignal, QPointF, QRectF, QSizeF
 from PyQt5.QtGui import QFont, QPixmap, QImage, QPainter, QPen, QColor, QBrush, QCursor, QKeySequence
 import os
@@ -11,6 +11,7 @@ import xml.etree.ElementTree as ET
 from datetime import datetime
 from .base_tab import BaseTab
 import json
+from PyQt5.QtWidgets import QApplication
 
 class AnnotationCanvas(QWidget):
     """图像标注画布"""
@@ -620,9 +621,11 @@ class AnnotationTab(BaseTab):
         self.processed_folder = ""  # 处理后的图片文件夹
         self.detection_folder = ""  # 目标检测图像文件夹
         self.annotation_folder = ""  # 标注输出文件夹
+        
+        # 先初始化UI
         self.init_ui()
         
-        # 尝试从配置文件加载默认路径
+        # 然后尝试从配置文件加载默认设置
         config_file = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'config.json')
         print(f"尝试加载配置文件: {config_file}")
         if os.path.exists(config_file):
@@ -630,13 +633,48 @@ class AnnotationTab(BaseTab):
                 with open(config_file, 'r', encoding='utf-8') as f:
                     config = json.load(f)
                     print(f"成功加载配置: {config}")
+                    
                     # 加载默认处理后文件夹和标注文件夹
-                    if 'default_processed_folder' in config and config['default_processed_folder']:
-                        self.processed_folder = config['default_processed_folder']
-                        print(f"设置处理后文件夹: {self.processed_folder}")
-                    if 'default_annotation_folder' in config and config['default_annotation_folder']:
-                        self.annotation_folder = config['default_annotation_folder']
-                        print(f"设置标注文件夹: {self.annotation_folder}")
+                    if 'default_output_folder' in config and config['default_output_folder']:
+                        self.processed_folder = config['default_output_folder']
+                        self.processed_path_edit.setText(self.processed_folder)
+                        self.detection_path_edit.setText(self.processed_folder)
+                        print(f"使用默认输出文件夹设置处理后文件夹和标注文件夹: {self.processed_folder}")
+                    
+                    # 加载默认类别
+                    if 'default_classes' in config and config['default_classes']:
+                        print(f"加载默认类别: {config['default_classes']}")
+                        # 清除现有类别
+                        self.defect_classes = config['default_classes'].copy()
+                        self.detection_classes = config['default_classes'].copy()
+                        
+                        # 更新分类界面类别列表
+                        if hasattr(self, 'class_list'):
+                            self.class_list.clear()
+                            for class_name in self.defect_classes:
+                                self.class_list.addItem(class_name)
+                            print(f"已更新分类界面类别列表，现在有 {self.class_list.count()} 个类别")
+                        
+                        # 更新目标检测界面类别列表  
+                        if hasattr(self, 'detection_class_list'):
+                            self.detection_class_list.clear()
+                            for class_name in self.detection_classes:
+                                self.detection_class_list.addItem(class_name)
+                            print(f"已更新目标检测界面类别列表，现在有 {self.detection_class_list.count()} 个类别")
+                        
+                        # 更新标签下拉框
+                        if hasattr(self, 'label_combo'):
+                            self.update_label_combo()
+                            print(f"已更新标签下拉框，现在有 {self.label_combo.count()} 个选项")
+                            
+                    # 检查各界面的启用状态
+                    self.check_annotation_ready()
+                    self.check_detection_ready()
+                    
+                    # 如果已经设置了处理后文件夹和有类别，加载图像
+                    if self.processed_folder and self.detection_classes:
+                        self.load_image_files(self.processed_folder)
+                
             except Exception as e:
                 print(f"加载配置失败: {str(e)}")
                 import traceback
@@ -802,6 +840,15 @@ class AnnotationTab(BaseTab):
             self.processed_path_edit.setText(self.processed_folder)
             self.check_annotation_ready()
         
+        # 从主窗口配置中获取默认输出文件夹路径
+        if hasattr(self, 'main_window') and hasattr(self.main_window, 'config'):
+            default_output_folder = self.main_window.config.get('default_output_folder', '')
+            if default_output_folder and not self.processed_folder:  # 如果还没有设置处理后文件夹，则使用默认输出文件夹
+                self.processed_folder = default_output_folder
+                self.processed_path_edit.setText(default_output_folder)
+                print(f"从配置加载默认输出文件夹作为处理后文件夹: {default_output_folder}")
+                self.check_annotation_ready()
+        
     def init_detection_ui(self):
         """初始化目标检测标注界面"""
         # 创建主布局
@@ -832,23 +879,48 @@ class AnnotationTab(BaseTab):
         folder_group.setLayout(folder_layout)
         left_layout.addWidget(folder_group)
         
-        # 输出文件夹选择组
-        output_group = QGroupBox("标注输出文件夹")
-        output_layout = QGridLayout()
+        # 添加训练数据准备组
+        training_prep_group = QGroupBox("训练数据准备")
+        training_prep_layout = QVBoxLayout()
         
-        self.output_path_edit = QLineEdit()
-        self.output_path_edit.setReadOnly(True)
-        self.output_path_edit.setPlaceholderText("请选择标注输出文件夹")
+        # 添加说明标签
+        help_label = QLabel("生成目标检测训练所需的文件结构:")
+        help_label.setWordWrap(True)
+        help_label.setStyleSheet("color: #333; font-size: 12px;")
+        training_prep_layout.addWidget(help_label)
         
-        output_btn = QPushButton("浏览...")
-        output_btn.clicked.connect(self.select_output_folder)
+        # 文件结构说明
+        structure_label = QLabel(
+            "将在默认输出文件夹中创建如下结构:\n"
+            "detection_data/\n"
+            "├── images/\n"
+            "│   ├── train/\n"
+            "│   └── val/\n"
+            "└── labels/\n"
+            "    ├── train/\n"
+            "    └── val/"
+        )
+        structure_label.setStyleSheet("background-color: #f0f0f0; padding: 5px; font-family: monospace;")
+        training_prep_layout.addWidget(structure_label)
         
-        output_layout.addWidget(QLabel("文件夹:"), 0, 0)
-        output_layout.addWidget(self.output_path_edit, 0, 1)
-        output_layout.addWidget(output_btn, 0, 2)
+        # 训练/验证比例
+        ratio_layout = QHBoxLayout()
+        ratio_layout.addWidget(QLabel("训练集比例:"))
+        self.train_ratio_spin = QDoubleSpinBox()
+        self.train_ratio_spin.setRange(0.5, 0.95)
+        self.train_ratio_spin.setValue(0.8)
+        self.train_ratio_spin.setSingleStep(0.05)
+        self.train_ratio_spin.setDecimals(2)
+        ratio_layout.addWidget(self.train_ratio_spin)
+        training_prep_layout.addLayout(ratio_layout)
         
-        output_group.setLayout(output_layout)
-        left_layout.addWidget(output_group)
+        # 生成按钮
+        generate_btn = QPushButton("生成训练数据结构")
+        generate_btn.clicked.connect(self.generate_detection_dataset)
+        training_prep_layout.addWidget(generate_btn)
+        
+        training_prep_group.setLayout(training_prep_layout)
+        left_layout.addWidget(training_prep_group)
         
         # 图像列表
         self.image_list_widget = QListWidget()
@@ -961,13 +1033,9 @@ class AnnotationTab(BaseTab):
         if self.processed_folder:
             print(f"设置detection_path_edit文本为: {self.processed_folder}")
             self.detection_path_edit.setText(self.processed_folder)
-        
-        if self.annotation_folder:
-            print(f"设置output_path_edit文本为: {self.annotation_folder}")
-            self.output_path_edit.setText(self.annotation_folder)
             
-        # 如果两个路径都已设置，自动加载图像
-        if self.processed_folder and self.annotation_folder:
+        # 如果已设置处理后文件夹，自动加载图像
+        if self.processed_folder:
             print(f"自动加载图像文件，文件夹: {self.processed_folder}")
             self.load_image_files(self.processed_folder)
             self.check_detection_ready()
@@ -983,12 +1051,9 @@ class AnnotationTab(BaseTab):
             # 确保在切换到目标检测模式时应用默认路径
             if self.processed_folder:
                 self.detection_path_edit.setText(self.processed_folder)
-            
-            if self.annotation_folder:
-                self.output_path_edit.setText(self.annotation_folder)
                 
-            # 如果两个路径都已设置但图像列表为空，则尝试加载图像
-            if self.processed_folder and self.annotation_folder and len(self.image_files) == 0:
+            # 如果已设置处理后文件夹但图像列表为空，则尝试加载图像
+            if self.processed_folder and len(self.image_files) == 0:
                 self.load_image_files(self.processed_folder)
                 self.check_detection_ready()
     
@@ -1243,13 +1308,18 @@ class AnnotationTab(BaseTab):
             
     def save_annotations(self):
         """保存当前图像的标注结果"""
-        output_folder = self.output_path_edit.text()
-        
-        if not output_folder:
-            # 如果未指定输出文件夹，使用图像文件夹下的annotations子文件夹
-            image_folder = os.path.dirname(self.image_files[self.current_index])
-            output_folder = os.path.join(image_folder, "annotations")
-            os.makedirs(output_folder, exist_ok=True)
+        # 使用默认输出文件夹中的annotations子文件夹
+        if not hasattr(self, 'main_window') or not hasattr(self.main_window, 'config'):
+            QMessageBox.warning(self, "错误", "无法获取默认输出文件夹设置")
+            return
+            
+        default_output_folder = self.main_window.config.get('default_output_folder', '')
+        if not default_output_folder:
+            QMessageBox.warning(self, "错误", "请先在设置中配置默认输出文件夹")
+            return
+            
+        output_folder = os.path.join(default_output_folder, 'annotations')
+        os.makedirs(output_folder, exist_ok=True)
             
         # 保存标注
         if self.annotation_canvas.save_annotations(output_folder, self.annotation_format):
@@ -1280,58 +1350,65 @@ class AnnotationTab(BaseTab):
     def update_detection_status(self, message):
         """更新目标检测状态标签"""
         self.detection_status_label.setText(message)
-        if hasattr(self, 'main_window'):
-            self.main_window.update_status(message)
+        try:
+            if hasattr(self, 'main_window') and self.main_window is not None:
+                self.main_window.update_status(message)
+        except Exception as e:
+            print(f"更新主窗口状态时出错: {str(e)}")
+            
+    def update_status(self, message):
+        """更新状态"""
+        try:
+            if hasattr(self, 'main_window') and self.main_window is not None:
+                self.main_window.update_status(message)
+        except Exception as e:
+            print(f"更新主窗口状态时出错: {str(e)}")
 
     def apply_config(self, config):
         """应用配置设置"""
+        print(f"AnnotationTab.apply_config被调用，配置内容: {config}")
         try:
-            # 加载默认处理后文件夹和标注文件夹
-            if 'default_processed_folder' in config and config['default_processed_folder']:
-                self.processed_folder = config['default_processed_folder']
+            # 使用默认输出文件夹作为处理后文件夹和标注文件夹
+            if 'default_output_folder' in config and config['default_output_folder']:
+                # 设置处理后文件夹
+                self.processed_folder = config['default_output_folder']
                 # 如果处理后文件夹输入框已创建，则设置文本
                 if hasattr(self, 'processed_path_edit'):
                     self.processed_path_edit.setText(self.processed_folder)
                 # 如果目标检测路径输入框已创建，也设置相同的路径
                 if hasattr(self, 'detection_path_edit'):
                     self.detection_path_edit.setText(self.processed_folder)
-                    # 如果当前在目标检测模式，加载图像
-                    if self.stacked_widget.currentIndex() == 1:
-                        self.load_image_files(self.processed_folder)
-            
-            # 加载默认标注文件夹
-            if 'default_annotation_folder' in config and config['default_annotation_folder']:
-                self.annotation_folder = config['default_annotation_folder']
-                # 如果标注输出文件夹输入框已创建，则设置文本
-                if hasattr(self, 'output_path_edit'):
-                    self.output_path_edit.setText(self.annotation_folder)
+                
+                # 设置标注文件夹
+                self.annotation_folder = config['default_output_folder']
+                
+                print(f"使用默认输出文件夹设置处理后文件夹和标注文件夹: {self.processed_folder}")
             
             # 加载默认类别
             if 'default_classes' in config and config['default_classes']:
+                print(f"加载默认类别: {config['default_classes']}")
                 # 清除现有类别
-                self.defect_classes = []
+                self.defect_classes = config['default_classes'].copy()
+                self.detection_classes = config['default_classes'].copy()
+                
+                # 更新分类界面类别列表
                 if hasattr(self, 'class_list'):
                     self.class_list.clear()
-                
-                # 添加新类别到分类标注
-                for class_name in config['default_classes']:
-                    self.defect_classes.append(class_name)
-                    if hasattr(self, 'class_list'):
+                    for class_name in self.defect_classes:
                         self.class_list.addItem(class_name)
+                    print(f"已更新分类界面类别列表，现在有 {self.class_list.count()} 个类别")
                 
-                # 同时添加到目标检测类别
-                self.detection_classes = []
+                # 更新目标检测界面类别列表  
                 if hasattr(self, 'detection_class_list'):
                     self.detection_class_list.clear()
-                    
-                for class_name in config['default_classes']:
-                    self.detection_classes.append(class_name)
-                    if hasattr(self, 'detection_class_list'):
+                    for class_name in self.detection_classes:
                         self.detection_class_list.addItem(class_name)
+                    print(f"已更新目标检测界面类别列表，现在有 {self.detection_class_list.count()} 个类别")
                 
                 # 更新标签下拉框
                 if hasattr(self, 'label_combo'):
                     self.update_label_combo()
+                    print(f"已更新标签下拉框，现在有 {self.label_combo.count()} 个选项")
             
             # 检查状态并更新UI
             if hasattr(self, 'check_annotation_ready'):
@@ -1339,12 +1416,18 @@ class AnnotationTab(BaseTab):
             if hasattr(self, 'check_detection_ready'):
                 self.check_detection_ready()
                 
+            # 如果已经设置了处理后文件夹和有类别，而且当前在目标检测模式，加载图像
+            if self.processed_folder and self.detection_classes and \
+               hasattr(self, 'stacked_widget') and self.stacked_widget.currentIndex() == 1:
+                self.load_image_files(self.processed_folder)
+                
+            print("AnnotationTab.apply_config应用完成")
             return True
         except Exception as e:
             print(f"应用配置到标注标签页时出错: {str(e)}")
             import traceback
             traceback.print_exc()
-            return False 
+            return False
 
     def open_validation_folder(self):
         """打开验证集文件夹"""
@@ -1355,3 +1438,171 @@ class AnnotationTab(BaseTab):
         # 发出打开验证集文件夹信号
         self.open_validation_folder_signal.emit(self.processed_folder)
         self.update_status("正在打开验证集文件夹...") 
+
+    def generate_detection_dataset(self):
+        """生成目标检测训练数据集文件结构"""
+        # 获取所需路径
+        source_folder = self.detection_path_edit.text()
+        
+        # 使用默认输出文件夹作为目标文件夹和标注文件夹
+        if not hasattr(self, 'main_window') or not hasattr(self.main_window, 'config'):
+            QMessageBox.warning(self, "错误", "无法获取默认输出文件夹设置")
+            return
+            
+        default_output_folder = self.main_window.config.get('default_output_folder', '')
+        if not default_output_folder:
+            QMessageBox.warning(self, "错误", "请先在设置中配置默认输出文件夹")
+            return
+            
+        target_folder = default_output_folder
+        annotation_folder = os.path.join(default_output_folder, 'annotations')
+        train_ratio = self.train_ratio_spin.value()
+        
+        # 打印路径信息以便调试
+        print(f"源图像文件夹: {source_folder}")
+        print(f"标注文件夹: {annotation_folder}")
+        print(f"目标文件夹: {target_folder}")
+        print(f"训练集比例: {train_ratio}")
+        
+        # 验证路径
+        if not source_folder or not os.path.exists(source_folder):
+            QMessageBox.warning(self, "错误", "请选择有效的图像文件夹")
+            return
+            
+        if not os.path.exists(annotation_folder):
+            os.makedirs(annotation_folder)
+            
+        # 确认操作
+        reply = QMessageBox.question(
+            self, "确认操作", 
+            f"将在{target_folder}中创建训练数据结构，并将图像和标注文件复制到相应文件夹。继续？",
+            QMessageBox.Yes | QMessageBox.No, QMessageBox.No
+        )
+        
+        if reply != QMessageBox.Yes:
+            return
+            
+        try:
+            # 创建目录结构
+            detection_data_dir = os.path.join(target_folder, "detection_data")
+            images_dir = os.path.join(detection_data_dir, "images")
+            labels_dir = os.path.join(detection_data_dir, "labels")
+            train_images_dir = os.path.join(images_dir, "train")
+            val_images_dir = os.path.join(images_dir, "val")
+            train_labels_dir = os.path.join(labels_dir, "train")
+            val_labels_dir = os.path.join(labels_dir, "val")
+            
+            os.makedirs(train_images_dir, exist_ok=True)
+            os.makedirs(val_images_dir, exist_ok=True)
+            os.makedirs(train_labels_dir, exist_ok=True)
+            os.makedirs(val_labels_dir, exist_ok=True)
+            
+            # 获取所有图像文件
+            image_files = []
+            print(f"在{source_folder}中搜索图像文件...")
+            for ext in ['*.jpg', '*.jpeg', '*.png', '*.bmp']:
+                pattern = os.path.join(source_folder, ext)
+                found = glob.glob(pattern)
+                print(f"使用模式 {pattern} 找到 {len(found)} 个文件")
+                image_files.extend(found)
+                
+                # 同时查找大写扩展名
+                upper_pattern = os.path.join(source_folder, ext.upper())
+                found_upper = glob.glob(upper_pattern)
+                print(f"使用模式 {upper_pattern} 找到 {len(found_upper)} 个文件")
+                image_files.extend(found_upper)
+            
+            print(f"总共找到 {len(image_files)} 个图像文件")
+            
+            if not image_files:
+                QMessageBox.warning(self, "错误", f"在{source_folder}中未找到图像文件")
+                return
+                
+            # 计算训练集和验证集大小
+            import random
+            random.shuffle(image_files)
+            train_size = int(len(image_files) * train_ratio)
+            train_files = image_files[:train_size]
+            val_files = image_files[train_size:]
+            
+            print(f"训练集: {len(train_files)}张图像, 验证集: {len(val_files)}张图像")
+            
+            # 处理进度
+            total_files = len(image_files)
+            processed = 0
+            
+            # 导入需要的模块
+            import shutil
+            
+            # 复制训练集图像和标注
+            for img_path in train_files:
+                img_filename = os.path.basename(img_path)
+                base_name = os.path.splitext(img_filename)[0]
+                
+                # 复制图像
+                dest_img_path = os.path.join(train_images_dir, img_filename)
+                shutil.copy2(img_path, dest_img_path)
+                
+                # 寻找对应的标注文件(YOLO格式.txt)
+                label_path = os.path.join(annotation_folder, f"{base_name}.txt")
+                if os.path.exists(label_path):
+                    dest_label_path = os.path.join(train_labels_dir, f"{base_name}.txt")
+                    shutil.copy2(label_path, dest_label_path)
+                else:
+                    print(f"警告: 未找到图像 {img_filename} 对应的标注文件")
+                    
+                processed += 1
+                self.update_detection_status(f"处理中... {processed}/{total_files}")
+                QApplication.processEvents() # 保持UI响应
+            
+            # 复制验证集图像和标注
+            for img_path in val_files:
+                img_filename = os.path.basename(img_path)
+                base_name = os.path.splitext(img_filename)[0]
+                
+                # 复制图像
+                dest_img_path = os.path.join(val_images_dir, img_filename)
+                shutil.copy2(img_path, dest_img_path)
+                
+                # 寻找对应的标注文件(YOLO格式.txt)
+                label_path = os.path.join(annotation_folder, f"{base_name}.txt")
+                if os.path.exists(label_path):
+                    dest_label_path = os.path.join(val_labels_dir, f"{base_name}.txt")
+                    shutil.copy2(label_path, dest_label_path)
+                else:
+                    print(f"警告: 未找到图像 {img_filename} 对应的标注文件")
+                    
+                processed += 1
+                self.update_detection_status(f"处理中... {processed}/{total_files}")
+                QApplication.processEvents() # 保持UI响应
+            
+            # 创建classes.txt文件
+            if self.detection_classes:
+                classes_path = os.path.join(detection_data_dir, "classes.txt")
+                print(f"正在创建类别文件: {classes_path}")
+                with open(classes_path, 'w', encoding='utf-8') as f:
+                    for i, class_name in enumerate(self.detection_classes):
+                        f.write(f"{i} {class_name}\n")
+                        
+                print(f"类别文件已创建，包含 {len(self.detection_classes)} 个类别")
+            
+            # 完成
+            msg = (f"已成功生成训练数据结构。\n"
+                  f"训练集: {len(train_files)}张图像\n"
+                  f"验证集: {len(val_files)}张图像\n"
+                  f"目标文件夹: {detection_data_dir}")
+            
+            print(msg)
+            QMessageBox.information(self, "成功", msg)
+            self.update_detection_status("训练数据结构生成完成")
+            
+            # 为训练标签页设置目标检测目录路径
+            if hasattr(self, 'main_window') and hasattr(self.main_window, 'training_tab'):
+                if hasattr(self.main_window.training_tab, 'detection_path_edit'):
+                    self.main_window.training_tab.detection_path_edit.setText(detection_data_dir)
+                    print(f"已自动为训练标签页设置检测数据路径: {detection_data_dir}")
+            
+        except Exception as e:
+            QMessageBox.critical(self, "错误", f"生成训练数据结构时出错: {str(e)}")
+            import traceback
+            traceback.print_exc() 

@@ -72,9 +72,10 @@ class TrainingThread(QThread):
     
     def stop(self):
         """停止训练过程"""
+        # 仅设置停止标志，不发送任何信号
         self.stop_training = True
-        self.status_updated.emit("正在停止训练线程...")
-        self.training_stopped.emit()
+        self.status_updated.emit("训练线程正在停止...")
+        # 不发送训练停止信号，由ModelTrainer类统一管理
     
     def train_model(self, data_dir, model_name, num_epochs, batch_size, learning_rate, 
                    model_save_dir, task_type='classification', use_tensorboard=True):
@@ -401,18 +402,31 @@ class TrainingThread(QThread):
                     if model_name == 'ResNet18':
                         model = models.resnet18(pretrained=True)
                         model.fc = nn.Linear(model.fc.in_features, num_classes)
+                        return model
                     elif model_name == 'ResNet34':
                         model = models.resnet34(pretrained=True)
                         model.fc = nn.Linear(model.fc.in_features, num_classes)
+                        return model
                     elif model_name == 'ResNet50':
                         model = models.resnet50(pretrained=True)
                         model.fc = nn.Linear(model.fc.in_features, num_classes)
+                        return model
                     elif model_name == 'ResNet101':
-                        model = models.resnet101(pretrained=True)
-                        model.fc = nn.Linear(model.fc.in_features, num_classes)
+                        # 使用新的权重参数方式加载模型，避免警告和下载问题
+                        try:
+                            model = models.resnet101(weights=models.ResNet101_Weights.IMAGENET1K_V1)
+                            model.fc = nn.Linear(model.fc.in_features, num_classes)
+                            return model
+                        except Exception as e:
+                            # 如果新API不可用，尝试旧的方式
+                            self.status_updated.emit(f"使用新API加载模型失败: {str(e)}")
+                            model = models.resnet101(pretrained=True)
+                            model.fc = nn.Linear(model.fc.in_features, num_classes)
+                            return model
                     elif model_name == 'ResNet152':
                         model = models.resnet152(pretrained=True)
                         model.fc = nn.Linear(model.fc.in_features, num_classes)
+                        return model
                     elif model_name == 'MobileNetV2':
                         model = models.mobilenet_v2(pretrained=True)
                         model.classifier[1] = nn.Linear(model.classifier[1].in_features, num_classes)
@@ -543,13 +557,24 @@ class TrainingThread(QThread):
                         if model_link:
                             self.model_download_failed.emit(exact_model_name, model_link)
                             self.status_updated.emit(f"预训练模型 {model_name} 下载失败，已提供手动下载链接")
-                            self.training_error.emit(f"预训练模型下载失败: {str(e)}")
                         else:
                             self.training_error.emit(f"预训练模型 {model_name} 下载失败，无法找到下载链接: {str(e)}")
                         
                         # 尝试使用不带预训练权重的模型来继续
                         self.status_updated.emit("尝试使用未预训练的模型继续训练...")
-                        if model_name == 'ResNet50':
+                        
+                        # 根据模型名称创建不带预训练权重的模型
+                        if model_name == 'ResNet101':
+                            self.status_updated.emit("使用不带预训练权重的ResNet101模型")
+                            try:
+                                # 尝试新API
+                                model = models.resnet101(weights=None)
+                            except:
+                                # 如果新API不可用，使用旧API
+                                model = models.resnet101(pretrained=False)
+                            model.fc = nn.Linear(model.fc.in_features, num_classes)
+                            return model
+                        elif model_name == 'ResNet50':
                             model = models.resnet50(pretrained=False)
                             model.fc = nn.Linear(model.fc.in_features, num_classes)
                             return model
@@ -559,10 +584,6 @@ class TrainingThread(QThread):
                             return model
                         elif model_name == 'ResNet34':
                             model = models.resnet34(pretrained=False)
-                            model.fc = nn.Linear(model.fc.in_features, num_classes)
-                            return model
-                        elif model_name == 'ResNet101':
-                            model = models.resnet101(pretrained=False)
                             model.fc = nn.Linear(model.fc.in_features, num_classes)
                             return model
                         elif model_name == 'ResNet152':
@@ -633,7 +654,17 @@ class TrainingThread(QThread):
                                         model = EfficientNet.from_name('efficientnet-b4', num_classes=num_classes)
                                     return model
                                 except Exception:
-                                    raise Exception(f"无法创建或安装EfficientNet模型")
+                                    # 如果安装失败，回退到ResNet50作为替代
+                                    self.status_updated.emit("无法安装或创建EfficientNet模型，使用ResNet50替代")
+                                    model = models.resnet50(pretrained=False)
+                                    model.fc = nn.Linear(model.fc.in_features, num_classes)
+                                    return model
+                        else:
+                            # 对于所有其他情况，使用ResNet50作为后备方案
+                            self.status_updated.emit(f"未知模型 {model_name}，使用ResNet50替代")
+                            model = models.resnet50(pretrained=False)
+                            model.fc = nn.Linear(model.fc.in_features, num_classes)
+                            return model
                     
                     # 重新抛出其他类型的错误
                     raise
@@ -646,28 +677,31 @@ class TrainingThread(QThread):
                 # 使用一个简单的占位模型
                 model = models.resnet50(pretrained=True)
                 model.fc = nn.Linear(model.fc.in_features, num_classes)
+                return model
                 
-                # 实际应用中，这里应该根据model_name创建不同的目标检测模型
-                # 例如：
-                # if model_name == 'Faster R-CNN':
-                #     from torchvision.models.detection import fasterrcnn_resnet50_fpn
-                #     model = fasterrcnn_resnet50_fpn(pretrained=True)
-                #     # 修改模型以适应自定义类别数
-                #     in_features = model.roi_heads.box_predictor.cls_score.in_features
-                #     model.roi_heads.box_predictor = FastRCNNPredictor(in_features, num_classes)
-                # elif model_name == 'SSD':
-                #     from torchvision.models.detection import ssd300_vgg16
-                #     model = ssd300_vgg16(pretrained=True)
-                #     # 修改模型以适应自定义类别数
-                #     # ...
-                # elif model_name == 'YOLO v5':
-                #     # YOLO v5需要单独安装
-                #     # ...
-                # 等等
             else:
                 raise ValueError(f"不支持的任务类型: {task_type}")
         except Exception as e:
-            raise Exception(f"创建模型时出错: {str(e)}")
+            # 确保即使发生错误也返回一个有效的模型
+            self.status_updated.emit(f"创建模型时出错: {str(e)}，使用默认的ResNet50模型")
+            try:
+                model = models.resnet50(pretrained=False)
+                model.fc = nn.Linear(model.fc.in_features, num_classes)
+                return model
+            except:
+                # 如果连ResNet50都创建失败，尝试创建最简单的模型
+                self.status_updated.emit("创建ResNet50模型失败，使用简单自定义模型")
+                model = nn.Sequential(
+                    nn.Conv2d(3, 64, kernel_size=7, stride=2, padding=3),
+                    nn.ReLU(inplace=True),
+                    nn.MaxPool2d(kernel_size=3, stride=2, padding=1),
+                    nn.Conv2d(64, 128, kernel_size=3, stride=1, padding=1),
+                    nn.ReLU(inplace=True),
+                    nn.AdaptiveAvgPool2d((1, 1)),
+                    nn.Flatten(),
+                    nn.Linear(128, num_classes)
+                )
+                return model
 
 class ModelTrainer(QObject):
     # 定义信号
@@ -1024,24 +1058,43 @@ class ModelTrainer(QObject):
         """停止训练过程"""
         # 设置停止标志
         self.stop_training = True
+        self.status_updated.emit("正在停止训练...")
         
-        # 如果有训练线程在运行，强制终止
+        # 如果有训练线程在运行
         if self.training_thread and self.training_thread.isRunning():
-            self.status_updated.emit("正在停止训练...")
-            # 先等待线程正常退出
-            self.training_thread.stop()
-            self.training_thread.wait(2000)  # 等待最多2秒
+            # 设置训练线程的停止标志
+            if hasattr(self.training_thread, 'stop_training'):
+                self.training_thread.stop_training = True
             
-            # 如果线程还在运行，则强制终止
-            if self.training_thread.isRunning():
-                self.training_thread.terminate()
-                self.training_thread.wait()
-                self.status_updated.emit("训练已强制终止")
+            # 调用训练线程的stop方法
+            if hasattr(self.training_thread, 'stop'):
+                # 断开所有训练线程的信号连接，避免产生竞争条件
+                try:
+                    self.training_thread.progress_updated.disconnect()
+                    self.training_thread.status_updated.disconnect()
+                    self.training_thread.training_finished.disconnect()
+                    self.training_thread.training_error.disconnect()
+                    self.training_thread.epoch_finished.disconnect()
+                    self.training_thread.model_download_failed.disconnect()
+                    if hasattr(self.training_thread, 'training_stopped'):
+                        self.training_thread.training_stopped.disconnect()
+                except (TypeError, RuntimeError):
+                    # 忽略信号断开可能产生的错误
+                    pass
+                
+                # 优雅地停止线程
+                self.training_thread.stop()
+            
+            # 等待线程结束，最多等待3秒
+            if not self.training_thread.wait(3000):
+                # 如果3秒后线程还在运行，记录警告但不强制终止
+                # 避免使用terminate()方法，因为它可能导致资源泄漏和程序崩溃
+                self.status_updated.emit("警告：训练线程未能及时停止，但训练已被标记为停止状态")
             else:
-                self.status_updated.emit("训练已停止")
-            
-            # 发射训练停止信号
-            self.training_stopped.emit()
+                self.status_updated.emit("训练线程已停止")
+        
+        # 无论线程是否正常结束，都发射一次训练停止信号
+        self.training_stopped.emit()
 
     def _create_model(self, model_name: str, num_classes: int, task_type: str = 'classification') -> nn.Module:
         """
@@ -1060,54 +1113,112 @@ class ModelTrainer(QObject):
             if model_name == 'ResNet18':
                 model = models.resnet18(pretrained=True)
                 model.fc = nn.Linear(model.fc.in_features, num_classes)
+            elif model_name == 'ResNet34':
+                model = models.resnet34(pretrained=True)
+                model.fc = nn.Linear(model.fc.in_features, num_classes)
             elif model_name == 'ResNet50':
                 model = models.resnet50(pretrained=True)
                 model.fc = nn.Linear(model.fc.in_features, num_classes)
-            elif model_name == 'EfficientNet-B0':
+                return model
+            elif model_name == 'ResNet101':
+                # 使用新的权重参数方式加载模型，避免警告和下载问题
                 try:
-                    # 使用条件导入避免IDE警告
-                    if True:  # 这行代码只是为了避免IDE警告
-                        from efficientnet_pytorch import EfficientNet
-                    model = EfficientNet.from_pretrained('efficientnet-b0', num_classes=num_classes)
-                except ImportError:
-                    self.status_updated.emit("EfficientNet模块未安装，尝试安装中...")
-                    try:
-                        subprocess.run([sys.executable, '-m', 'pip', 'install', 'efficientnet-pytorch'], 
-                                      check=True)
-                        from efficientnet_pytorch import EfficientNet
-                        model = EfficientNet.from_pretrained('efficientnet-b0', num_classes=num_classes)
-                    except Exception as e:
-                        self.status_updated.emit(f"无法安装EfficientNet: {str(e)}，使用ResNet50替代")
-                        model = models.resnet50(pretrained=True)
-                        model.fc = nn.Linear(model.fc.in_features, num_classes)
-            elif model_name == 'EfficientNet-B4':
-                try:
-                    # 使用条件导入避免IDE警告
-                    if True:  # 这行代码只是为了避免IDE警告
-                        from efficientnet_pytorch import EfficientNet
-                    model = EfficientNet.from_pretrained('efficientnet-b4', num_classes=num_classes)
-                except ImportError:
-                    self.status_updated.emit("EfficientNet模块未安装，尝试安装中...")
-                    try:
-                        subprocess.run([sys.executable, '-m', 'pip', 'install', 'efficientnet-pytorch'], 
-                                      check=True)
-                        from efficientnet_pytorch import EfficientNet
-                        model = EfficientNet.from_pretrained('efficientnet-b4', num_classes=num_classes)
-                    except Exception as e:
-                        self.status_updated.emit(f"无法安装EfficientNet: {str(e)}，使用ResNet50替代")
-                        model = models.resnet50(pretrained=True)
-                        model.fc = nn.Linear(model.fc.in_features, num_classes)
+                    model = models.resnet101(weights=models.ResNet101_Weights.IMAGENET1K_V1)
+                    model.fc = nn.Linear(model.fc.in_features, num_classes)
+                    return model
+                except Exception as e:
+                    # 如果新API不可用，尝试旧的方式
+                    self.status_updated.emit(f"使用新API加载模型失败: {str(e)}")
+                    model = models.resnet101(pretrained=True)
+                    model.fc = nn.Linear(model.fc.in_features, num_classes)
+                    return model
+            elif model_name == 'ResNet152':
+                model = models.resnet152(pretrained=True)
+                model.fc = nn.Linear(model.fc.in_features, num_classes)
+                return model
             elif model_name == 'MobileNetV2':
                 model = models.mobilenet_v2(pretrained=True)
                 model.classifier[1] = nn.Linear(model.classifier[1].in_features, num_classes)
+                return model
+            elif model_name == 'MobileNetV3':
+                model = models.mobilenet_v3_large(pretrained=True)
+                model.classifier[3] = nn.Linear(model.classifier[3].in_features, num_classes)
+                return model
+            elif model_name == 'VGG16':
+                model = models.vgg16(pretrained=True)
+                model.classifier[6] = nn.Linear(model.classifier[6].in_features, num_classes)
+                return model
+            elif model_name == 'VGG19':
+                model = models.vgg19(pretrained=True)
+                model.classifier[6] = nn.Linear(model.classifier[6].in_features, num_classes)
+                return model
             elif model_name == 'DenseNet121':
                 model = models.densenet121(pretrained=True)
                 model.classifier = nn.Linear(model.classifier.in_features, num_classes)
-            else:
-                # 默认使用ResNet50
-                self.status_updated.emit(f"未知模型: {model_name}，使用默认的ResNet50")
-                model = models.resnet50(pretrained=True)
+                return model
+            elif model_name == 'DenseNet169':
+                model = models.densenet169(pretrained=True)
+                model.classifier = nn.Linear(model.classifier.in_features, num_classes)
+                return model
+            elif model_name == 'DenseNet201':
+                model = models.densenet201(pretrained=True)
+                model.classifier = nn.Linear(model.classifier.in_features, num_classes)
+                return model
+            elif model_name == 'InceptionV3':
+                model = models.inception_v3(pretrained=True, aux_logits=False)
                 model.fc = nn.Linear(model.fc.in_features, num_classes)
+                return model
+            elif model_name in ['EfficientNetB0', 'EfficientNetB1', 'EfficientNetB2', 'EfficientNetB3', 'EfficientNetB4']:
+                # 检查是否安装了efficientnet_pytorch
+                try:
+                    from efficientnet_pytorch import EfficientNet
+                    
+                    # 根据模型名称选择对应版本
+                    if model_name == 'EfficientNetB0':
+                        model = EfficientNet.from_pretrained('efficientnet-b0', num_classes=num_classes)
+                    elif model_name == 'EfficientNetB1':
+                        model = EfficientNet.from_pretrained('efficientnet-b1', num_classes=num_classes)
+                    elif model_name == 'EfficientNetB2':
+                        model = EfficientNet.from_pretrained('efficientnet-b2', num_classes=num_classes)
+                    elif model_name == 'EfficientNetB3':
+                        model = EfficientNet.from_pretrained('efficientnet-b3', num_classes=num_classes)
+                    elif model_name == 'EfficientNetB4':
+                        model = EfficientNet.from_pretrained('efficientnet-b4', num_classes=num_classes)
+                    
+                    return model
+                except ImportError:
+                    # 如果没有安装efficientnet_pytorch，提示用户安装
+                    self.status_updated.emit(f"未安装EfficientNet库，尝试自动安装...")
+                    try:
+                        subprocess.check_call([sys.executable, "-m", "pip", "install", "efficientnet_pytorch"])
+                        from efficientnet_pytorch import EfficientNet
+                        
+                        # 根据模型名称选择对应版本
+                        if model_name == 'EfficientNetB0':
+                            model = EfficientNet.from_pretrained('efficientnet-b0', num_classes=num_classes)
+                        elif model_name == 'EfficientNetB1':
+                            model = EfficientNet.from_pretrained('efficientnet-b1', num_classes=num_classes)
+                        elif model_name == 'EfficientNetB2':
+                            model = EfficientNet.from_pretrained('efficientnet-b2', num_classes=num_classes)
+                        elif model_name == 'EfficientNetB3':
+                            model = EfficientNet.from_pretrained('efficientnet-b3', num_classes=num_classes)
+                        elif model_name == 'EfficientNetB4':
+                            model = EfficientNet.from_pretrained('efficientnet-b4', num_classes=num_classes)
+                        
+                        return model
+                    except Exception as install_err:
+                        raise Exception(f"无法安装EfficientNet库: {str(install_err)}")
+            elif model_name == 'Xception':
+                try:
+                    # 使用torchvision替代timm
+                    model = models.resnet50(pretrained=True)  # 临时使用ResNet50作为替代
+                    model.fc = nn.Linear(model.fc.in_features, num_classes)
+                    self.status_updated.emit("注意：Xception模型暂未实现，使用ResNet50替代")
+                    return model
+                except Exception as e:
+                    raise Exception(f"创建Xception模型失败: {str(e)}")
+            else:
+                raise ValueError(f"不支持的模型名称: {model_name}")
         elif task_type == 'detection':
             # 目标检测模型
             # 这里只是一个示例框架，实际应用中需要实现具体的目标检测模型
@@ -1116,28 +1227,10 @@ class ModelTrainer(QObject):
             # 使用一个简单的占位模型
             model = models.resnet50(pretrained=True)
             model.fc = nn.Linear(model.fc.in_features, num_classes)
+            return model
             
-            # 实际应用中，这里应该根据model_name创建不同的目标检测模型
-            # 例如：
-            # if model_name == 'Faster R-CNN':
-            #     from torchvision.models.detection import fasterrcnn_resnet50_fpn
-            #     model = fasterrcnn_resnet50_fpn(pretrained=True)
-            #     # 修改模型以适应自定义类别数
-            #     in_features = model.roi_heads.box_predictor.cls_score.in_features
-            #     model.roi_heads.box_predictor = FastRCNNPredictor(in_features, num_classes)
-            # elif model_name == 'SSD':
-            #     from torchvision.models.detection import ssd300_vgg16
-            #     model = ssd300_vgg16(pretrained=True)
-            #     # 修改模型以适应自定义类别数
-            #     # ...
-            # elif model_name == 'YOLO v5':
-            #     # YOLO v5需要单独安装
-            #     # ...
-            # 等等
         else:
             raise ValueError(f"不支持的任务类型: {task_type}")
-            
-        return model 
 
     def train_model_with_config(self, config: Dict[str, Any]) -> None:
         """

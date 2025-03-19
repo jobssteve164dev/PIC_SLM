@@ -1,5 +1,6 @@
 import os
 import yaml
+import json
 from typing import Dict, Any, Optional
 
 class ConfigLoader:
@@ -13,9 +14,10 @@ class ConfigLoader:
             config_path: 配置文件路径，如果为None则使用默认路径
         """
         if config_path is None:
-            # 默认配置文件路径
-            base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-            config_path = os.path.join(base_dir, 'config', 'config.yaml')
+            # 默认使用src目录下的config.json
+            base_dir = os.path.dirname(os.path.abspath(__file__))
+            config_path = os.path.join(base_dir, 'config.json')
+            print(f"ConfigLoader使用默认配置路径: {config_path}")
             
         self.config_path = config_path
         self.config = self._load_config()
@@ -23,8 +25,12 @@ class ConfigLoader:
     def _load_config(self) -> Dict[str, Any]:
         """加载配置文件"""
         try:
+            # 优先尝试以JSON格式加载
             with open(self.config_path, 'r', encoding='utf-8') as f:
-                config = yaml.safe_load(f)
+                config = json.load(f)
+            
+            print(f"成功加载配置文件: {self.config_path}")
+            print(f"配置内容: {config}")
             return config
         except Exception as e:
             print(f"加载配置文件时出错: {str(e)}")
@@ -61,7 +67,10 @@ class ConfigLoader:
                 'default_data_dir': 'data/raw',
                 'default_output_dir': 'data/processed',
                 'model_save_dir': 'models/saved_models'
-            }
+            },
+            'default_classes': [
+                '划痕', '污点', '缺失', '变形', '异物'
+            ]
         }
         
     def get_config(self) -> Dict[str, Any]:
@@ -99,9 +108,12 @@ class ConfigLoader:
             是否保存成功
         """
         try:
+            # 保存为JSON格式
             with open(self.config_path, 'w', encoding='utf-8') as f:
-                yaml.dump(config, f, default_flow_style=False, allow_unicode=True)
+                json.dump(config, f, ensure_ascii=False, indent=4)
+                    
             self.config = config
+            print(f"成功保存配置到: {self.config_path}")
             return True
         except Exception as e:
             print(f"保存配置文件时出错: {str(e)}")

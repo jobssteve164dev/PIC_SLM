@@ -108,9 +108,11 @@ class ImagePreprocessor(QObject):
                 if self._stop_preprocessing:
                     self.status_updated.emit('预处理已停止')
                     return
-                
-            self.status_updated.emit('预处理完成')
-            self.preprocessing_finished.emit()
+            
+            # 如果没有被停止，发出完成信号
+            if not self._stop_preprocessing:
+                self.status_updated.emit('预处理完成')
+                self.preprocessing_finished.emit()
             
         except Exception as e:
             import traceback
@@ -122,32 +124,21 @@ class ImagePreprocessor(QObject):
         self.status_updated.emit('正在停止预处理...')
 
     def _preprocess_with_class_balance(self, params: Dict) -> None:
-        """
-        使用类别平衡模式预处理图片
-        
-        这种方式确保：
-        1. 源文件夹应已按类别组织为子文件夹
-        2. 每个类别都会被均衡地分割为训练集和验证集
-        3. 训练集和验证集中包含所有类别
-        """
+        """使用类别平衡的方式预处理图片"""
         source_folder = params['source_folder']
         output_folder = params['target_folder']
         dataset_folder = params['dataset_folder']
         train_ratio = params['train_ratio']
-        class_names = params['class_names']
         
-        # 确保目标文件夹存在
+        # 创建必要的文件夹
         os.makedirs(output_folder, exist_ok=True)
-        
-        # 确保数据集文件夹存在
         train_folder = os.path.join(dataset_folder, 'train')
         val_folder = os.path.join(dataset_folder, 'val')
         os.makedirs(train_folder, exist_ok=True)
         os.makedirs(val_folder, exist_ok=True)
         
-        # 预处理进度
-        total_classes = len(class_names)
-        processed_classes = 0
+        # 获取类别名称
+        class_names = params['class_names']
         
         # 遍历所有类别
         for class_name in class_names:
@@ -191,36 +182,26 @@ class ImagePreprocessor(QObject):
                 self.status_updated.emit('预处理已停止')
                 return
             
-            # 获取预处理后的图片
-            processed_images = self._get_image_files(class_output_folder)
-            
-            if not processed_images:
-                self.status_updated.emit(f"警告：类别 {class_name} 处理后没有图片文件，跳过该类别")
-                continue
-                
             # 第2步：划分训练集和验证集
+            processed_images = self._get_image_files(class_output_folder)
             train_images, val_images = train_test_split(
                 processed_images, train_size=train_ratio, random_state=42)
                 
-            self.status_updated.emit(f"类别 {class_name} 划分为 {len(train_images)} 个训练图片和 {len(val_images)} 个验证图片")
-            
-            # 第3步：处理训练集和验证集
-            # 处理训练集
-            self._process_dataset_class_images(
-                class_output_folder, class_train_folder, train_images,
-                params.get('augmentation_level', '基础'), True, params)
-            
-            # 处理验证集
-            self._process_dataset_class_images(
-                class_output_folder, class_val_folder, val_images,
-                params.get('augmentation_level', '基础'), False, params)
-            
-            # 更新进度
-            processed_classes += 1
-            progress = int((processed_classes / total_classes) * 100)
-            self.progress_updated.emit(progress)
-            
-        self.status_updated.emit('类别平衡预处理完成')
+            # 第3步：复制到训练集和验证集文件夹
+            for img in train_images:
+                src = os.path.join(class_output_folder, img)
+                dst = os.path.join(class_train_folder, img)
+                shutil.copy2(src, dst)
+                
+            for img in val_images:
+                src = os.path.join(class_output_folder, img)
+                dst = os.path.join(class_val_folder, img)
+                shutil.copy2(src, dst)
+        
+        # 如果没有被停止，发出完成信号
+        if not self._stop_preprocessing:
+            self.status_updated.emit('预处理完成')
+            self.preprocessing_finished.emit()
 
     def _preprocess_class_images(self, source_folder: str, target_folder: str, 
                                 image_files: List[str], params: Dict) -> None:

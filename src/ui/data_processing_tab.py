@@ -6,6 +6,7 @@ from PyQt5.QtCore import Qt, pyqtSignal, QPoint
 from PyQt5.QtGui import QFont, QIcon
 import os
 from .base_tab import BaseTab
+import json
 
 class DataProcessingTab(BaseTab):
     """数据处理标签页，负责图像预处理功能"""
@@ -23,6 +24,23 @@ class DataProcessingTab(BaseTab):
         self.defect_classes = []  # 初始化类别列表
         self.init_ui()
         
+        # 尝试从配置文件中加载类别信息
+        config_file = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'config.json')
+        if os.path.exists(config_file):
+            try:
+                with open(config_file, 'r', encoding='utf-8') as f:
+                    config = json.load(f)
+                    if 'default_classes' in config and config['default_classes']:
+                        self.defect_classes = config['default_classes'].copy()
+                        self.class_list.clear()
+                        for class_name in self.defect_classes:
+                            self.class_list.addItem(class_name)
+                        print(f"DataProcessingTab.__init__: 从配置文件加载了{len(self.defect_classes)}个类别")
+            except Exception as e:
+                print(f"DataProcessingTab.__init__: 加载配置文件出错: {str(e)}")
+                import traceback
+                traceback.print_exc()
+    
     def init_ui(self):
         """初始化UI"""
         # 创建主布局
@@ -57,6 +75,12 @@ class DataProcessingTab(BaseTab):
         # 添加类别管理组 - 新增
         class_group = QGroupBox("图片类别管理")
         class_layout = QVBoxLayout()
+        
+        # 添加类别文件夹检查开关
+        self.check_class_folders = QCheckBox("启用类别文件夹检查和预处理")
+        self.check_class_folders.setChecked(True)  # 默认启用
+        self.check_class_folders.setToolTip("目标检测任务不需要创建类别文件夹，可以关闭此选项")
+        class_layout.addWidget(self.check_class_folders)
         
         # 添加类别提示
         class_tip = QLabel("请添加需要分类的图片类别，这些类别将用于创建源文件夹中的子文件夹结构。")
@@ -93,6 +117,7 @@ class DataProcessingTab(BaseTab):
         create_folders_btn = QPushButton("在源文件夹中创建类别文件夹")
         create_folders_btn.setMinimumHeight(30)
         create_folders_btn.clicked.connect(self.create_class_folders)
+        self.create_folders_btn = create_folders_btn  # 保存为实例变量
         class_layout.addWidget(create_folders_btn)
         
         # 添加说明
@@ -103,6 +128,9 @@ class DataProcessingTab(BaseTab):
         
         class_group.setLayout(class_layout)
         main_layout.addWidget(class_group)
+        
+        # 连接勾选框信号
+        self.check_class_folders.stateChanged.connect(self.on_check_class_folders_changed)
         
         # 创建输出文件夹选择组
         output_group = QGroupBox("输出文件夹")
@@ -283,29 +311,33 @@ class DataProcessingTab(BaseTab):
         
         # 添加弹性空间
         main_layout.addStretch()
-        
-        # 尝试加载默认类别
-        self.load_default_classes()
     
     def select_source_folder(self):
         """选择源图片文件夹"""
         folder = QFileDialog.getExistingDirectory(self, "选择源图片文件夹")
+        print(f"选择源文件夹: {folder}")
         if folder:
             self.source_folder = folder
             self.source_path_edit.setText(folder)
+            print(f"设置源文件夹路径: {self.source_folder}")
             self.check_preprocess_ready()
     
     def select_output_folder(self):
         """选择输出文件夹"""
         folder = QFileDialog.getExistingDirectory(self, "选择输出文件夹")
+        print(f"选择输出文件夹: {folder}")
         if folder:
             self.output_folder = folder
             self.output_path_edit.setText(folder)
+            print(f"设置输出文件夹路径: {self.output_folder}")
             self.check_preprocess_ready()
     
     def check_preprocess_ready(self):
         """检查是否可以开始预处理"""
-        self.preprocess_btn.setEnabled(bool(self.source_folder and self.output_folder))
+        print(f"检查预处理准备状态: source_folder='{self.source_folder}', output_folder='{self.output_folder}'")
+        is_ready = bool(self.source_folder and self.output_folder)
+        print(f"预处理按钮状态: {'启用' if is_ready else '禁用'}")
+        self.preprocess_btn.setEnabled(is_ready)
     
     def add_defect_class(self):
         """添加缺陷类别"""
@@ -330,8 +362,34 @@ class DataProcessingTab(BaseTab):
     def load_default_classes(self):
         """从配置加载默认缺陷类别"""
         try:
-            # 尝试从主窗口获取ConfigLoader实例
-            if hasattr(self.main_window, 'config_loader'):
+            config_file = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'config.json')
+            print(f"DataProcessingTab.load_default_classes: 尝试从以下路径加载配置: {config_file}")
+            
+            if os.path.exists(config_file):
+                with open(config_file, 'r', encoding='utf-8') as f:
+                    config = json.load(f)
+                    if 'default_classes' in config and config['default_classes']:
+                        default_classes = config['default_classes']
+                        # 清空当前类别
+                        self.defect_classes = []
+                        self.class_list.clear()
+                        
+                        # 添加默认类别
+                        for class_name in default_classes:
+                            self.defect_classes.append(class_name)
+                            self.class_list.addItem(class_name)
+                        
+                        print(f"DataProcessingTab.load_default_classes: 已加载 {len(default_classes)} 个默认类别: {default_classes}")
+                        self.update_status(f"已加载 {len(default_classes)} 个默认类别")
+                    else:
+                        print("DataProcessingTab.load_default_classes: 配置文件中未找到default_classes字段")
+                        self.update_status("未找到默认类别")
+            else:
+                print(f"DataProcessingTab.load_default_classes: 配置文件不存在: {config_file}")
+                self.update_status("未找到配置文件")
+                
+            # 作为备选，尝试从主窗口获取ConfigLoader实例
+            if not self.defect_classes and hasattr(self.main_window, 'config_loader'):
                 default_classes = self.main_window.config_loader.get_defect_classes()
                 if default_classes:
                     # 清空当前类别
@@ -343,11 +401,13 @@ class DataProcessingTab(BaseTab):
                         self.defect_classes.append(class_name)
                         self.class_list.addItem(class_name)
                     
+                    print(f"DataProcessingTab.load_default_classes: 从ConfigLoader加载了 {len(default_classes)} 个默认类别")
                     self.update_status(f"已加载 {len(default_classes)} 个默认类别")
-                else:
-                    self.update_status("未找到默认类别")
         except Exception as e:
+            print(f"DataProcessingTab.load_default_classes: 加载默认类别时出错: {str(e)}")
             self.update_status(f"加载默认类别时出错: {str(e)}")
+            import traceback
+            traceback.print_exc()
     
     def create_class_folders(self):
         """在源文件夹中创建类别文件夹"""
@@ -432,10 +492,20 @@ class DataProcessingTab(BaseTab):
             # 计算并存储当前的长宽比
             self.aspect_ratio = self.resize_width / self.resize_height
     
+    def on_check_class_folders_changed(self, state):
+        """当类别文件夹检查开关状态改变时调用"""
+        # 更新创建文件夹按钮的状态
+        self.create_folders_btn.setEnabled(state == Qt.Checked)
+        # 更新类别列表和相关按钮的状态
+        self.class_list.setEnabled(state == Qt.Checked)
+        for button in self.findChildren(QPushButton):
+            if button.text() in ["添加类别", "删除类别", "加载默认类别"]:
+                button.setEnabled(state == Qt.Checked)
+    
     def preprocess_images(self):
         """开始预处理图像"""
-        # 检查是否有类别文件夹
-        if self.defect_classes and self.balance_classes_check.isChecked():
+        # 检查是否需要处理类别文件夹
+        if self.check_class_folders.isChecked() and self.defect_classes and self.balance_classes_check.isChecked():
             # 检查源文件夹是否包含所有类别子文件夹
             missing_folders = []
             for class_name in self.defect_classes:
@@ -480,8 +550,9 @@ class DataProcessingTab(BaseTab):
             'blur': self.blur_check.isChecked(),
             'hue': self.hue_check.isChecked(),
             'augmentation_intensity': self.aug_intensity.value(),
-            'balance_classes': self.balance_classes_check.isChecked(),
-            'class_names': self.defect_classes
+            'balance_classes': self.balance_classes_check.isChecked() and self.check_class_folders.isChecked(),  # 只在启用类别文件夹检查时才启用类别平衡
+            'class_names': self.defect_classes if self.check_class_folders.isChecked() else [],  # 只在启用类别文件夹检查时才传递类别名称
+            'check_class_folders': self.check_class_folders.isChecked()  # 添加类别文件夹检查状态
         }
         
         # 发出预处理开始信号
@@ -496,10 +567,22 @@ class DataProcessingTab(BaseTab):
     
     def apply_config(self, config):
         """应用配置信息"""
+        print(f"DataProcessingTab.apply_config被调用，配置内容: {config}")
         if config:
             # 应用类别配置
-            if 'classes' in config and config['classes']:
+            if 'default_classes' in config and config['default_classes']:
+                print(f"DataProcessingTab: 找到default_classes字段: {config['default_classes']}")
+                self.defect_classes = config['default_classes'].copy()
+                self.class_list.clear()
+                for class_name in self.defect_classes:
+                    self.class_list.addItem(class_name)
+                print(f"DataProcessingTab: 已加载{len(self.defect_classes)}个类别到类别列表中，类别列表项数: {self.class_list.count()}")
+            elif 'classes' in config and config['classes']:
+                print(f"DataProcessingTab: 找到classes字段: {config['classes']}")
                 self.defect_classes = config['classes'].copy()
                 self.class_list.clear()
                 for class_name in self.defect_classes:
-                    self.class_list.addItem(class_name) 
+                    self.class_list.addItem(class_name)
+                print(f"DataProcessingTab: 已加载{len(self.defect_classes)}个类别到类别列表中，类别列表项数: {self.class_list.count()}")
+            else:
+                print("DataProcessingTab: 配置文件中未找到有效的类别信息") 

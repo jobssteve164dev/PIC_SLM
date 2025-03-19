@@ -189,6 +189,37 @@ class EvaluationTab(BaseTab):
         info_label.setAlignment(Qt.AlignCenter)
         training_curve_layout.addWidget(info_label)
         
+        # 添加训练参数说明
+        explanation_group = QGroupBox("曲线参数说明")
+        explanation_layout = QVBoxLayout()
+        
+        # 添加各指标说明
+        params_explanation = """
+        <b>训练损失</b>：模型在训练集上的误差，值越小表示模型在训练数据上拟合得越好。
+        <b>验证损失</b>：模型在验证集上的误差，是评估模型泛化能力的重要指标。
+        <b>训练准确率</b>：模型在训练集上的准确率，表示模型对训练数据的拟合程度。
+        <b>验证准确率</b>：模型在验证集上的准确率，反映模型在未见过数据上的表现。
+        """
+        
+        params_label = QLabel(params_explanation)
+        params_label.setWordWrap(True)
+        explanation_layout.addWidget(params_label)
+        
+        # 添加模型状态判断说明
+        model_state_explanation = """
+        <b>正常训练</b>：训练损失和验证损失都在下降，训练准确率和验证准确率都在上升。
+        <b>过拟合</b>：训练损失继续下降但验证损失开始上升，或训练准确率继续上升但验证准确率开始下降，表明模型过度拟合了训练数据，失去泛化能力。
+        <b>欠拟合</b>：训练损失和验证损失都较高且下降缓慢，训练准确率和验证准确率都较低且提升缓慢，表明模型能力不足或训练不充分。
+        <b>何时停止训练</b>：当验证损失在多个轮次后不再下降或开始上升时，应考虑停止训练以避免过拟合。
+        """
+        
+        state_label = QLabel(model_state_explanation)
+        state_label.setWordWrap(True)
+        explanation_layout.addWidget(state_label)
+        
+        explanation_group.setLayout(explanation_layout)
+        training_curve_layout.addWidget(explanation_group)
+        
         # 添加训练可视化组件
         self.training_visualization = TrainingVisualizationWidget()
         training_curve_layout.addWidget(self.training_visualization)
@@ -214,6 +245,10 @@ class EvaluationTab(BaseTab):
             self.models_dir = folder
             self.models_path_edit.setText(folder)
             self.refresh_model_list()
+            
+            # 如果有主窗口并且有设置标签页，则更新设置
+            if self.main_window and hasattr(self.main_window, 'settings_tab'):
+                self.main_window.settings_tab.default_model_eval_dir_edit.setText(folder)
     
     def select_log_dir(self):
         """选择TensorBoard日志目录"""
@@ -381,3 +416,32 @@ class EvaluationTab(BaseTab):
         # 确保在关闭窗口时停止TensorBoard进程
         self.stop_tensorboard()
         super().closeEvent(event) 
+
+    def apply_config(self, config):
+        """应用配置，从配置中加载默认设置"""
+        if not config:
+            print("EvaluationTab: 配置为空，无法应用")
+            return
+            
+        print(f"EvaluationTab正在应用配置: {config}")
+            
+        # 加载默认模型评估文件夹
+        default_model_eval_dir = config.get('default_model_eval_dir', '')
+        if default_model_eval_dir and os.path.exists(default_model_eval_dir):
+            self.models_dir = default_model_eval_dir
+            self.models_path_edit.setText(default_model_eval_dir)
+            self.refresh_model_list()
+            print(f"EvaluationTab: 已应用默认模型评估文件夹: {default_model_eval_dir}")
+        else:
+            print(f"EvaluationTab: 默认模型评估文件夹无效或不存在: {default_model_eval_dir}")
+            
+        # 加载TensorBoard日志目录
+        log_dir = config.get('tensorboard_log_dir', '')
+        if log_dir and os.path.exists(log_dir):
+            self.log_dir = log_dir
+            self.log_path_edit.setText(log_dir)
+            self.start_btn.setEnabled(True)
+            self.tensorboard_widget.set_tensorboard_dir(log_dir)
+            print(f"EvaluationTab: 已应用TensorBoard日志目录: {log_dir}")
+        else:
+            print(f"EvaluationTab: TensorBoard日志目录无效或不存在: {log_dir}") 

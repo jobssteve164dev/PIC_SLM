@@ -31,60 +31,69 @@ class Worker(QObject):
 
 def main():
     # 检查配置文件
-    config_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'config.json')
+    config_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'config.json')
     print(f"配置文件路径: {os.path.abspath(config_path)}")
     print(f"配置文件是否存在: {os.path.exists(config_path)}")
     
-    # 确保配置文件存在并包含必要的字段
+    # 创建配置文件
     if not os.path.exists(config_path):
         print("配置文件不存在，创建默认配置")
         default_config = {
             'default_source_folder': '',
             'default_output_folder': '',
-            'default_processed_folder': '',
-            'default_annotation_folder': os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'data', 'annotations'),
-            'default_classes': [],
-            'auto_annotation': False,
+            'default_classes': ['划痕', '污点', '缺失', '变形', '异物'],
             'default_model_file': '',
-            'default_class_info_file': ''
+            'default_class_info_file': '',
+            'default_model_eval_dir': os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'models', 'saved_models')
         }
         
         # 确保目录存在
         os.makedirs(os.path.dirname(config_path), exist_ok=True)
-        os.makedirs(default_config['default_annotation_folder'], exist_ok=True)
+        os.makedirs(default_config['default_model_eval_dir'], exist_ok=True)
         
         # 保存默认配置
         with open(config_path, 'w', encoding='utf-8') as f:
             json.dump(default_config, f, ensure_ascii=False, indent=4)
         
         print(f"已创建默认配置文件: {config_path}")
-        print(f"默认标注文件夹: {default_config['default_annotation_folder']}")
     else:
         try:
             with open(config_path, 'r', encoding='utf-8') as f:
                 config_content = json.load(f)
                 print(f"配置文件内容: {config_content}")
                 
-                # 检查是否有默认标注文件夹，如果没有则添加
-                if 'default_annotation_folder' not in config_content or not config_content['default_annotation_folder']:
-                    print("配置文件中缺少default_annotation_folder，添加默认值")
-                    config_content['default_annotation_folder'] = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'data', 'annotations')
-                    os.makedirs(config_content['default_annotation_folder'], exist_ok=True)
+                # 检查是否有默认模型评估文件夹，如果没有则添加
+                if 'default_model_eval_dir' not in config_content or not config_content['default_model_eval_dir']:
+                    print("配置文件中缺少default_model_eval_dir，添加默认值")
+                    config_content['default_model_eval_dir'] = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'models', 'saved_models')
+                    os.makedirs(config_content['default_model_eval_dir'], exist_ok=True)
                     
                     # 保存更新后的配置
                     with open(config_path, 'w', encoding='utf-8') as f:
                         json.dump(config_content, f, ensure_ascii=False, indent=4)
                     
-                    print(f"已更新配置文件，添加默认标注文件夹: {config_content['default_annotation_folder']}")
+                    print(f"已更新配置文件，添加默认模型评估文件夹: {config_content['default_model_eval_dir']}")
                 
-                print(f"默认标注文件夹: {config_content.get('default_annotation_folder', '未设置')}")
+                # 检查是否有默认类别，如果没有则添加
+                if 'default_classes' not in config_content or not config_content['default_classes']:
+                    print("配置文件中缺少default_classes，添加默认值")
+                    config_content['default_classes'] = ['划痕', '污点', '缺失', '变形', '异物']
+                    
+                    # 保存更新后的配置
+                    with open(config_path, 'w', encoding='utf-8') as f:
+                        json.dump(config_content, f, ensure_ascii=False, indent=4)
+                    
+                    print(f"已更新配置文件，添加默认类别: {config_content['default_classes']}")
+                
+                print(f"默认模型评估文件夹: {config_content.get('default_model_eval_dir', '未设置')}")
+                print(f"默认类别: {config_content.get('default_classes', [])}")
         except Exception as e:
             print(f"读取配置文件出错: {str(e)}")
             import traceback
             traceback.print_exc()
     
     # 加载配置
-    config_loader = ConfigLoader()
+    config_loader = ConfigLoader(config_path)  # 直接传入已知的配置文件路径
     config = config_loader.get_config() if hasattr(config_loader, 'get_config') else config_loader.load_config()
     ui_config = config_loader.get_ui_config() if hasattr(config_loader, 'get_ui_config') else {}
     
@@ -101,11 +110,28 @@ def main():
     # 应用配置 - 确保在初始化完成后应用配置
     if config:
         print("正在应用配置...")
+        print(f"配置内容: {config}")
         window.apply_config(config)
-        
+    else:
+        # 如果config_loader没有加载到配置，直接从config.json加载
+        try:
+            with open(config_path, 'r', encoding='utf-8') as f:
+                direct_config = json.load(f)
+                print("通过直接读取config.json加载配置...")
+                print(f"直接配置内容: {direct_config}")
+                window.apply_config(direct_config)
+        except Exception as e:
+            print(f"直接加载配置文件失败: {str(e)}")
+            import traceback
+            traceback.print_exc()
+            
     # 强制应用标注界面的配置，确保目标检测界面路径正确设置
     if hasattr(window, 'annotation_tab') and hasattr(window.annotation_tab, 'apply_config'):
-        window.annotation_tab.apply_config(config)
+        print("正在强制应用配置到标注界面...")
+        if config:
+            window.annotation_tab.apply_config(config)
+        elif 'direct_config' in locals():
+            window.annotation_tab.apply_config(direct_config)
     
     # 强制应用训练界面的配置，确保训练界面标注文件夹路径正确设置
     if hasattr(window, 'training_tab'):
@@ -195,7 +221,6 @@ def main():
     worker.model_trainer.progress_updated.connect(window.update_progress)
     worker.model_trainer.status_updated.connect(window.update_status)
     worker.model_trainer.training_error.connect(lambda msg: QMessageBox.critical(window, '错误', msg))
-    worker.model_trainer.training_stopped.connect(window.training_tab.on_training_stopped)
     
     # 确保评估标签页存在并正确连接
     if hasattr(window, 'evaluation_tab') and hasattr(window.evaluation_tab, 'update_training_visualization'):
@@ -211,9 +236,9 @@ def main():
     # 修改训练开始信号连接，改为在工作线程中执行训练
     window.training_started.connect(lambda: window.prepare_training_config(worker.model_trainer))
     
-    # 如果训练标签页有停止按钮，则连接停止训练信号
-    if hasattr(window, 'training_tab') and hasattr(window.training_tab, 'stop_btn'):
-        window.training_tab.stop_btn.clicked.connect(worker.model_trainer.stop)
+    # 确保模型训练器的信号被正确连接到训练标签页
+    if hasattr(window, 'training_tab') and hasattr(window.training_tab, 'connect_model_trainer_signals'):
+        window.training_tab.connect_model_trainer_signals(worker.model_trainer)
     
     # 单张预测信号
     worker.predictor.prediction_error.connect(lambda msg: QMessageBox.critical(window, '错误', msg))

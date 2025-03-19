@@ -152,7 +152,7 @@ class TrainingTab(BaseTab):
     
     # 定义信号
     training_started = pyqtSignal()
-    training_progress_updated = pyqtSignal(int, dict)  # 添加训练进度更新信号
+    training_progress_updated = pyqtSignal(dict)  # 修改为只接收dict参数
     training_stopped = pyqtSignal()  # 添加训练停止信号
     
     def __init__(self, parent=None, main_window=None):
@@ -161,15 +161,15 @@ class TrainingTab(BaseTab):
         self.task_type = "classification"  # 默认为图片分类任务
         self.init_ui()
         
-        # 尝试直接从配置文件加载默认标注文件夹
+        # 尝试直接从配置文件加载默认输出文件夹
         try:
             config_file = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'config.json')
             print(f"训练标签页直接加载配置文件: {config_file}")
             if os.path.exists(config_file):
                 with open(config_file, 'r', encoding='utf-8') as f:
                     config = json.load(f)
-                    if 'default_annotation_folder' in config and config['default_annotation_folder']:
-                        self.annotation_folder = config['default_annotation_folder']
+                    if 'default_output_folder' in config and config['default_output_folder']:
+                        self.annotation_folder = config['default_output_folder']
                         print(f"训练标签页直接设置标注文件夹: {self.annotation_folder}")
                         
                         # 设置相应的路径输入框
@@ -193,10 +193,10 @@ class TrainingTab(BaseTab):
         try:
             print(f"训练标签页apply_config被调用，配置内容：{config}")
             
-            # 加载默认标注文件夹路径
-            if 'default_annotation_folder' in config and config['default_annotation_folder']:
-                print(f"发现默认标注文件夹配置: {config['default_annotation_folder']}")
-                self.annotation_folder = config['default_annotation_folder']
+            # 加载默认输出文件夹路径作为标注文件夹
+            if 'default_output_folder' in config and config['default_output_folder']:
+                print(f"发现默认输出文件夹配置: {config['default_output_folder']}")
+                self.annotation_folder = config['default_output_folder']
                 
                 # 根据当前任务类型设置相应的路径输入框
                 if hasattr(self, 'classification_path_edit'):
@@ -214,7 +214,7 @@ class TrainingTab(BaseTab):
                 # 检查是否满足开始训练的条件
                 self.check_training_ready()
             else:
-                print("配置中没有找到default_annotation_folder或为空值")
+                print("配置中没有找到default_output_folder或为空值")
                 
             print(f"已应用训练标签页配置，标注文件夹: {self.annotation_folder}")
         except Exception as e:
@@ -361,26 +361,23 @@ class TrainingTab(BaseTab):
         main_layout.setContentsMargins(10, 10, 10, 10)
         
         # 创建标注文件夹选择组
-        folder_group = QGroupBox("标注文件夹")
+        folder_group = QGroupBox("数据集文件夹")
         folder_group.setMaximumHeight(70)  # 限制文件夹选择组的高度
         folder_layout = QHBoxLayout()
         folder_layout.setContentsMargins(10, 5, 10, 5)
         
         self.classification_path_edit = QLineEdit()
         self.classification_path_edit.setReadOnly(True)
-        self.classification_path_edit.setPlaceholderText("请选择包含已标注图片的分类文件夹")
+        self.classification_path_edit.setPlaceholderText("将使用默认输出文件夹中的dataset目录")
         
-        # 如果有设置默认标注文件夹，在创建完控件后立即设置
-        if hasattr(self, 'annotation_folder') and self.annotation_folder:
-            self.classification_path_edit.setText(self.annotation_folder)
-            print(f"初始化分类界面时设置路径: {self.annotation_folder}")
-        
-        folder_btn = QPushButton("浏览...")
-        folder_btn.setFixedWidth(60)
-        folder_btn.clicked.connect(self.select_classification_folder)
+        # 添加刷新按钮
+        refresh_btn = QPushButton("刷新")
+        refresh_btn.setFixedWidth(60)
+        refresh_btn.setToolTip("刷新检测数据集文件夹结构")
+        refresh_btn.clicked.connect(self.select_classification_folder)
         
         folder_layout.addWidget(self.classification_path_edit)
-        folder_layout.addWidget(folder_btn)
+        folder_layout.addWidget(refresh_btn)
         folder_group.setLayout(folder_layout)
         main_layout.addWidget(folder_group)
         
@@ -550,28 +547,62 @@ class TrainingTab(BaseTab):
         main_layout.setContentsMargins(10, 10, 10, 10)
         
         # 创建标注文件夹选择组
-        folder_group = QGroupBox("检测标注文件夹")
+        folder_group = QGroupBox("数据集文件夹")
         folder_group.setMaximumHeight(70)  # 限制文件夹选择组的高度
         folder_layout = QHBoxLayout()
         folder_layout.setContentsMargins(10, 5, 10, 5)
         
         self.detection_path_edit = QLineEdit()
         self.detection_path_edit.setReadOnly(True)
-        self.detection_path_edit.setPlaceholderText("请选择包含目标检测标注的文件夹")
+        self.detection_path_edit.setPlaceholderText("将使用默认输出文件夹中的detection_data目录")
         
-        # 如果有设置默认标注文件夹，在创建完控件后立即设置
-        if hasattr(self, 'annotation_folder') and self.annotation_folder:
-            self.detection_path_edit.setText(self.annotation_folder)
-            print(f"初始化检测界面时设置路径: {self.annotation_folder}")
-        
-        folder_btn = QPushButton("浏览...")
-        folder_btn.setFixedWidth(60)
-        folder_btn.clicked.connect(self.select_detection_folder)
+        # 添加刷新按钮
+        refresh_btn = QPushButton("刷新")
+        refresh_btn.setFixedWidth(60)
+        refresh_btn.setToolTip("刷新检测数据集文件夹结构")
+        refresh_btn.clicked.connect(self.select_detection_folder)
         
         folder_layout.addWidget(self.detection_path_edit)
-        folder_layout.addWidget(folder_btn)
+        folder_layout.addWidget(refresh_btn)
         folder_group.setLayout(folder_layout)
         main_layout.addWidget(folder_group)
+        
+        # 添加数据结构说明组
+        data_structure_group = QGroupBox("数据结构说明")
+        data_structure_layout = QVBoxLayout()
+        
+        # 添加说明标签
+        structure_info_label = QLabel(
+            "目标检测训练需要特定的数据结构，您可以在<b>图像标注</b>标签页中使用<b>训练数据准备</b>功能生成。"
+        )
+        structure_info_label.setWordWrap(True)
+        structure_info_label.setStyleSheet("color: #333; font-size: 12px;")
+        data_structure_layout.addWidget(structure_info_label)
+        
+        # 目录结构示例
+        structure_label = QLabel(
+            "所需结构:\n"
+            "detection_data/\n"
+            "├── images/\n"
+            "│   ├── train/  (训练图像)\n"
+            "│   └── val/    (验证图像)\n"
+            "└── labels/\n"
+            "    ├── train/  (训练标注文件)\n"
+            "    └── val/    (验证标注文件)\n"
+            "\n"
+            "以及类别映射文件 classes.txt"
+        )
+        structure_label.setStyleSheet("background-color: #f0f0f0; padding: 5px; font-family: monospace;")
+        data_structure_layout.addWidget(structure_label)
+        
+        # 添加立即前往按钮
+        goto_annotation_btn = QPushButton("前往图像标注页面生成数据结构")
+        goto_annotation_btn.setStyleSheet("background-color: #2196F3; color: white;")
+        goto_annotation_btn.clicked.connect(self.goto_annotation_tab)
+        data_structure_layout.addWidget(goto_annotation_btn)
+        
+        data_structure_group.setLayout(data_structure_layout)
+        main_layout.addWidget(data_structure_group)
         
         # 添加预训练模型选择组
         pretrained_group = QGroupBox("预训练模型")
@@ -778,39 +809,181 @@ class TrainingTab(BaseTab):
         if button == self.classification_radio:
             self.stacked_widget.setCurrentIndex(0)
             self.task_type = "classification"
+            # 自动设置分类数据集路径
+            self.select_classification_folder()
         else:
             self.stacked_widget.setCurrentIndex(1)
             self.task_type = "detection"
+            # 自动设置目标检测数据集路径
+            self.select_detection_folder()
+            
         self.check_training_ready()
         
     def select_classification_folder(self):
         """选择分类标注文件夹"""
-        folder = QFileDialog.getExistingDirectory(self, "选择分类标注文件夹")
-        if folder:
-            self.annotation_folder = folder
-            self.classification_path_edit.setText(folder)
+        try:
+            # 尝试从配置文件直接加载
+            config_file = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'config.json')
+            if os.path.exists(config_file):
+                with open(config_file, 'r', encoding='utf-8') as f:
+                    config = json.load(f)
+                    default_output_folder = config.get('default_output_folder', '')
+            else:
+                # 如果配置文件不存在，尝试从main_window获取
+                if hasattr(self, 'main_window') and hasattr(self.main_window, 'config'):
+                    default_output_folder = self.main_window.config.get('default_output_folder', '')
+                else:
+                    default_output_folder = ''
+            
+            if not default_output_folder:
+                QMessageBox.warning(self, "错误", "请先在设置中配置默认输出文件夹")
+                return
+                
+            dataset_folder = os.path.join(default_output_folder, 'dataset')
+            if not os.path.exists(dataset_folder):
+                QMessageBox.warning(self, "错误", "未找到数据集文件夹，请先完成图像标注")
+                return
+                
+            self.annotation_folder = dataset_folder
+            self.classification_path_edit.setText(dataset_folder)
             self.check_training_ready()
+            
+            # 显示成功信息
+            self.update_status("成功检测到分类数据集文件夹结构")
+            # 更新训练状态标签
+            self.training_status_label.setText("数据集文件夹已刷新")
+            
+        except Exception as e:
+            print(f"选择分类文件夹时出错: {str(e)}")
+            QMessageBox.warning(self, "错误", f"无法获取默认输出文件夹设置: {str(e)}")
     
     def select_detection_folder(self):
         """选择检测标注文件夹"""
-        folder = QFileDialog.getExistingDirectory(self, "选择检测标注文件夹")
-        if folder:
-            self.annotation_folder = folder
-            self.detection_path_edit.setText(folder)
+        try:
+            # 尝试从配置文件直接加载
+            config_file = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'config.json')
+            if os.path.exists(config_file):
+                with open(config_file, 'r', encoding='utf-8') as f:
+                    config = json.load(f)
+                    default_output_folder = config.get('default_output_folder', '')
+            else:
+                # 如果配置文件不存在，尝试从main_window获取
+                if hasattr(self, 'main_window') and hasattr(self.main_window, 'config'):
+                    default_output_folder = self.main_window.config.get('default_output_folder', '')
+                else:
+                    default_output_folder = ''
+            
+            if not default_output_folder:
+                QMessageBox.warning(self, "错误", "请先在设置中配置默认输出文件夹")
+                return
+                
+            detection_data_folder = os.path.join(default_output_folder, 'detection_data')
+            if not os.path.exists(detection_data_folder):
+                QMessageBox.warning(self, "错误", "未找到目标检测数据集文件夹，请先完成目标检测标注")
+                return
+                
+            self.annotation_folder = detection_data_folder
+            self.detection_path_edit.setText(detection_data_folder)
             self.check_training_ready()
+            
+            # 显示成功信息
+            self.update_status("成功检测到目标检测数据集文件夹结构")
+            # 更新训练状态标签
+            self.training_status_label.setText("数据集文件夹已刷新")
+            
+        except Exception as e:
+            print(f"选择检测文件夹时出错: {str(e)}")
+            QMessageBox.warning(self, "错误", f"无法获取默认输出文件夹设置: {str(e)}")
     
     def check_training_ready(self):
         """检查是否可以开始训练"""
-        if self.task_type == "classification":
-            path_edit = self.classification_path_edit
-        else:
-            path_edit = self.detection_path_edit
+        try:
+            # 尝试从配置文件直接加载
+            config_file = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'config.json')
+            if os.path.exists(config_file):
+                with open(config_file, 'r', encoding='utf-8') as f:
+                    config = json.load(f)
+                    default_output_folder = config.get('default_output_folder', '')
+            else:
+                # 如果配置文件不存在，尝试从main_window获取
+                if hasattr(self, 'main_window') and hasattr(self.main_window, 'config'):
+                    default_output_folder = self.main_window.config.get('default_output_folder', '')
+                else:
+                    default_output_folder = ''
             
-        if path_edit.text() and os.path.exists(path_edit.text()):
-            self.train_btn.setEnabled(True)
-            return True
-        else:
+            if not default_output_folder:
+                self.train_btn.setEnabled(False)
+                self.update_status("请先在设置中配置默认输出文件夹")
+                return False
+                
+            # 根据任务类型检查相应的数据集文件夹
+            if self.task_type == "classification":
+                dataset_folder = os.path.join(default_output_folder, 'dataset')
+                train_folder = os.path.join(dataset_folder, 'train')
+                val_folder = os.path.join(dataset_folder, 'val')
+                
+                # 检查训练集和验证集文件夹是否存在
+                if os.path.exists(train_folder) and os.path.exists(val_folder):
+                    self.train_btn.setEnabled(True)
+                    self.update_status("分类数据集结构检查完成，可以开始训练")
+                    return True
+                else:
+                    missing_folders = []
+                    if not os.path.exists(dataset_folder):
+                        missing_folders.append("dataset")
+                    else:
+                        if not os.path.exists(train_folder):
+                            missing_folders.append("train")
+                        if not os.path.exists(val_folder):
+                            missing_folders.append("val")
+                    
+                    error_msg = f"缺少必要的文件夹: {', '.join(missing_folders)}"
+                    self.update_status(error_msg)
+                    self.train_btn.setEnabled(False)
+                    return False
+            else:
+                detection_data_folder = os.path.join(default_output_folder, 'detection_data')
+                train_images = os.path.join(detection_data_folder, 'images', 'train')
+                val_images = os.path.join(detection_data_folder, 'images', 'val')
+                train_labels = os.path.join(detection_data_folder, 'labels', 'train')
+                val_labels = os.path.join(detection_data_folder, 'labels', 'val')
+                
+                # 检查目标检测数据集的完整性
+                if (os.path.exists(train_images) and os.path.exists(val_images) and
+                    os.path.exists(train_labels) and os.path.exists(val_labels)):
+                    self.train_btn.setEnabled(True)
+                    self.update_status("目标检测数据集结构检查完成，可以开始训练")
+                    return True
+                else:
+                    missing_folders = []
+                    if not os.path.exists(detection_data_folder):
+                        missing_folders.append("detection_data")
+                    else:
+                        if not os.path.exists(os.path.join(detection_data_folder, 'images')):
+                            missing_folders.append("images")
+                        else:
+                            if not os.path.exists(train_images):
+                                missing_folders.append("images/train")
+                            if not os.path.exists(val_images):
+                                missing_folders.append("images/val")
+                            
+                        if not os.path.exists(os.path.join(detection_data_folder, 'labels')):
+                            missing_folders.append("labels")
+                        else:
+                            if not os.path.exists(train_labels):
+                                missing_folders.append("labels/train")
+                            if not os.path.exists(val_labels):
+                                missing_folders.append("labels/val")
+                    
+                    error_msg = f"缺少必要的文件夹: {', '.join(missing_folders)}"
+                    self.update_status(error_msg)
+                    self.train_btn.setEnabled(False)
+                    return False
+            
+        except Exception as e:
+            print(f"检查训练准备状态时出错: {str(e)}")
             self.train_btn.setEnabled(False)
+            self.update_status(f"检查数据集结构时出错: {str(e)}")
             return False
     
     def train_model(self):
@@ -858,8 +1031,12 @@ class TrainingTab(BaseTab):
         dialog = TrainingHelpDialog(self)
         dialog.exec_()
     
-    def update_training_progress(self, epoch, logs):
+    def update_training_progress(self, data_dict):
         """更新训练进度"""
+        # 从字典中提取epoch和logs信息
+        epoch = data_dict.get('epoch', 0) - 1  # 减1是因为我们的epoch从1开始，但索引从0开始
+        logs = data_dict  # 直接使用整个字典作为logs
+        
         # 根据当前任务类型获取训练轮数
         if self.task_type == "classification":
             epochs = self.classification_epochs_spin.value()
@@ -884,8 +1061,9 @@ class TrainingTab(BaseTab):
         self.update_status(status)
         self.training_status_label.setText(status)
         
-        # 发射训练进度更新信号，用于更新评估标签页中的实时训练曲线
-        self.training_progress_updated.emit(epoch, logs)
+        # 直接传递整个data_dict到训练进度更新信号
+        # 这个信号被连接到evaluation_tab.update_training_visualization
+        self.training_progress_updated.emit(data_dict)
     
     def on_training_finished(self):
         """训练完成时调用"""
@@ -1007,11 +1185,22 @@ class TrainingTab(BaseTab):
         
     def on_training_stopped(self):
         """训练停止完成时调用"""
-        self.train_btn.setEnabled(True)
-        self.stop_btn.setEnabled(False)
-        self.update_status("训练已停止")
-        self.training_status_label.setText("训练已停止")
-        QMessageBox.information(self, "训练状态", "训练已成功停止")
+        # 检查防止重复调用的标志
+        if hasattr(self, '_stopping_in_progress') and self._stopping_in_progress:
+            return
+            
+        # 设置标志防止重复调用
+        self._stopping_in_progress = True
+        
+        try:
+            self.train_btn.setEnabled(True)
+            self.stop_btn.setEnabled(False)
+            self.update_status("训练已停止")
+            self.training_status_label.setText("训练已停止")
+            QMessageBox.information(self, "训练状态", "训练已成功停止")
+        finally:
+            # 重置标志
+            self._stopping_in_progress = False
 
     def connect_model_trainer_signals(self, model_trainer):
         """连接模型训练器的信号"""
@@ -1049,4 +1238,33 @@ class TrainingTab(BaseTab):
                 subprocess.run(["xdg-open", model_dir])
                 
         except Exception as e:
-            QMessageBox.warning(self, "错误", f"无法打开模型保存文件夹: {str(e)}") 
+            QMessageBox.warning(self, "错误", f"无法打开模型保存文件夹: {str(e)}")
+
+    def goto_annotation_tab(self):
+        """切换到标注标签页"""
+        if self.main_window and hasattr(self.main_window, 'tabs'):
+            annotation_tab_index = -1
+            for i in range(self.main_window.tabs.count()):
+                if self.main_window.tabs.tabText(i) == "图像标注":
+                    annotation_tab_index = i
+                    break
+            
+            if annotation_tab_index >= 0:
+                self.main_window.tabs.setCurrentIndex(annotation_tab_index)
+                # 如果有标注标签页的引用，尝试切换到目标检测模式
+                if hasattr(self.main_window, 'annotation_tab'):
+                    # 检查是否有mode_radio_group
+                    if hasattr(self.main_window.annotation_tab, 'mode_radio_group'):
+                        # 获取按钮列表
+                        buttons = self.main_window.annotation_tab.mode_radio_group.buttons()
+                        # 选中目标检测按钮(通常是第二个按钮)
+                        if len(buttons) >= 2:
+                            buttons[1].setChecked(True)
+
+    def update_status(self, message):
+        """更新状态信息"""
+        if hasattr(self, 'main_window') and hasattr(self.main_window, 'update_status'):
+            self.main_window.update_status(message)
+        # 更新训练状态标签
+        if hasattr(self, 'training_status_label'):
+            self.training_status_label.setText(message) 

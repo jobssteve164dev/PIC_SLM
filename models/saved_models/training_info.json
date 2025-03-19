@@ -1,9 +1,9 @@
 {
-    "model_name": "EfficientNetB0",
+    "model_name": "MobileNetV2",
     "num_epochs": 20,
     "batch_size": 32,
     "learning_rate": 0.001,
-    "best_accuracy": 0.16666666666666666,
+    "best_accuracy": 0.0,
     "class_names": [
         "Missing_hole",
         "Mouse_bite",
@@ -12,5 +12,5 @@
         "Spur",
         "Spurious_copper"
     ],
-    "model_path": "models/saved_models\\EfficientNetB0_final.pth"
+    "model_path": "models/saved_models\\MobileNetV2_final.pth"
 }

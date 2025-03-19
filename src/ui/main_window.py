@@ -101,12 +101,11 @@ class MainWindow(QMainWindow):
         
         # 添加进度条
         self.progress_bar = QProgressBar()
-        self.progress_bar.setRange(0, 100)
-        self.progress_bar.setValue(0)
-        # 删除最大宽度限制
+        # 移除最大宽度限制，使进度条铺满窗口
         # self.progress_bar.setMaximumWidth(200)
-        # 使进度条铺满状态栏剩余空间
-        self.statusBar.addPermanentWidget(self.progress_bar, 1)
+        self.progress_bar.hide()  # 默认隐藏进度条
+        # 使用addWidget而不是addPermanentWidget，并添加stretch参数使进度条填满状态栏
+        self.statusBar.addWidget(self.progress_bar, 1)  # stretch=1使进度条占据所有可用空间
         
         # 连接信号
         self.connect_signals()
@@ -148,12 +147,18 @@ class MainWindow(QMainWindow):
         self.settings_tab.settings_saved.connect(self.apply_config)
 
     def update_status(self, message):
-        """更新状态栏信息"""
-        self.status_label.setText(message)
-
+        """更新状态栏消息"""
+        if hasattr(self, 'status_label'):
+            self.status_label.setText(message)
+            
     def update_progress(self, value):
         """更新进度条"""
-        self.progress_bar.setValue(value)
+        if hasattr(self, 'progress_bar'):
+            if value > 0:
+                self.progress_bar.show()
+                self.progress_bar.setValue(value)
+            else:
+                self.progress_bar.hide()
 
     def preprocessing_finished(self):
         """处理图像预处理完成后的操作"""
@@ -221,14 +226,20 @@ class MainWindow(QMainWindow):
                 
                 # 应用配置
                 self.apply_config(config)
+                print(f"MainWindow成功加载配置文件: {config_file}")
+                print(f"配置内容: {config}")
                 
         except Exception as e:
-            print(f"加载配置失败: {str(e)}")
+            print(f"MainWindow加载配置失败: {str(e)}")
             import traceback
             traceback.print_exc()
 
     def apply_config(self, config):
         """应用配置"""
+        print(f"MainWindow.apply_config被调用，配置内容: {config}")
+        # 保存配置到实例变量中，以便其他标签页可以访问
+        self.config = config
+        
         # 将配置应用到各个标签页
         
         # 数据处理标签页
@@ -245,97 +256,79 @@ class MainWindow(QMainWindow):
                 if hasattr(self.data_processing_tab, 'output_folder'):
                     self.data_processing_tab.output_folder = config['default_output_folder']
             
+            # 在设置了source_folder和output_folder后，检查是否可以开始预处理
+            if hasattr(self.data_processing_tab, 'check_preprocess_ready'):
+                self.data_processing_tab.check_preprocess_ready()
+                print("MainWindow: 已调用data_processing_tab.check_preprocess_ready()方法")
+            
             # 添加默认类别设置应用
             if 'default_classes' in config and config['default_classes']:
+                print(f"MainWindow: 向数据处理标签页应用默认类别: {config['default_classes']}")
                 if hasattr(self.data_processing_tab, 'defect_classes'):
                     self.data_processing_tab.defect_classes = config['default_classes'].copy()
+                # 更新类别列表
                 if hasattr(self.data_processing_tab, 'class_list'):
                     self.data_processing_tab.class_list.clear()
                     for class_name in config['default_classes']:
                         self.data_processing_tab.class_list.addItem(class_name)
-            
-            if hasattr(self.data_processing_tab, 'check_preprocess_ready'):
-                self.data_processing_tab.check_preprocess_ready()
+                    print(f"MainWindow: 数据处理标签页的类别列表已更新，现在有 {self.data_processing_tab.class_list.count()} 个类别")
+                elif hasattr(self.data_processing_tab, 'defect_class_list'):
+                    self.data_processing_tab.defect_class_list.clear()
+                    for class_name in config['default_classes']:
+                        self.data_processing_tab.defect_class_list.addItem(class_name)
+                    print(f"MainWindow: 数据处理标签页的类别列表已更新，现在有 {self.data_processing_tab.defect_class_list.count()} 个类别")
+                
+                # 如果标签页有apply_config方法，也调用它
+                if hasattr(self.data_processing_tab, 'apply_config'):
+                    self.data_processing_tab.apply_config(config)
+                    print("MainWindow: 已调用data_processing_tab.apply_config方法")
         
-        # 标注标签页 - 直接调用标注标签页的apply_config方法
-        if hasattr(self, 'annotation_tab') and hasattr(self.annotation_tab, 'apply_config'):
-            self.annotation_tab.apply_config(config)
-        # 兼容旧版本，以防apply_config方法不存在
-        elif hasattr(self, 'annotation_tab'):
-            if 'default_processed_folder' in config and config['default_processed_folder']:
-                if hasattr(self.annotation_tab, 'processed_path_edit'):
-                    self.annotation_tab.processed_path_edit.setText(config['default_processed_folder'])
-                if hasattr(self.annotation_tab, 'processed_folder'):
-                    self.annotation_tab.processed_folder = config['default_processed_folder']
-                if hasattr(self.annotation_tab, 'detection_path_edit'):
-                    self.annotation_tab.detection_path_edit.setText(config['default_processed_folder'])
-            
-            if 'default_annotation_folder' in config and config['default_annotation_folder']:
-                if hasattr(self.annotation_tab, 'output_path_edit'):
-                    self.annotation_tab.output_path_edit.setText(config['default_annotation_folder'])
-                if hasattr(self.annotation_tab, 'annotation_folder'):
-                    self.annotation_tab.annotation_folder = config['default_annotation_folder']
-            
-            if 'default_classes' in config and config['default_classes']:
-                if hasattr(self.annotation_tab, 'defect_classes'):
-                    self.annotation_tab.defect_classes = config['default_classes'].copy()
-                if hasattr(self.annotation_tab, 'class_list'):
-                    self.annotation_tab.class_list.clear()
-                    for class_name in config['default_classes']:
-                        self.annotation_tab.class_list.addItem(class_name)
-                        
-                # 同时更新目标检测类别
-                if hasattr(self.annotation_tab, 'detection_classes'):
-                    self.annotation_tab.detection_classes = config['default_classes'].copy()
-                if hasattr(self.annotation_tab, 'detection_class_list'):
-                    self.annotation_tab.detection_class_list.clear()
-                    for class_name in config['default_classes']:
-                        self.annotation_tab.detection_class_list.addItem(class_name)
-                
-                # 更新标签下拉框
-                if hasattr(self.annotation_tab, 'update_label_combo'):
-                    self.annotation_tab.update_label_combo()
-            
-            # 检查准备状态
-            if hasattr(self.annotation_tab, 'check_annotation_ready'):
-                self.annotation_tab.check_annotation_ready()
-            if hasattr(self.annotation_tab, 'check_detection_ready'):
-                self.annotation_tab.check_detection_ready()
-                
-            # 如果目前是在目标检测界面，尝试加载图像
-            if hasattr(self.annotation_tab, 'stacked_widget') and hasattr(self.annotation_tab, 'load_image_files'):
-                if self.annotation_tab.stacked_widget.currentIndex() == 1:
-                    processed_folder = config.get('default_processed_folder', '')
-                    if processed_folder:
-                        self.annotation_tab.load_image_files(processed_folder)
+        # 标注标签页
+        if hasattr(self, 'annotation_tab'):
+            # 将配置应用到标注界面
+            if hasattr(self.annotation_tab, 'apply_config'):
+                self.annotation_tab.apply_config(config)
         
         # 训练标签页
         if hasattr(self, 'training_tab'):
-            if 'default_annotation_folder' in config and config['default_annotation_folder']:
-                # 移除原先的代码，现在在TrainingTab类中直接实现
-                if hasattr(self.training_tab, 'annotation_folder'):
-                    self.training_tab.annotation_folder = config['default_annotation_folder']
-            
-            if hasattr(self.training_tab, 'check_training_ready'):
-                self.training_tab.check_training_ready()
+            # 将配置应用到训练界面
+            if hasattr(self.training_tab, 'apply_config'):
+                self.training_tab.apply_config(config)
+                
+        # 评估标签页
+        if hasattr(self, 'evaluation_tab'):
+            # 将配置应用到评估界面
+            if hasattr(self.evaluation_tab, 'apply_config'):
+                self.evaluation_tab.apply_config(config)
         
         # 预测标签页
         if hasattr(self, 'prediction_tab'):
+            # 应用默认模型文件
             if 'default_model_file' in config and config['default_model_file']:
                 if hasattr(self.prediction_tab, 'model_path_edit'):
                     self.prediction_tab.model_path_edit.setText(config['default_model_file'])
                 if hasattr(self.prediction_tab, 'model_file'):
                     self.prediction_tab.model_file = config['default_model_file']
             
+            # 应用默认类别信息文件
             if 'default_class_info_file' in config and config['default_class_info_file']:
                 if hasattr(self.prediction_tab, 'class_info_path_edit'):
                     self.prediction_tab.class_info_path_edit.setText(config['default_class_info_file'])
                 if hasattr(self.prediction_tab, 'class_info_file'):
                     self.prediction_tab.class_info_file = config['default_class_info_file']
-            
-            if hasattr(self.prediction_tab, 'check_model_ready'):
-                self.prediction_tab.check_model_ready()
-    
+                    
+                    # 如果类别信息文件有效，加载类别信息
+                    if os.path.exists(config['default_class_info_file']):
+                        try:
+                            with open(config['default_class_info_file'], 'r', encoding='utf-8') as f:
+                                class_info = json.load(f)
+                                if hasattr(self.prediction_tab, 'class_info'):
+                                    self.prediction_tab.class_info = class_info
+                        except Exception as e:
+                            print(f"加载类别信息文件失败: {str(e)}")
+                            
+        print("MainWindow.apply_config应用完成")
+
     def goto_annotation_tab(self):
         """切换到标注选项卡"""
         self.tabs.setCurrentWidget(self.annotation_tab)

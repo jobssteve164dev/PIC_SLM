@@ -68,30 +68,6 @@ class SettingsTab(BaseTab):
         folders_layout.addWidget(self.default_output_edit, 1, 1)
         folders_layout.addWidget(output_btn, 1, 2)
         
-        # 处理后文件夹
-        self.default_processed_edit = QLineEdit()
-        self.default_processed_edit.setReadOnly(True)
-        self.default_processed_edit.setPlaceholderText("默认处理后文件夹")
-        
-        processed_btn = QPushButton("浏览...")
-        processed_btn.clicked.connect(self.select_default_processed_folder)
-        
-        folders_layout.addWidget(QLabel("默认处理后文件夹:"), 2, 0)
-        folders_layout.addWidget(self.default_processed_edit, 2, 1)
-        folders_layout.addWidget(processed_btn, 2, 2)
-        
-        # 标注文件夹
-        self.default_annotation_edit = QLineEdit()
-        self.default_annotation_edit.setReadOnly(True)
-        self.default_annotation_edit.setPlaceholderText("默认标注文件夹")
-        
-        annotation_btn = QPushButton("浏览...")
-        annotation_btn.clicked.connect(self.select_default_annotation_folder)
-        
-        folders_layout.addWidget(QLabel("默认标注文件夹:"), 3, 0)
-        folders_layout.addWidget(self.default_annotation_edit, 3, 1)
-        folders_layout.addWidget(annotation_btn, 3, 2)
-        
         folders_group.setLayout(folders_layout)
         general_layout.addWidget(folders_group)
         
@@ -126,17 +102,6 @@ class SettingsTab(BaseTab):
         advanced_tab = QWidget()
         advanced_layout = QVBoxLayout(advanced_tab)
         
-        # 创建自动标注组
-        auto_group = QGroupBox("自动标注")
-        auto_layout = QVBoxLayout()
-        
-        self.auto_annotation_check = QCheckBox("启用自动标注")
-        self.auto_annotation_check.stateChanged.connect(self.toggle_auto_annotation)
-        auto_layout.addWidget(self.auto_annotation_check)
-        
-        auto_group.setLayout(auto_layout)
-        advanced_layout.addWidget(auto_group)
-        
         # 创建模型文件组
         model_group = QGroupBox("默认模型文件")
         model_layout = QGridLayout()
@@ -164,6 +129,18 @@ class SettingsTab(BaseTab):
         model_layout.addWidget(QLabel("默认类别信息:"), 1, 0)
         model_layout.addWidget(self.default_class_info_edit, 1, 1)
         model_layout.addWidget(class_info_btn, 1, 2)
+        
+        # 模型评估文件夹
+        self.default_model_eval_dir_edit = QLineEdit()
+        self.default_model_eval_dir_edit.setReadOnly(True)
+        self.default_model_eval_dir_edit.setPlaceholderText("默认模型评估文件夹")
+        
+        model_eval_dir_btn = QPushButton("浏览...")
+        model_eval_dir_btn.clicked.connect(self.select_default_model_eval_dir)
+        
+        model_layout.addWidget(QLabel("默认模型评估文件夹:"), 2, 0)
+        model_layout.addWidget(self.default_model_eval_dir_edit, 2, 1)
+        model_layout.addWidget(model_eval_dir_btn, 2, 2)
         
         model_group.setLayout(model_layout)
         advanced_layout.addWidget(model_group)
@@ -200,18 +177,6 @@ class SettingsTab(BaseTab):
         if folder:
             self.default_output_edit.setText(folder)
     
-    def select_default_processed_folder(self):
-        """选择默认处理后文件夹"""
-        folder = QFileDialog.getExistingDirectory(self, "选择默认处理后文件夹")
-        if folder:
-            self.default_processed_edit.setText(folder)
-    
-    def select_default_annotation_folder(self):
-        """选择默认标注文件夹"""
-        folder = QFileDialog.getExistingDirectory(self, "选择默认标注文件夹")
-        if folder:
-            self.default_annotation_edit.setText(folder)
-    
     def settings_add_defect_class(self):
         """添加默认缺陷类别"""
         class_name, ok = QInputDialog.getText(self, "添加缺陷类别", "请输入缺陷类别名称:")
@@ -232,11 +197,6 @@ class SettingsTab(BaseTab):
             self.default_classes.remove(class_name)
             self.default_class_list.takeItem(self.default_class_list.row(current_item))
     
-    def toggle_auto_annotation(self, state):
-        """切换自动标注状态"""
-        # 这里可以添加自动标注相关的逻辑
-        pass
-    
     def select_default_model_file(self):
         """选择默认模型文件"""
         file, _ = QFileDialog.getOpenFileName(self, "选择默认模型文件", "", "模型文件 (*.h5 *.pb *.tflite *.pth);;所有文件 (*)")
@@ -248,93 +208,78 @@ class SettingsTab(BaseTab):
         file, _ = QFileDialog.getOpenFileName(self, "选择默认类别信息文件", "", "JSON文件 (*.json);;所有文件 (*)")
         if file:
             self.default_class_info_edit.setText(file)
+            
+    def select_default_model_eval_dir(self):
+        """选择默认模型评估文件夹"""
+        folder = QFileDialog.getExistingDirectory(self, "选择默认模型评估文件夹")
+        if folder:
+            self.default_model_eval_dir_edit.setText(folder)
     
     def load_current_settings(self):
         """加载当前设置"""
         try:
-            # 尝试从配置文件加载
-            config_file = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'config.json')
-            if os.path.exists(config_file):
-                with open(config_file, 'r', encoding='utf-8') as f:
+            config_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'config.json')
+            print(f"SettingsTab: 尝试从以下路径加载配置: {config_path}")
+            if os.path.exists(config_path):
+                with open(config_path, 'r', encoding='utf-8') as f:
                     self.config = json.load(f)
-                
-                # 应用设置到UI
-                self.apply_config_to_ui()
+                    self.apply_config_to_ui()
+                    print(f"SettingsTab: 已加载配置: {self.config}")
             else:
-                # 使用默认设置
-                self.config = {
-                    'default_source_folder': '',
-                    'default_output_folder': '',
-                    'default_processed_folder': '',
-                    'default_annotation_folder': '',
-                    'default_classes': [],
-                    'auto_annotation': False,
-                    'default_model_file': '',
-                    'default_class_info_file': ''
-                }
+                print(f"SettingsTab: 配置文件不存在: {config_path}")
         except Exception as e:
-            QMessageBox.warning(self, "警告", f"加载设置失败: {str(e)}")
-            # 使用默认设置
-            self.config = {
-                'default_source_folder': '',
-                'default_output_folder': '',
-                'default_processed_folder': '',
-                'default_annotation_folder': '',
-                'default_classes': [],
-                'auto_annotation': False,
-                'default_model_file': '',
-                'default_class_info_file': ''
-            }
-    
+            print(f"SettingsTab: 加载配置失败: {str(e)}")
+            import traceback
+            traceback.print_exc()
+            
     def apply_config_to_ui(self):
         """将配置应用到UI"""
+        if not self.config:
+            return
+            
         # 设置默认文件夹
         self.default_source_edit.setText(self.config.get('default_source_folder', ''))
         self.default_output_edit.setText(self.config.get('default_output_folder', ''))
-        self.default_processed_edit.setText(self.config.get('default_processed_folder', ''))
-        self.default_annotation_edit.setText(self.config.get('default_annotation_folder', ''))
+        
+        # 设置默认模型文件和类别信息
+        self.default_model_edit.setText(self.config.get('default_model_file', ''))
+        self.default_class_info_edit.setText(self.config.get('default_class_info_file', ''))
+        self.default_model_eval_dir_edit.setText(self.config.get('default_model_eval_dir', ''))
         
         # 设置默认类别
         self.default_classes = self.config.get('default_classes', [])
         self.default_class_list.clear()
         for class_name in self.default_classes:
             self.default_class_list.addItem(class_name)
-        
-        # 设置自动标注
-        self.auto_annotation_check.setChecked(self.config.get('auto_annotation', False))
-        
-        # 设置默认模型文件
-        self.default_model_edit.setText(self.config.get('default_model_file', ''))
-        self.default_class_info_edit.setText(self.config.get('default_class_info_file', ''))
     
     def save_settings(self):
         """保存设置"""
         try:
-            # 收集设置
-            self.config = {
+            # 创建配置字典
+            config = {
                 'default_source_folder': self.default_source_edit.text(),
                 'default_output_folder': self.default_output_edit.text(),
-                'default_processed_folder': self.default_processed_edit.text(),
-                'default_annotation_folder': self.default_annotation_edit.text(),
-                'default_classes': self.default_classes,
-                'auto_annotation': self.auto_annotation_check.isChecked(),
                 'default_model_file': self.default_model_edit.text(),
-                'default_class_info_file': self.default_class_info_edit.text()
+                'default_class_info_file': self.default_class_info_edit.text(),
+                'default_model_eval_dir': self.default_model_eval_dir_edit.text(),
+                'default_classes': self.default_classes
             }
             
-            # 保存到配置文件
-            config_file = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'config.json')
-            os.makedirs(os.path.dirname(config_file), exist_ok=True)
+            # 保存配置到文件
+            config_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'config.json')
+            print(f"SettingsTab: 尝试保存配置到: {config_path}")
+            os.makedirs(os.path.dirname(config_path), exist_ok=True)
             
-            with open(config_file, 'w', encoding='utf-8') as f:
-                json.dump(self.config, f, ensure_ascii=False, indent=4)
+            with open(config_path, 'w', encoding='utf-8') as f:
+                json.dump(config, f, ensure_ascii=False, indent=4)
             
-            # 发出设置已保存信号
-            self.settings_saved.emit(self.config)
-            self.update_status("设置已保存")
+            self.config = config
+            self.settings_saved.emit(config)
             QMessageBox.information(self, "成功", "设置已保存")
             
+            print(f"SettingsTab: 已保存配置: {config}")
         except Exception as e:
             QMessageBox.critical(self, "错误", f"保存设置失败: {str(e)}")
+            print(f"SettingsTab: 保存设置失败: {str(e)}")
             import traceback
             traceback.print_exc() 
