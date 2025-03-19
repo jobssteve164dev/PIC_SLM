@@ -74,6 +74,18 @@ def main():
                     
                     print(f"已更新配置文件，添加默认模型评估文件夹: {config_content['default_model_eval_dir']}")
                 
+                # 检查是否有默认模型保存文件夹，如果没有则添加
+                if 'default_model_save_dir' not in config_content or not config_content['default_model_save_dir']:
+                    print("配置文件中缺少default_model_save_dir，添加默认值")
+                    config_content['default_model_save_dir'] = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'models', 'saved_models')
+                    os.makedirs(config_content['default_model_save_dir'], exist_ok=True)
+                    
+                    # 保存更新后的配置
+                    with open(config_path, 'w', encoding='utf-8') as f:
+                        json.dump(config_content, f, ensure_ascii=False, indent=4)
+                    
+                    print(f"已更新配置文件，添加默认模型保存文件夹: {config_content['default_model_save_dir']}")
+                
                 # 检查是否有默认类别，如果没有则添加
                 if 'default_classes' not in config_content or not config_content['default_classes']:
                     print("配置文件中缺少default_classes，添加默认值")
@@ -86,6 +98,7 @@ def main():
                     print(f"已更新配置文件，添加默认类别: {config_content['default_classes']}")
                 
                 print(f"默认模型评估文件夹: {config_content.get('default_model_eval_dir', '未设置')}")
+                print(f"默认模型保存文件夹: {config_content.get('default_model_save_dir', '未设置')}")
                 print(f"默认类别: {config_content.get('default_classes', [])}")
         except Exception as e:
             print(f"读取配置文件出错: {str(e)}")
@@ -278,7 +291,15 @@ def main():
         task_type = params.get('task_type', 'classification')
         
         # 设置模型保存目录
-        model_save_dir = os.path.join('models', 'saved_models')
+        # 优先使用设置中的模型保存路径
+        config_loader = ConfigLoader()
+        config = config_loader.get_config()
+        model_save_dir = config.get('default_model_save_dir', '')
+        
+        # 如果设置中没有指定，则使用默认路径
+        if not model_save_dir:
+            model_save_dir = os.path.join('models', 'saved_models')
+            
         os.makedirs(model_save_dir, exist_ok=True)
         
         # 获取数据目录（根据任务类型选择）
