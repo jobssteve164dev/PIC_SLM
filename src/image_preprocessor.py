@@ -130,6 +130,10 @@ class ImagePreprocessor(QObject):
         dataset_folder = params['dataset_folder']
         train_ratio = params['train_ratio']
         
+        # 调试输出参数信息
+        self.status_updated.emit(f"预处理参数: 增强模式={params.get('augmentation_mode', '未指定')}")
+        self.status_updated.emit(f"启用的增强方法: 水平翻转={params.get('flip_horizontal', False)}, 亮度={params.get('brightness', False)}, 对比度={params.get('contrast', False)}等")
+        
         # 创建必要的文件夹
         os.makedirs(output_folder, exist_ok=True)
         train_folder = os.path.join(dataset_folder, 'train')
@@ -173,35 +177,259 @@ class ImagePreprocessor(QObject):
             if not image_files:
                 self.status_updated.emit(f"警告：类别 {class_name} 中没有图片文件，跳过该类别")
                 continue
-                
-            # 第1步：预处理该类别的图片
-            self._preprocess_class_images(class_source_folder, class_output_folder, image_files, params)
             
-            # 如果处理被停止，则退出
-            if self._stop_preprocessing:
-                self.status_updated.emit('预处理已停止')
-                return
-            
-            # 第2步：划分训练集和验证集
-            processed_images = self._get_image_files(class_output_folder)
+            # 先划分训练集和验证集
             train_images, val_images = train_test_split(
-                processed_images, train_size=train_ratio, random_state=42)
+                image_files, train_size=train_ratio, random_state=42)
+            
+            self.status_updated.emit(f"类别 {class_name} 划分为训练集{len(train_images)}张和验证集{len(val_images)}张")
                 
-            # 第3步：复制到训练集和验证集文件夹
-            for img in train_images:
-                src = os.path.join(class_output_folder, img)
-                dst = os.path.join(class_train_folder, img)
-                shutil.copy2(src, dst)
+            # 第1步：对原始图片进行基本预处理
+            # 先处理训练集图片
+            for img_file in train_images:
+                if self._stop_preprocessing:
+                    return
+                    
+                # 预处理原始图片并保存到输出文件夹
+                source_path = os.path.join(class_source_folder, img_file)
+                file_name = os.path.splitext(img_file)[0]
+                img_format = params['format']
+                output_path = os.path.join(class_output_folder, f"{file_name}.{img_format}")
                 
-            for img in val_images:
-                src = os.path.join(class_output_folder, img)
-                dst = os.path.join(class_val_folder, img)
-                shutil.copy2(src, dst)
+                # 基本图像处理（调整大小、亮度、对比度）
+                self._process_single_image(
+                    source_path, 
+                    output_path, 
+                    params['width'], 
+                    params['height'], 
+                    params['brightness_value'], 
+                    params['contrast_value']
+                )
+                
+                # 直接复制预处理后的图片到训练集文件夹
+                train_dest_path = os.path.join(class_train_folder, f"{file_name}.{img_format}")
+                shutil.copy2(output_path, train_dest_path)
+                
+                # 对训练集图片应用增强处理
+                self._apply_augmentations_to_image(
+                    output_path, 
+                    class_train_folder, 
+                    file_name, 
+                    img_format, 
+                    params
+                )
+            
+            # 再处理验证集图片 - 只进行基本预处理，不增强
+            for img_file in val_images:
+                if self._stop_preprocessing:
+                    return
+                    
+                # 预处理原始图片并保存到输出文件夹
+                source_path = os.path.join(class_source_folder, img_file)
+                file_name = os.path.splitext(img_file)[0]
+                img_format = params['format']
+                output_path = os.path.join(class_output_folder, f"{file_name}.{img_format}")
+                
+                # 基本图像处理（调整大小、亮度、对比度）
+                self._process_single_image(
+                    source_path, 
+                    output_path, 
+                    params['width'], 
+                    params['height'], 
+                    params['brightness_value'], 
+                    params['contrast_value']
+                )
+                
+                # 只复制预处理后的原始图片到验证集文件夹，不进行增强
+                val_dest_path = os.path.join(class_val_folder, f"{file_name}.{img_format}")
+                shutil.copy2(output_path, val_dest_path)
         
         # 如果没有被停止，发出完成信号
         if not self._stop_preprocessing:
             self.status_updated.emit('预处理完成')
             self.preprocessing_finished.emit()
+            
+    def _apply_augmentations_to_image(self, image_path: str, target_dir: str, file_name: str, img_format: str, params: Dict) -> None:
+        """对单张图片应用所有选择的增强方法"""
+        try:
+            # 读取图像
+            image = np.array(Image.open(image_path).convert('RGB'))
+            success_count = 0
+            generated_methods = []
+            
+            # 获取增强模式
+            augmentation_mode = params.get('augmentation_mode', 'combined')
+            
+            # 获取增强强度参数
+            aug_intensity = params.get('augmentation_intensity', 0.5)
+            
+            # 根据增强强度调整各增强参数
+            scale_limit = aug_intensity * 0.4
+            brightness_limit = aug_intensity * 0.6
+            contrast_limit = aug_intensity * 0.6
+            noise_limit_min = 5.0 + aug_intensity * 15.0
+            noise_limit_max = 20.0 + aug_intensity * 80.0
+            blur_limit = int(2 + aug_intensity * 5)
+            hue_shift_limit = int(10 + aug_intensity * 30)
+            sat_val_limit = int(15 + aug_intensity * 35)
+            
+            if augmentation_mode == 'separate':
+                # 应用所有选择的独立增强方法
+                if params.get('flip_horizontal'):
+                    try:
+                        aug = A.Compose([A.HorizontalFlip(p=1.0)])
+                        augmented = aug(image=image)['image']
+                        aug_name = f'{file_name}_flip_h.{img_format}'
+                        aug_path = os.path.join(target_dir, aug_name)
+                        Image.fromarray(augmented).save(aug_path)
+                        success_count += 1
+                        generated_methods.append("水平翻转")
+                    except Exception as e:
+                        self.status_updated.emit(f"水平翻转增强失败: {str(e)}")
+                
+                if params.get('flip_vertical'):
+                    try:
+                        aug = A.Compose([A.VerticalFlip(p=1.0)])
+                        augmented = aug(image=image)['image']
+                        aug_name = f'{file_name}_flip_v.{img_format}'
+                        aug_path = os.path.join(target_dir, aug_name)
+                        Image.fromarray(augmented).save(aug_path)
+                        success_count += 1
+                        generated_methods.append("垂直翻转")
+                    except Exception as e:
+                        self.status_updated.emit(f"垂直翻转增强失败: {str(e)}")
+                
+                if params.get('rotate'):
+                    try:
+                        aug = A.Compose([A.RandomRotate90(p=1.0)])
+                        augmented = aug(image=image)['image']
+                        aug_name = f'{file_name}_rotate.{img_format}'
+                        aug_path = os.path.join(target_dir, aug_name)
+                        Image.fromarray(augmented).save(aug_path)
+                        success_count += 1
+                        generated_methods.append("旋转")
+                    except Exception as e:
+                        self.status_updated.emit(f"旋转增强失败: {str(e)}")
+                
+                if params.get('random_crop'):
+                    try:
+                        # 确保裁剪尺寸不超过图片尺寸
+                        height = int(params['height'])
+                        width = int(params['width'])
+                        crop_height = min(height, image.shape[0])
+                        crop_width = min(width, image.shape[1])
+                        aug = A.Compose([A.RandomCrop(height=crop_height, width=crop_width, p=1.0)])
+                        augmented = aug(image=image)['image']
+                        aug_name = f'{file_name}_crop.{img_format}'
+                        aug_path = os.path.join(target_dir, aug_name)
+                        Image.fromarray(augmented).save(aug_path)
+                        success_count += 1
+                        generated_methods.append("裁剪")
+                    except Exception as e:
+                        self.status_updated.emit(f"裁剪增强失败: {str(e)}")
+                
+                if params.get('random_scale'):
+                    try:
+                        aug = A.Compose([A.RandomScale(scale_limit=scale_limit, p=1.0)])
+                        augmented = aug(image=image)['image']
+                        aug_name = f'{file_name}_scale.{img_format}'
+                        aug_path = os.path.join(target_dir, aug_name)
+                        Image.fromarray(augmented).save(aug_path)
+                        success_count += 1
+                        generated_methods.append("缩放")
+                    except Exception as e:
+                        self.status_updated.emit(f"缩放增强失败: {str(e)}")
+                
+                if params.get('brightness'):
+                    try:
+                        pil_img = Image.fromarray(image)
+                        enhancer = ImageEnhance.Brightness(pil_img)
+                        brightness_factor = 1.0 + brightness_limit
+                        brightened = enhancer.enhance(brightness_factor)
+                        aug_name = f'{file_name}_bright.{img_format}'
+                        aug_path = os.path.join(target_dir, aug_name)
+                        brightened.save(aug_path)
+                        success_count += 1
+                        generated_methods.append("亮度")
+                    except Exception as e:
+                        self.status_updated.emit(f"亮度增强失败: {str(e)}")
+                
+                if params.get('contrast'):
+                    try:
+                        pil_img = Image.fromarray(image)
+                        enhancer = ImageEnhance.Contrast(pil_img)
+                        contrast_factor = 1.0 + contrast_limit
+                        contrasted = enhancer.enhance(contrast_factor)
+                        aug_name = f'{file_name}_contrast.{img_format}'
+                        aug_path = os.path.join(target_dir, aug_name)
+                        contrasted.save(aug_path)
+                        success_count += 1
+                        generated_methods.append("对比度")
+                    except Exception as e:
+                        self.status_updated.emit(f"对比度增强失败: {str(e)}")
+                
+                if params.get('noise'):
+                    try:
+                        aug = A.Compose([A.GaussNoise(var_limit=(noise_limit_min, noise_limit_max), p=1.0)])
+                        augmented = aug(image=image)['image']
+                        aug_name = f'{file_name}_noise.{img_format}'
+                        aug_path = os.path.join(target_dir, aug_name)
+                        Image.fromarray(augmented).save(aug_path)
+                        success_count += 1
+                        generated_methods.append("噪声")
+                    except Exception as e:
+                        self.status_updated.emit(f"噪声增强失败: {str(e)}")
+                
+                if params.get('blur'):
+                    try:
+                        aug = A.Compose([A.GaussianBlur(blur_limit=blur_limit, p=1.0)])
+                        augmented = aug(image=image)['image']
+                        aug_name = f'{file_name}_blur.{img_format}'
+                        aug_path = os.path.join(target_dir, aug_name)
+                        Image.fromarray(augmented).save(aug_path)
+                        success_count += 1
+                        generated_methods.append("模糊")
+                    except Exception as e:
+                        self.status_updated.emit(f"模糊增强失败: {str(e)}")
+                
+                if params.get('hue'):
+                    try:
+                        aug = A.Compose([A.HueSaturationValue(
+                            hue_shift_limit=hue_shift_limit, 
+                            sat_shift_limit=sat_val_limit, 
+                            val_shift_limit=sat_val_limit, 
+                            p=1.0
+                        )])
+                        augmented = aug(image=image)['image']
+                        aug_name = f'{file_name}_hue.{img_format}'
+                        aug_path = os.path.join(target_dir, aug_name)
+                        Image.fromarray(augmented).save(aug_path)
+                        success_count += 1
+                        generated_methods.append("色相")
+                    except Exception as e:
+                        self.status_updated.emit(f"色相增强失败: {str(e)}")
+                
+                self.status_updated.emit(f"成功应用 {success_count} 种增强方法: {', '.join(generated_methods)}")
+            
+            else:
+                # 组合模式，使用预定义的增强配置
+                augmentation_level = params.get('augmentation_level', '基础')
+                aug = self._get_augmentation_with_intensity(augmentation_level, aug_intensity)
+                # 为每张图片生成2个增强版本
+                for j in range(2):
+                    if self._stop_preprocessing:
+                        return
+                    try:
+                        augmented = aug(image=image)['image']
+                        aug_name = f'{file_name}_aug_{j}.{img_format}'
+                        aug_path = os.path.join(target_dir, aug_name)
+                        Image.fromarray(augmented).save(aug_path)
+                        self.status_updated.emit(f"对图片应用了组合增强 #{j+1}")
+                    except Exception as e:
+                        self.status_updated.emit(f"组合增强 #{j+1} 失败: {str(e)}")
+                    
+        except Exception as e:
+            self.status_updated.emit(f"增强图片 {file_name} 时出错: {str(e)}")
 
     def _preprocess_class_images(self, source_folder: str, target_folder: str, 
                                 image_files: List[str], params: Dict) -> None:
@@ -212,8 +440,28 @@ class ImagePreprocessor(QObject):
         brightness = params['brightness_value']
         contrast = params['contrast_value']
         
+        # 获取增强模式
+        augmentation_mode = params.get('augmentation_mode', 'combined')
+        self.status_updated.emit(f"类别预处理使用增强模式: {augmentation_mode}")
+        
+        # 获取增强强度参数
+        aug_intensity = params.get('augmentation_intensity', 0.5)
+        
+        # 根据增强强度调整各增强参数
+        # 注意：有些效果需要较小强度(如亮度)，有些需要较大强度(如噪声)
+        scale_limit = aug_intensity * 0.4  # 缩放范围: 0.04 to 0.4
+        brightness_limit = aug_intensity * 0.6  # 亮度范围: 0.06 to 0.6
+        contrast_limit = aug_intensity * 0.6  # 对比度范围: 0.06 to 0.6
+        noise_limit_min = 5.0 + aug_intensity * 15.0  # 噪声最小值范围: 5.0 to 20.0
+        noise_limit_max = 20.0 + aug_intensity * 80.0  # 噪声最大值范围: 20.0 to 100.0
+        blur_limit = int(2 + aug_intensity * 5)  # 模糊范围: 2 to 7
+        hue_shift_limit = int(10 + aug_intensity * 30)  # 色相范围: 10 to 40
+        sat_val_limit = int(15 + aug_intensity * 35)  # 饱和度/明度范围: 15 to 50
+        
         # 处理每个图片
         total_files = len(image_files)
+        processed_count = 0
+        
         for i, img_file in enumerate(image_files):
             # 检查是否需要停止处理
             if self._stop_preprocessing:
@@ -225,7 +473,7 @@ class ImagePreprocessor(QObject):
                 file_name = os.path.splitext(img_file)[0]
                 target_path = os.path.join(target_folder, f"{file_name}.{img_format}")
                 
-                # 处理图片
+                # 步骤1：基本预处理（调整大小、亮度、对比度等）
                 self._process_single_image(
                     source_path, 
                     target_path, 
@@ -234,9 +482,179 @@ class ImagePreprocessor(QObject):
                     brightness, 
                     contrast
                 )
+                processed_count += 1
+                
+                # 步骤2：如果是独立模式且启用了增强，则为每种方法单独生成增强图像
+                if augmentation_mode == 'separate':
+                    try:
+                        # 读取预处理后的图像作为增强的输入
+                        image = np.array(Image.open(target_path).convert('RGB'))
+                        success_count = 0
+                        generated_methods = []
+                        
+                        # 应用所有选择的增强方法
+                        if params.get('flip_horizontal'):
+                            try:
+                                aug = A.Compose([A.HorizontalFlip(p=1.0)])
+                                augmented = aug(image=image)['image']
+                                aug_name = f'{file_name}_flip_h.{img_format}'
+                                aug_path = os.path.join(target_folder, aug_name)
+                                Image.fromarray(augmented).save(aug_path)
+                                success_count += 1
+                                generated_methods.append("水平翻转")
+                                processed_count += 1
+                            except Exception as e:
+                                self.status_updated.emit(f"水平翻转增强失败: {str(e)}")
+                            
+                        if params.get('flip_vertical'):
+                            try:
+                                aug = A.Compose([A.VerticalFlip(p=1.0)])
+                                augmented = aug(image=image)['image']
+                                aug_name = f'{file_name}_flip_v.{img_format}'
+                                aug_path = os.path.join(target_folder, aug_name)
+                                Image.fromarray(augmented).save(aug_path)
+                                success_count += 1
+                                generated_methods.append("垂直翻转")
+                                processed_count += 1
+                            except Exception as e:
+                                self.status_updated.emit(f"垂直翻转增强失败: {str(e)}")
+                        
+                        if params.get('rotate'):
+                            try:
+                                aug = A.Compose([A.RandomRotate90(p=1.0)])
+                                augmented = aug(image=image)['image']
+                                aug_name = f'{file_name}_rotate.{img_format}'
+                                aug_path = os.path.join(target_folder, aug_name)
+                                Image.fromarray(augmented).save(aug_path)
+                                success_count += 1
+                                generated_methods.append("旋转")
+                                processed_count += 1
+                            except Exception as e:
+                                self.status_updated.emit(f"旋转增强失败: {str(e)}")
+                        
+                        if params.get('random_crop'):
+                            try:
+                                # 确保裁剪尺寸不超过图片尺寸
+                                crop_height = min(height, image.shape[0])
+                                crop_width = min(width, image.shape[1])
+                                aug = A.Compose([A.RandomCrop(height=crop_height, width=crop_width, p=1.0)])
+                                augmented = aug(image=image)['image']
+                                aug_name = f'{file_name}_crop.{img_format}'
+                                aug_path = os.path.join(target_folder, aug_name)
+                                Image.fromarray(augmented).save(aug_path)
+                                success_count += 1
+                                generated_methods.append("裁剪")
+                                processed_count += 1
+                            except Exception as e:
+                                self.status_updated.emit(f"裁剪增强失败: {str(e)}")
+                        
+                        if params.get('random_scale'):
+                            try:
+                                # 使用增强强度调整缩放范围
+                                aug = A.Compose([A.RandomScale(scale_limit=scale_limit, p=1.0)])
+                                augmented = aug(image=image)['image']
+                                aug_name = f'{file_name}_scale.{img_format}'
+                                aug_path = os.path.join(target_folder, aug_name)
+                                Image.fromarray(augmented).save(aug_path)
+                                success_count += 1
+                                generated_methods.append("缩放")
+                                processed_count += 1
+                            except Exception as e:
+                                self.status_updated.emit(f"缩放增强失败: {str(e)}")
+                        
+                        if params.get('brightness'):
+                            try:
+                                pil_img = Image.fromarray(image)
+                                enhancer = ImageEnhance.Brightness(pil_img)
+                                # 使用增强强度调整亮度
+                                brightness_factor = 1.0 + brightness_limit
+                                brightened = enhancer.enhance(brightness_factor)
+                                aug_name = f'{file_name}_bright.{img_format}'
+                                aug_path = os.path.join(target_folder, aug_name)
+                                brightened.save(aug_path)
+                                success_count += 1
+                                generated_methods.append("亮度")
+                                processed_count += 1
+                            except Exception as e:
+                                self.status_updated.emit(f"亮度增强失败: {str(e)}")
+                        
+                        if params.get('contrast'):
+                            try:
+                                pil_img = Image.fromarray(image)
+                                enhancer = ImageEnhance.Contrast(pil_img)
+                                # 使用增强强度调整对比度
+                                contrast_factor = 1.0 + contrast_limit
+                                contrasted = enhancer.enhance(contrast_factor)
+                                aug_name = f'{file_name}_contrast.{img_format}'
+                                aug_path = os.path.join(target_folder, aug_name)
+                                contrasted.save(aug_path)
+                                success_count += 1
+                                generated_methods.append("对比度")
+                                processed_count += 1
+                            except Exception as e:
+                                self.status_updated.emit(f"对比度增强失败: {str(e)}")
+                        
+                        if params.get('noise'):
+                            try:
+                                # 使用增强强度调整噪声增强效果
+                                aug = A.Compose([A.GaussNoise(var_limit=(noise_limit_min, noise_limit_max), p=1.0)])
+                                augmented = aug(image=image)['image']
+                                aug_name = f'{file_name}_noise.{img_format}'
+                                aug_path = os.path.join(target_folder, aug_name)
+                                Image.fromarray(augmented).save(aug_path)
+                                success_count += 1
+                                generated_methods.append("噪声")
+                                processed_count += 1
+                            except Exception as e:
+                                self.status_updated.emit(f"噪声增强失败: {str(e)}")
+                        
+                        if params.get('blur'):
+                            try:
+                                # 使用增强强度调整模糊增强效果
+                                aug = A.Compose([A.GaussianBlur(blur_limit=blur_limit, p=1.0)])
+                                augmented = aug(image=image)['image']
+                                aug_name = f'{file_name}_blur.{img_format}'
+                                aug_path = os.path.join(target_folder, aug_name)
+                                Image.fromarray(augmented).save(aug_path)
+                                success_count += 1
+                                generated_methods.append("模糊")
+                                processed_count += 1
+                            except Exception as e:
+                                self.status_updated.emit(f"模糊增强失败: {str(e)}")
+                        
+                        if params.get('hue'):
+                            try:
+                                # 使用增强强度调整色相增强效果
+                                aug = A.Compose([A.HueSaturationValue(
+                                    hue_shift_limit=hue_shift_limit, 
+                                    sat_shift_limit=sat_val_limit, 
+                                    val_shift_limit=sat_val_limit, 
+                                    p=1.0
+                                )])
+                                augmented = aug(image=image)['image']
+                                aug_name = f'{file_name}_hue.{img_format}'
+                                aug_path = os.path.join(target_folder, aug_name)
+                                Image.fromarray(augmented).save(aug_path)
+                                success_count += 1
+                                generated_methods.append("色相")
+                                processed_count += 1
+                            except Exception as e:
+                                self.status_updated.emit(f"色相增强失败: {str(e)}")
+                        
+                        if i == 0:  # 仅对第一张图片详细记录应用的方法
+                            self.status_updated.emit(f"对图片 {img_file} 成功应用 {success_count} 种增强方法: {', '.join(generated_methods)}")
+                        
+                    except Exception as e:
+                        self.status_updated.emit(f"应用增强时出错: {str(e)}")
+                
+                # 更新进度
+                progress = int(((i + 1) / total_files) * 50)  # 预处理占总进度的50%
+                self.progress_updated.emit(progress)
                 
             except Exception as e:
                 self.status_updated.emit(f'处理图片 {img_file} 时出错: {str(e)}')
+        
+        self.status_updated.emit(f'完成类别图片预处理，共处理 {processed_count} 张图片')
 
     def _process_dataset_class_images(self,
                                      source_dir: str,
@@ -352,37 +770,37 @@ class ImagePreprocessor(QObject):
                             except Exception as e:
                                 self.status_updated.emit(f"缩放增强失败: {str(e)}")
                         
-                        # 单独处理亮度增强 - 使用PIL直接实现
-                        try:
-                            # 强制启用亮度增强进行测试，使用PIL而不是albumentations
-                            pil_img = Image.fromarray(image)
-                            enhancer = ImageEnhance.Brightness(pil_img)
-                            # 使用固定的亮度因子1.5（增加50%亮度）
-                            brightened = enhancer.enhance(1.5)
-                            aug_name = f'{os.path.splitext(image_name)[0]}_bright{os.path.splitext(image_name)[1]}'
-                            aug_path = os.path.join(target_dir, aug_name)
-                            brightened.save(aug_path)
-                            success_count += 1
-                            generated_methods.append("亮度 (PIL强制)")
-                            self.status_updated.emit(f"亮度增强使用PIL强制应用成功")
-                        except Exception as e:
-                            self.status_updated.emit(f"亮度增强使用PIL强制应用失败: {str(e)}")
+                        # 亮度增强 - 只在用户勾选时应用
+                        if params.get('brightness'):
+                            try:
+                                pil_img = Image.fromarray(image)
+                                enhancer = ImageEnhance.Brightness(pil_img)
+                                # 使用增强强度调整亮度
+                                brightness_factor = 1.0 + brightness_limit
+                                brightened = enhancer.enhance(brightness_factor)
+                                aug_name = f'{os.path.splitext(image_name)[0]}_bright{os.path.splitext(image_name)[1]}'
+                                aug_path = os.path.join(target_dir, aug_name)
+                                brightened.save(aug_path)
+                                success_count += 1
+                                generated_methods.append("亮度")
+                            except Exception as e:
+                                self.status_updated.emit(f"亮度增强失败: {str(e)}")
                         
-                        # 单独处理对比度增强 - 使用PIL直接实现
-                        try:
-                            # 强制启用对比度增强进行测试，使用PIL而不是albumentations
-                            pil_img = Image.fromarray(image)
-                            enhancer = ImageEnhance.Contrast(pil_img)
-                            # 使用固定的对比度因子1.5（增加50%对比度）
-                            contrasted = enhancer.enhance(1.5)
-                            aug_name = f'{os.path.splitext(image_name)[0]}_contrast{os.path.splitext(image_name)[1]}'
-                            aug_path = os.path.join(target_dir, aug_name)
-                            contrasted.save(aug_path)
-                            success_count += 1
-                            generated_methods.append("对比度 (PIL强制)")
-                            self.status_updated.emit(f"对比度增强使用PIL强制应用成功")
-                        except Exception as e:
-                            self.status_updated.emit(f"对比度增强使用PIL强制应用失败: {str(e)}")
+                        # 对比度增强 - 只在用户勾选时应用
+                        if params.get('contrast'):
+                            try:
+                                pil_img = Image.fromarray(image)
+                                enhancer = ImageEnhance.Contrast(pil_img)
+                                # 使用增强强度调整对比度
+                                contrast_factor = 1.0 + contrast_limit
+                                contrasted = enhancer.enhance(contrast_factor)
+                                aug_name = f'{os.path.splitext(image_name)[0]}_contrast{os.path.splitext(image_name)[1]}'
+                                aug_path = os.path.join(target_dir, aug_name)
+                                contrasted.save(aug_path)
+                                success_count += 1
+                                generated_methods.append("对比度")
+                            except Exception as e:
+                                self.status_updated.emit(f"对比度增强失败: {str(e)}")
                                 
                         if params.get('noise'):
                             try:
@@ -627,6 +1045,9 @@ class ImagePreprocessor(QObject):
             self.status_updated.emit(f"- 模糊: {params.get('blur', False)} (强度: {blur_limit})")
             self.status_updated.emit(f"- 色相: {params.get('hue', False)} (强度: 色相{hue_shift_limit}, 饱和度/明度{sat_val_limit})")
         
+        # 记录处理的图片数量
+        processed_count = 0
+        
         for i, image_name in enumerate(images):
             # 检查是否需要停止处理
             if self._stop_preprocessing:
@@ -634,180 +1055,46 @@ class ImagePreprocessor(QObject):
                 return
                 
             try:
-                # 复制原始图片
+                # 复制原始图片（如果不是已经存在于目标文件夹中）
                 src_path = os.path.join(source_dir, image_name)
                 dst_path = os.path.join(target_dir, image_name)
-                shutil.copy2(src_path, dst_path)
                 
-                # 对训练集进行数据增强
+                # 只有当目标文件不存在时才复制
+                if not os.path.exists(dst_path):
+                    shutil.copy2(src_path, dst_path)
+                    processed_count += 1
+                
+                # 对训练集进行数据增强（只有apply_augmentation为True时）
                 if apply_augmentation:
+                    # 如果是独立模式，我们已经在_preprocess_class_images中应用了所有增强
+                    # 所以这里不需要再做增强
+                    if aug_mode == 'separate':
+                        continue
+                    
+                    # 对于组合模式，我们应用额外的增强
                     try:
                         image = np.array(Image.open(src_path).convert('RGB'))
                     except Exception as e:
                         self.status_updated.emit(f"打开图片 {image_name} 失败: {str(e)}")
                         continue
                     
-                    # 根据增强模式选择不同的处理方式
-                    if params.get('augmentation_mode') == 'separate':
-                        success_count = 0
-                        # 记录强制生成的增强方法
-                        generated_methods = []
-                        
-                        # 独立模式：为每个选中的增强方法生成单独的图片
-                        if params.get('flip_horizontal'):
-                            try:
-                                aug = A.Compose([A.HorizontalFlip(p=1.0)])
-                                augmented = aug(image=image)['image']
-                                aug_name = f'{os.path.splitext(image_name)[0]}_flip_h{os.path.splitext(image_name)[1]}'
-                                aug_path = os.path.join(target_dir, aug_name)
-                                Image.fromarray(augmented).save(aug_path)
-                                success_count += 1
-                                generated_methods.append("水平翻转")
-                            except Exception as e:
-                                self.status_updated.emit(f"水平翻转增强失败: {str(e)}")
-                            
-                        if params.get('flip_vertical'):
-                            try:
-                                aug = A.Compose([A.VerticalFlip(p=1.0)])
-                                augmented = aug(image=image)['image']
-                                aug_name = f'{os.path.splitext(image_name)[0]}_flip_v{os.path.splitext(image_name)[1]}'
-                                aug_path = os.path.join(target_dir, aug_name)
-                                Image.fromarray(augmented).save(aug_path)
-                                success_count += 1
-                                generated_methods.append("垂直翻转")
-                            except Exception as e:
-                                self.status_updated.emit(f"垂直翻转增强失败: {str(e)}")
-                            
-                        if params.get('rotate'):
-                            try:
-                                aug = A.Compose([A.RandomRotate90(p=1.0)])
-                                augmented = aug(image=image)['image']
-                                aug_name = f'{os.path.splitext(image_name)[0]}_rotate{os.path.splitext(image_name)[1]}'
-                                aug_path = os.path.join(target_dir, aug_name)
-                                Image.fromarray(augmented).save(aug_path)
-                                success_count += 1
-                                generated_methods.append("旋转")
-                            except Exception as e:
-                                self.status_updated.emit(f"旋转增强失败: {str(e)}")
-                            
-                        if params.get('random_crop'):
-                            try:
-                                height = int(params['height'])
-                                width = int(params['width'])
-                                # 确保裁剪尺寸不超过图片尺寸
-                                crop_height = min(height, image.shape[0])
-                                crop_width = min(width, image.shape[1])
-                                aug = A.Compose([A.RandomCrop(height=crop_height, width=crop_width, p=1.0)])
-                                augmented = aug(image=image)['image']
-                                aug_name = f'{os.path.splitext(image_name)[0]}_crop{os.path.splitext(image_name)[1]}'
-                                aug_path = os.path.join(target_dir, aug_name)
-                                Image.fromarray(augmented).save(aug_path)
-                                success_count += 1
-                                generated_methods.append("裁剪")
-                            except Exception as e:
-                                self.status_updated.emit(f"裁剪增强失败: {str(e)}")
-                            
-                        if params.get('random_scale'):
-                            try:
-                                # 使用增强强度调整缩放范围
-                                aug = A.Compose([A.RandomScale(scale_limit=scale_limit, p=1.0)])
-                                augmented = aug(image=image)['image']
-                                aug_name = f'{os.path.splitext(image_name)[0]}_scale{os.path.splitext(image_name)[1]}'
-                                aug_path = os.path.join(target_dir, aug_name)
-                                Image.fromarray(augmented).save(aug_path)
-                                success_count += 1
-                                generated_methods.append("缩放")
-                            except Exception as e:
-                                self.status_updated.emit(f"缩放增强失败: {str(e)}")
-                        
-                        # 单独处理亮度增强 - 使用PIL直接实现
+                    # 使用组合增强处理
+                    aug = self._get_augmentation_with_intensity(augmentation_level, aug_intensity)
+                    # 为每张图片生成2个增强版本
+                    for j in range(2):
+                        if self._stop_preprocessing:
+                            return
                         try:
-                            # 强制启用亮度增强进行测试，使用PIL而不是albumentations
-                            pil_img = Image.fromarray(image)
-                            enhancer = ImageEnhance.Brightness(pil_img)
-                            # 使用固定的亮度因子1.5（增加50%亮度）
-                            brightened = enhancer.enhance(1.5)
-                            aug_name = f'{os.path.splitext(image_name)[0]}_bright{os.path.splitext(image_name)[1]}'
-                            aug_path = os.path.join(target_dir, aug_name)
-                            brightened.save(aug_path)
-                            success_count += 1
-                            generated_methods.append("亮度 (PIL强制)")
-                            self.status_updated.emit(f"亮度增强使用PIL强制应用成功")
-                        except Exception as e:
-                            self.status_updated.emit(f"亮度增强使用PIL强制应用失败: {str(e)}")
-                        
-                        # 单独处理对比度增强 - 使用PIL直接实现
-                        try:
-                            # 强制启用对比度增强进行测试，使用PIL而不是albumentations
-                            pil_img = Image.fromarray(image)
-                            enhancer = ImageEnhance.Contrast(pil_img)
-                            # 使用固定的对比度因子1.5（增加50%对比度）
-                            contrasted = enhancer.enhance(1.5)
-                            aug_name = f'{os.path.splitext(image_name)[0]}_contrast{os.path.splitext(image_name)[1]}'
-                            aug_path = os.path.join(target_dir, aug_name)
-                            contrasted.save(aug_path)
-                            success_count += 1
-                            generated_methods.append("对比度 (PIL强制)")
-                            self.status_updated.emit(f"对比度增强使用PIL强制应用成功")
-                        except Exception as e:
-                            self.status_updated.emit(f"对比度增强使用PIL强制应用失败: {str(e)}")
-                                
-                        if params.get('noise'):
-                            try:
-                                # 使用增强强度调整噪声增强效果
-                                aug = A.Compose([A.GaussNoise(var_limit=(noise_limit_min, noise_limit_max), p=1.0)])
-                                augmented = aug(image=image)['image']
-                                aug_name = f'{os.path.splitext(image_name)[0]}_noise{os.path.splitext(image_name)[1]}'
-                                aug_path = os.path.join(target_dir, aug_name)
-                                Image.fromarray(augmented).save(aug_path)
-                                success_count += 1
-                                generated_methods.append("噪声")
-                            except Exception as e:
-                                self.status_updated.emit(f"噪声增强失败: {str(e)}")
-                            
-                        if params.get('blur'):
-                            try:
-                                # 使用增强强度调整模糊增强效果
-                                aug = A.Compose([A.GaussianBlur(blur_limit=blur_limit, p=1.0)])
-                                augmented = aug(image=image)['image']
-                                aug_name = f'{os.path.splitext(image_name)[0]}_blur{os.path.splitext(image_name)[1]}'
-                                aug_path = os.path.join(target_dir, aug_name)
-                                Image.fromarray(augmented).save(aug_path)
-                                success_count += 1
-                                generated_methods.append("模糊")
-                            except Exception as e:
-                                self.status_updated.emit(f"模糊增强失败: {str(e)}")
-                            
-                        if params.get('hue'):
-                            try:
-                                # 使用增强强度调整色相增强效果
-                                aug = A.Compose([A.HueSaturationValue(
-                                    hue_shift_limit=hue_shift_limit, 
-                                    sat_shift_limit=sat_val_limit, 
-                                    val_shift_limit=sat_val_limit, 
-                                    p=1.0
-                                )])
-                                augmented = aug(image=image)['image']
-                                aug_name = f'{os.path.splitext(image_name)[0]}_hue{os.path.splitext(image_name)[1]}'
-                                aug_path = os.path.join(target_dir, aug_name)
-                                Image.fromarray(augmented).save(aug_path)
-                                success_count += 1
-                                generated_methods.append("色相")
-                            except Exception as e:
-                                self.status_updated.emit(f"色相增强失败: {str(e)}")
-                                
-                        if i == 0:  # 仅对第一张图片记录
-                            self.status_updated.emit(f"成功应用 {success_count} 种增强方法: {', '.join(generated_methods)}")
-                    else:
-                        # 组合模式：使用预定义的增强配置但应用增强强度调整
-                        aug = self._get_augmentation_with_intensity(augmentation_level, aug_intensity)
-                        for j in range(3):  # 每张图片生成3个增强版本
-                            if self._stop_preprocessing:
-                                return
                             augmented = aug(image=image)['image']
                             aug_name = f'{os.path.splitext(image_name)[0]}_aug_{j}{os.path.splitext(image_name)[1]}'
                             aug_path = os.path.join(target_dir, aug_name)
-                            Image.fromarray(augmented).save(aug_path)
+                            # 只有当增强图片不存在时才保存
+                            if not os.path.exists(aug_path):
+                                Image.fromarray(augmented).save(aug_path)
+                                processed_count += 1
+                            self.status_updated.emit(f"对 {image_name} 应用了组合增强 #{j+1}")
+                        except Exception as e:
+                            self.status_updated.emit(f"组合增强 #{j+1} 失败: {str(e)}")
                 
                 # 更新进度
                 progress = int(progress_start + ((i + 1) / total_images) * (progress_end - progress_start))
@@ -816,7 +1103,9 @@ class ImagePreprocessor(QObject):
             except Exception as e:
                 import traceback
                 self.status_updated.emit(f'处理数据集图片 {image_name} 时出错: {str(e)}\n{traceback.format_exc()}')
-                
+        
+        self.status_updated.emit(f'完成数据集处理，共处理 {processed_count} 张图片')
+
     def _get_augmentation_with_intensity(self, level: str, intensity: float) -> A.Compose:
         """根据增强级别和强度获取相应的增强配置"""
         # 根据增强强度调整各增强参数

@@ -1,9 +1,10 @@
 {
-    "default_source_folder": "E:/PIC_SLM/TEST/SOURCE3",
+    "default_source_folder": "E:/PIC_SLM/TEST/SOURCE2",
     "default_output_folder": "E:/PIC_SLM/TEST/OUTPUT2",
     "default_model_file": "F:/Qsync/00.AI_PROJECT/图片分类模型训练/C1/models/saved_models/EfficientNetB0_best.pth",
     "default_class_info_file": "F:/Qsync/00.AI_PROJECT/图片分类模型训练/C1/models/saved_models/class_info.json",
     "default_model_eval_dir": "f:\\Qsync\\00.AI_PROJECT\\图片分类模型训练\\C1\\src\\..\\models\\saved_models",
+    "default_model_save_dir": "f:\\Qsync\\00.AI_PROJECT\\图片分类模型训练\\C1\\src\\..\\models\\saved_models",
     "default_classes": [
         "Missing_hole",
         "Mouse_bite",
@@ -11,6 +12,5 @@
         "Short",
         "Spur",
         "Spurious_copper"
-    ],
-    "default_model_save_dir": "f:\\Qsync\\00.AI_PROJECT\\图片分类模型训练\\C1\\src\\..\\models\\saved_models"
+    ]
 }
