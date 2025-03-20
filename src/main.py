@@ -236,11 +236,34 @@ def main():
     worker.model_trainer.training_error.connect(lambda msg: QMessageBox.critical(window, '错误', msg))
     
     # 确保评估标签页存在并正确连接
-    if hasattr(window, 'evaluation_tab') and hasattr(window.evaluation_tab, 'update_training_visualization'):
-        print("连接训练可视化信号...")  # 添加调试信息
-        worker.model_trainer.epoch_finished.connect(window.evaluation_tab.update_training_visualization)
+    if hasattr(window, 'evaluation_tab'):
+        if hasattr(window.evaluation_tab, 'update_training_visualization'):
+            print("连接训练可视化信号（传统方式）...")
+            worker.model_trainer.epoch_finished.connect(window.evaluation_tab.update_training_visualization)
+        
+        # 添加新增信号的连接
+        if hasattr(worker.model_trainer, 'metrics_updated'):
+            print("连接实时指标更新信号...")
+            worker.model_trainer.metrics_updated.connect(window.evaluation_tab.update_training_visualization)
+        
+        if hasattr(worker.model_trainer, 'tensorboard_updated') and hasattr(window.evaluation_tab, 'tensorboard_widget'):
+            print("连接TensorBoard更新信号...")
+            # 如果TensorBoardWidget支持接收tensorboard_updated信号，将其连接
+            if hasattr(window.evaluation_tab.tensorboard_widget, 'update_tensorboard'):
+                worker.model_trainer.tensorboard_updated.connect(
+                    window.evaluation_tab.tensorboard_widget.update_tensorboard)
+        
+        # 使用新的setup_trainer方法直接连接DetectionTrainer信号
+        if hasattr(window.evaluation_tab, 'setup_trainer'):
+            print("正在设置训练器的直接连接...")
+            # 确保在训练开始时调用setup_trainer
+            window.training_started.connect(
+                lambda: window.evaluation_tab.setup_trainer(worker.model_trainer.detection_trainer)
+                if worker.model_trainer.detection_trainer is not None
+                else print("检测训练器尚未初始化，将在训练开始时自动连接")
+            )
     else:
-        print("警告: 无法连接训练可视化信号，evaluation_tab 或 update_training_visualization 方法不存在")
+        print("警告: 无法连接训练可视化信号，evaluation_tab不存在")
     
     # 添加模型下载失败信号连接
     if hasattr(window, 'training_tab') and hasattr(window.training_tab, 'on_model_download_failed'):

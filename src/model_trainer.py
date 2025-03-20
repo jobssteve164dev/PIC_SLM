@@ -708,6 +708,9 @@ class ModelTrainer(QObject):
     model_download_failed = pyqtSignal(str, str)  # 模型名称，下载链接
     # 添加训练停止信号
     training_stopped = pyqtSignal()
+    # 添加对应DetectionTrainer的信号
+    metrics_updated = pyqtSignal(dict)
+    tensorboard_updated = pyqtSignal(str, float, int)
 
     def __init__(self):
         super().__init__()
@@ -741,6 +744,11 @@ class ModelTrainer(QObject):
                 self.detection_trainer.training_error.connect(self.training_error)
                 self.detection_trainer.epoch_finished.connect(self.epoch_finished)
                 self.detection_trainer.model_download_failed.connect(self.model_download_failed)
+                self.detection_trainer.training_stopped.connect(self.training_stopped)
+                
+                # 连接新增的指标更新信号
+                self.detection_trainer.metrics_updated.connect(self.metrics_updated)
+                self.detection_trainer.tensorboard_updated.connect(self.tensorboard_updated)
                 
                 # 启动训练
                 self.detection_trainer.train_model(config)

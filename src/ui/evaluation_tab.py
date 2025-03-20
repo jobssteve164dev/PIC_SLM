@@ -381,25 +381,48 @@ class EvaluationTab(BaseTab):
     def update_training_visualization(self, data):
         """更新训练可视化"""
         try:
-            print(f"收到训练数据更新: {data}")  # 添加调试信息
             if hasattr(self, 'training_visualization'):
-                # 准备数据
-                epoch_results = {
-                    'phase': data['phase'],
-                    'epoch': data['epoch'],
-                    'loss': float(data['loss']),  # 确保转换为浮点数
-                    'accuracy': float(data['accuracy'])  # 确保转换为浮点数
+                # 检查是否存储了上一次的训练和验证损失值
+                if not hasattr(self, 'last_train_loss'):
+                    self.last_train_loss = 0.0
+                if not hasattr(self, 'last_val_loss'):
+                    self.last_val_loss = 0.0
+                if not hasattr(self, 'last_val_map'):
+                    self.last_val_map = 0.0
+                
+                # 数据格式转换
+                is_train = data.get('phase') == 'train'
+                epoch = data.get('epoch', 0)
+                loss = float(data.get('loss', 0))
+                accuracy = float(data.get('accuracy', 0))
+                learning_rate = float(data.get('learning_rate', 0.001))
+                
+                # 更新对应的损失值
+                if is_train:
+                    self.last_train_loss = loss
+                else:
+                    self.last_val_loss = loss
+                    self.last_val_map = accuracy  # 对于检测模型，accuracy通常是mAP
+                
+                # 构建TrainingVisualizationWidget期望的指标格式
+                metrics = {
+                    'epoch': epoch,
+                    'train_loss': self.last_train_loss,
+                    'val_loss': self.last_val_loss,
+                    'val_map': self.last_val_map,
+                    'learning_rate': learning_rate
                 }
                 
                 # 更新可视化
-                self.training_visualization.update_plots(epoch_results)
+                self.training_visualization.update_metrics(metrics)
                 
                 # 更新状态标签
-                phase = "训练" if data['phase'] == 'train' else "验证"
-                loss = data['loss']
-                acc = data['accuracy']
+                phase_text = "训练" if is_train else "验证"
+                self.training_status_label.setText(
+                    f"轮次 {epoch}: {phase_text}损失 = {loss:.4f}, "
+                    f"{'训练准确率' if is_train else 'mAP'} = {accuracy:.4f}"
+                )
                 
-                self.training_status_label.setText(f"轮次 {data['epoch']}: {phase}损失 = {loss:.4f}, {phase}准确率 = {acc:.4f}")
         except Exception as e:
             import traceback
             print(f"更新训练可视化时出错: {str(e)}")
@@ -408,6 +431,15 @@ class EvaluationTab(BaseTab):
     def reset_training_visualization(self):
         """重置训练可视化"""
         if hasattr(self, 'training_visualization'):
+            # 重置数据存储
+            if hasattr(self, 'last_train_loss'):
+                self.last_train_loss = 0.0
+            if hasattr(self, 'last_val_loss'):
+                self.last_val_loss = 0.0
+            if hasattr(self, 'last_val_map'):
+                self.last_val_map = 0.0
+            
+            # 调用TrainingVisualizationWidget的reset_plots方法
             self.training_visualization.reset_plots()
             self.training_status_label.setText("等待训练开始...")
     
@@ -445,3 +477,19 @@ class EvaluationTab(BaseTab):
             print(f"EvaluationTab: 已应用TensorBoard日志目录: {log_dir}")
         else:
             print(f"EvaluationTab: TensorBoard日志目录无效或不存在: {log_dir}") 
+
+    def setup_trainer(self, trainer):
+        """设置训练器并连接信号"""
+        try:
+            if hasattr(self, 'training_visualization') and trainer is not None:
+                # 直接连接TrainingVisualizationWidget和训练器
+                self.training_visualization.connect_signals(trainer)
+                
+                # 记录设置成功的日志
+                print(f"已成功设置训练器并连接信号到训练可视化组件")
+                return True
+        except Exception as e:
+            import traceback
+            print(f"设置训练器时出错: {str(e)}")
+            print(traceback.format_exc())
+            return False 

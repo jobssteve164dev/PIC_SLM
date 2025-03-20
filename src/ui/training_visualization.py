@@ -343,6 +343,8 @@ class TensorBoardWidget(QWidget):
         super().__init__(parent)
         self.tensorboard_dir = None
         self.init_ui()
+        self.logger = logging.getLogger(__name__)
+        self.logger.setLevel(logging.INFO)
         
     def init_ui(self):
         layout = QVBoxLayout(self)
@@ -376,6 +378,30 @@ class TensorBoardWidget(QWidget):
         layout.addWidget(usage_label)
         
         layout.addStretch()
+        
+    def update_tensorboard(self, metric_name, value, step):
+        """接收并处理来自训练器的TensorBoard更新信号"""
+        try:
+            self.logger.info(f"接收到TensorBoard更新: {metric_name}={value:.4f} (step={step})")
+            
+            # 更新状态标签，显示最近的指标更新
+            self.status_label.setText(
+                f"TensorBoard日志目录: {self.tensorboard_dir or '未设置'}\n"
+                f"最新指标: {metric_name} = {value:.4f} (step={step})"
+            )
+            
+            # 如果TensorBoard目录未设置，尝试使用默认目录
+            if not self.tensorboard_dir:
+                default_dir = os.path.join('runs', 'detection')
+                if os.path.exists(default_dir):
+                    self.set_tensorboard_dir(default_dir)
+                    self.logger.info(f"自动设置TensorBoard目录: {default_dir}")
+            
+            # 启用启动按钮
+            self.launch_btn.setEnabled(self.tensorboard_dir is not None)
+            
+        except Exception as e:
+            self.logger.error(f"处理TensorBoard更新时出错: {str(e)}")
         
     def set_tensorboard_dir(self, directory):
         """设置TensorBoard日志目录"""

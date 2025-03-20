@@ -1375,3 +1375,33 @@ class TrainingTab(BaseTab):
         # 更新训练状态标签
         if hasattr(self, 'training_status_label'):
             self.training_status_label.setText(message) 
+
+    def start_training(self):
+        """开始训练模型"""
+        try:
+            if not self.check_training_ready():
+                return
+                
+            # 禁用开始按钮，启用停止按钮
+            self.start_btn.setEnabled(False)
+            self.stop_btn.setEnabled(True)
+            
+            # 创建训练配置
+            config = self.get_training_params()
+            
+            # 发射训练开始信号，携带配置信息
+            self.update_status("准备开始训练...")
+            
+            # 重置图表
+            if hasattr(self.main_window, 'evaluation_tab') and hasattr(self.main_window.evaluation_tab, 'reset_training_visualization'):
+                self.main_window.evaluation_tab.reset_training_visualization()
+                
+            # 通知主窗口训练已开始，并传递配置
+            self.training_started.emit()
+            
+        except Exception as e:
+            QMessageBox.critical(self, "错误", f"启动训练失败: {str(e)}")
+            self.start_btn.setEnabled(True)
+            self.stop_btn.setEnabled(False)
+            import traceback
+            traceback.print_exc()
