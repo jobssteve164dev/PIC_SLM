@@ -1343,24 +1343,30 @@ class TrainingTab(BaseTab):
 
     def goto_annotation_tab(self):
         """切换到标注标签页"""
-        if self.main_window and hasattr(self.main_window, 'tabs'):
-            annotation_tab_index = -1
-            for i in range(self.main_window.tabs.count()):
-                if self.main_window.tabs.tabText(i) == "图像标注":
-                    annotation_tab_index = i
-                    break
-            
-            if annotation_tab_index >= 0:
-                self.main_window.tabs.setCurrentIndex(annotation_tab_index)
-                # 如果有标注标签页的引用，尝试切换到目标检测模式
-                if hasattr(self.main_window, 'annotation_tab'):
-                    # 检查是否有mode_radio_group
-                    if hasattr(self.main_window.annotation_tab, 'mode_radio_group'):
-                        # 获取按钮列表
-                        buttons = self.main_window.annotation_tab.mode_radio_group.buttons()
-                        # 选中目标检测按钮(通常是第二个按钮)
-                        if len(buttons) >= 2:
-                            buttons[1].setChecked(True)
+        try:
+            if self.main_window and hasattr(self.main_window, 'tabs'):
+                annotation_tab_index = -1
+                for i in range(self.main_window.tabs.count()):
+                    if self.main_window.tabs.tabText(i) == "图像标注":
+                        annotation_tab_index = i
+                        break
+                
+                if annotation_tab_index >= 0:
+                    self.main_window.tabs.setCurrentIndex(annotation_tab_index)
+                    # 如果有标注标签页的引用，尝试切换到目标检测模式
+                    if hasattr(self.main_window, 'annotation_tab'):
+                        # 使用正确的属性名：mode_button_group 而不是 mode_radio_group
+                        if hasattr(self.main_window.annotation_tab, 'mode_button_group'):
+                            # 获取按钮
+                            detection_radio = self.main_window.annotation_tab.detection_radio
+                            if detection_radio:
+                                detection_radio.setChecked(True)
+                                # 手动触发模式切换事件
+                                self.main_window.annotation_tab.on_mode_changed(detection_radio)
+        except Exception as e:
+            print(f"切换到标注标签页时出错: {str(e)}")
+            import traceback
+            traceback.print_exc()
 
     def update_status(self, message):
         """更新状态信息"""

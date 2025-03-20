@@ -419,96 +419,116 @@ class AnnotationCanvas(QWidget):
         self.update()
         
     def save_annotations(self, output_folder, format_type='voc'):
-        """保存标注结果"""
-        if not self.image_path or not self.boxes:
+        """保存标注结果到指定文件夹"""
+        if not self.image_path:
+            print("错误: 没有图像可供标注")
+            return False
+            
+        image_name = os.path.basename(self.image_path)
+        base_name = os.path.splitext(image_name)[0]
+        
+        # 获取图像尺寸
+        if self.pixmap:
+            image_width = self.pixmap.width()
+            image_height = self.pixmap.height()
+        else:
+            print("错误: 无法获取图像尺寸")
             return False
             
         try:
-            # 创建输出文件夹
-            os.makedirs(output_folder, exist_ok=True)
+            # 确保boxes属性存在
+            if not hasattr(self, 'boxes'):
+                self.boxes = []
+                print("警告: 标注框列表不存在，已初始化为空列表")
             
-            # 获取图像信息
-            image_name = os.path.basename(self.image_path)
-            image_width = self.pixmap.width()
-            image_height = self.pixmap.height()
+            # 根据格式保存
+            if format_type.lower() == 'voc':
+                result = self.save_voc_format(output_folder, base_name, image_width, image_height)
+            else:  # 默认为YOLO格式
+                result = self.save_yolo_format(output_folder, base_name, image_width, image_height)
             
-            if format_type == 'voc':
-                # 保存为VOC格式
-                self.save_voc_format(output_folder, image_name, image_width, image_height)
-            else:
-                # 保存为YOLO格式
-                self.save_yolo_format(output_folder, image_name, image_width, image_height)
-                
-            return True
+            # 打印保存路径信息，便于调试
+            print(f"标注文件已保存到: {output_folder}")
+            print(f"图像名称: {image_name}, 基本名称: {base_name}")
+            print(f"保存格式: {format_type}, 图像尺寸: {image_width}x{image_height}")
+            print(f"标注框数量: {len(self.boxes)}")
             
+            return result
         except Exception as e:
-            print(f"保存标注失败: {str(e)}")
+            print(f"保存标注结果时出错: {str(e)}")
+            import traceback
+            traceback.print_exc()
             return False
             
-    def save_voc_format(self, output_folder, image_name, image_width, image_height):
-        """保存为VOC格式"""
-        # 创建XML文件
-        root = ET.Element('annotation')
+    def save_voc_format(self, output_folder, base_name, image_width, image_height):
+        """保存为VOC格式的XML文件"""
+        # 创建输出文件夹
+        os.makedirs(output_folder, exist_ok=True)
+        
+        # 设置XML文件路径
+        xml_path = os.path.join(output_folder, f"{base_name}.xml")
+        
+        # 创建XML根元素
+        root = ET.Element("annotation")
         
         # 添加基本信息
-        folder = ET.SubElement(root, 'folder')
-        folder.text = os.path.basename(output_folder)
+        ET.SubElement(root, "folder").text = os.path.basename(os.path.dirname(self.image_path))
+        ET.SubElement(root, "filename").text = os.path.basename(self.image_path)
+        ET.SubElement(root, "path").text = self.image_path
         
-        filename = ET.SubElement(root, 'filename')
-        filename.text = image_name
+        # 添加源信息
+        source = ET.SubElement(root, "source")
+        ET.SubElement(source, "database").text = "Unknown"
         
-        path = ET.SubElement(root, 'path')
-        path.text = self.image_path
+        # 添加大小信息
+        size = ET.SubElement(root, "size")
+        ET.SubElement(size, "width").text = str(image_width)
+        ET.SubElement(size, "height").text = str(image_height)
+        ET.SubElement(size, "depth").text = "3"
         
-        size = ET.SubElement(root, 'size')
-        width = ET.SubElement(size, 'width')
-        width.text = str(image_width)
-        height = ET.SubElement(size, 'height')
-        height.text = str(image_height)
-        depth = ET.SubElement(size, 'depth')
-        depth.text = '3'
+        # 添加分割信息
+        ET.SubElement(root, "segmented").text = "0"
         
-        # 添加标注框
-        for rect, label, _ in self.boxes:
-            obj = ET.SubElement(root, 'object')
+        # 添加每个对象
+        for rect, label, color in self.boxes:
+            obj = ET.SubElement(root, "object")
+            ET.SubElement(obj, "name").text = label
+            ET.SubElement(obj, "pose").text = "Unspecified"
+            ET.SubElement(obj, "truncated").text = "0"
+            ET.SubElement(obj, "difficult").text = "0"
             
-            name = ET.SubElement(obj, 'name')
-            name.text = label
-            
-            pose = ET.SubElement(obj, 'pose')
-            pose.text = 'Unspecified'
-            
-            truncated = ET.SubElement(obj, 'truncated')
-            truncated.text = '0'
-            
-            difficult = ET.SubElement(obj, 'difficult')
-            difficult.text = '0'
-            
-            bndbox = ET.SubElement(obj, 'bndbox')
-            xmin = ET.SubElement(bndbox, 'xmin')
-            xmin.text = str(int(rect.x()))
-            ymin = ET.SubElement(bndbox, 'ymin')
-            ymin.text = str(int(rect.y()))
-            xmax = ET.SubElement(bndbox, 'xmax')
-            xmax.text = str(int(rect.x() + rect.width()))
-            ymax = ET.SubElement(bndbox, 'ymax')
-            ymax.text = str(int(rect.y() + rect.height()))
-            
+            # 添加边界框信息
+            bbox = ET.SubElement(obj, "bndbox")
+            ET.SubElement(bbox, "xmin").text = str(int(rect.x()))
+            ET.SubElement(bbox, "ymin").text = str(int(rect.y()))
+            ET.SubElement(bbox, "xmax").text = str(int(rect.x() + rect.width()))
+            ET.SubElement(bbox, "ymax").text = str(int(rect.y() + rect.height()))
+        
         # 保存XML文件
-        xml_name = os.path.splitext(image_name)[0] + '.xml'
-        xml_path = os.path.join(output_folder, xml_name)
         tree = ET.ElementTree(root)
         tree.write(xml_path, encoding='utf-8', xml_declaration=True)
         
-    def save_yolo_format(self, output_folder, image_name, image_width, image_height):
-        """保存为YOLO格式"""
-        # 创建标签文件
-        txt_name = os.path.splitext(image_name)[0] + '.txt'
-        txt_path = os.path.join(output_folder, txt_name)
+        print(f"VOC格式标注文件已保存到: {xml_path}")
+        return True
         
-        with open(txt_path, 'w', encoding='utf-8') as f:
-            for rect, label, _ in self.boxes:
-                # 转换为YOLO格式（归一化坐标）
+    def save_yolo_format(self, output_folder, base_name, image_width, image_height):
+        """保存为YOLO格式的TXT文件"""
+        # 创建输出文件夹
+        os.makedirs(output_folder, exist_ok=True)
+        
+        # 设置TXT文件路径
+        txt_path = os.path.join(output_folder, f"{base_name}.txt")
+        
+        # 如果没有标注框，创建一个空文件表示无标注
+        if not self.boxes:
+            open(txt_path, 'w').close()
+            print(f"创建了空的YOLO格式标注文件: {txt_path} (无标注)")
+            return True
+            
+        # 写入标注
+        with open(txt_path, 'w') as f:
+            for rect, label, color in self.boxes:
+                # 计算YOLO格式的参数
                 x_center = (rect.x() + rect.width() / 2) / image_width
                 y_center = (rect.y() + rect.height() / 2) / image_height
                 width = rect.width() / image_width
@@ -516,7 +536,10 @@ class AnnotationCanvas(QWidget):
                 
                 # 写入标签文件
                 f.write(f"{label} {x_center} {y_center} {width} {height}\n")
-                
+        
+        print(f"YOLO格式标注文件已保存到: {txt_path}")
+        return True
+        
     def box_at_position(self, pos):
         """获取指定位置的标注框索引"""
         if not self.pixmap or self.pixmap.isNull():
@@ -621,6 +644,8 @@ class AnnotationTab(BaseTab):
         self.processed_folder = ""  # 处理后的图片文件夹
         self.detection_folder = ""  # 目标检测图像文件夹
         self.annotation_folder = ""  # 标注输出文件夹
+        self.image_files = []  # 确保图像文件列表一开始就被初始化
+        self.current_index = -1  # 当前图像索引初始化
         
         # 先初始化UI
         self.init_ui()
@@ -1005,6 +1030,24 @@ class AnnotationTab(BaseTab):
         # 添加分割器到主布局
         main_layout.addWidget(splitter)
         
+        # 添加保存选项组
+        save_options_group = QGroupBox("保存选项")
+        save_options_layout = QVBoxLayout()
+        
+        # 添加保存到特定标注文件夹的勾选框
+        self.save_to_annotations_folder_checkbox = QCheckBox("保存标注文件到标注文件夹")
+        self.save_to_annotations_folder_checkbox.setChecked(True)  # 默认选中
+        self.save_to_annotations_folder_checkbox.setToolTip("勾选后，标注文件将保存到默认输出文件夹中的annotations子文件夹，否则保存在图片所在目录")
+        save_options_layout.addWidget(self.save_to_annotations_folder_checkbox)
+        
+        # 添加说明文本
+        save_info_label = QLabel("勾选：标注文件将保存到默认输出文件夹的annotations子文件夹\n取消勾选：标注文件将保存在图片所在的目录")
+        save_info_label.setStyleSheet("color: #666; font-size: 11px;")
+        save_options_layout.addWidget(save_info_label)
+        
+        save_options_group.setLayout(save_options_layout)
+        main_layout.addWidget(save_options_group)
+        
         # 状态标签
         self.detection_status_label = QLabel("就绪")
         main_layout.addWidget(self.detection_status_label)
@@ -1030,32 +1073,54 @@ class AnnotationTab(BaseTab):
         print(f"  annotation_folder = {self.annotation_folder}")
         
         # 自动设置默认路径
-        if self.processed_folder:
-            print(f"设置detection_path_edit文本为: {self.processed_folder}")
-            self.detection_path_edit.setText(self.processed_folder)
-            
-        # 如果已设置处理后文件夹，自动加载图像
-        if self.processed_folder:
-            print(f"自动加载图像文件，文件夹: {self.processed_folder}")
-            self.load_image_files(self.processed_folder)
-            self.check_detection_ready()
+        try:
+            if hasattr(self, 'processed_folder') and self.processed_folder:
+                print(f"设置detection_path_edit文本为: {self.processed_folder}")
+                if hasattr(self, 'detection_path_edit'):
+                    self.detection_path_edit.setText(self.processed_folder)
+                
+            # 如果已设置处理后文件夹，自动加载图像
+            if hasattr(self, 'processed_folder') and self.processed_folder:
+                print(f"自动加载图像文件，文件夹: {self.processed_folder}")
+                self.load_image_files(self.processed_folder)
+                if hasattr(self, 'check_detection_ready'):
+                    self.check_detection_ready()
+        except Exception as e:
+            print(f"初始化目标检测UI时出错: {str(e)}")
+            import traceback
+            traceback.print_exc()
         
     def on_mode_changed(self, button):
         """标注模式改变时调用"""
-        if button == self.classification_radio:
-            self.stacked_widget.setCurrentIndex(0)
-        else:
-            # 切换到目标检测模式时重新应用路径
-            self.stacked_widget.setCurrentIndex(1)
-            
-            # 确保在切换到目标检测模式时应用默认路径
-            if self.processed_folder:
-                self.detection_path_edit.setText(self.processed_folder)
+        try:
+            if button == self.classification_radio:
+                self.stacked_widget.setCurrentIndex(0)
+            else:
+                # 切换到目标检测模式时重新应用路径
+                self.stacked_widget.setCurrentIndex(1)
                 
-            # 如果已设置处理后文件夹但图像列表为空，则尝试加载图像
-            if self.processed_folder and len(self.image_files) == 0:
-                self.load_image_files(self.processed_folder)
-                self.check_detection_ready()
+                # 确保图像文件列表已初始化
+                if not hasattr(self, 'image_files'):
+                    self.image_files = []
+                
+                # 确保在切换到目标检测模式时应用默认路径
+                if hasattr(self, 'processed_folder') and self.processed_folder:
+                    if hasattr(self, 'detection_path_edit'):
+                        self.detection_path_edit.setText(self.processed_folder)
+                    
+                # 如果已设置处理后文件夹但图像列表为空，则尝试加载图像
+                if hasattr(self, 'processed_folder') and self.processed_folder and len(self.image_files) == 0:
+                    self.load_image_files(self.processed_folder)
+                    if hasattr(self, 'check_detection_ready'):
+                        self.check_detection_ready()
+        except Exception as e:
+            print(f"切换标注模式时出错: {str(e)}")
+            import traceback
+            traceback.print_exc()
+            # 出错时恢复到分类模式
+            if hasattr(self, 'stacked_widget') and hasattr(self, 'classification_radio'):
+                self.stacked_widget.setCurrentIndex(0)
+                self.classification_radio.setChecked(True)
     
     def select_folder(self, title, path_edit, check_callback):
         """通用的文件夹选择方法"""
@@ -1099,15 +1164,17 @@ class AnnotationTab(BaseTab):
     
     def select_detection_folder(self):
         """选择目标检测图像文件夹"""
-        self.select_folder(
-            "选择图像文件夹",
-            self.detection_path_edit,
-            lambda: [
-                setattr(self, 'detection_folder', self.detection_path_edit.text()),
-                self.load_image_files(self.detection_path_edit.text()), 
+        try:
+            folder = QFileDialog.getExistingDirectory(self, "选择图像文件夹")
+            if folder:
+                self.detection_path_edit.setText(folder)
+                self.detection_folder = folder
+                self.load_image_files(folder)
                 self.check_detection_ready()
-            ]
-        )
+        except Exception as e:
+            print(f"选择目标检测文件夹时出错: {str(e)}")
+            import traceback
+            traceback.print_exc()
     
     def select_output_folder(self):
         """选择标注输出文件夹"""
@@ -1128,17 +1195,32 @@ class AnnotationTab(BaseTab):
     
     def check_detection_ready(self):
         """检查是否可以开始目标检测标注"""
-        has_image_folder = bool(self.detection_path_edit.text())
-        has_classes = self.detection_class_list.count() > 0
-        
-        # 更新标签下拉框
-        if has_classes:
-            self.update_label_combo()
+        try:
+            # 检查必要的控件是否存在
+            if not hasattr(self, 'detection_path_edit') or not hasattr(self, 'detection_class_list') or \
+               not hasattr(self, 'save_btn') or not hasattr(self, 'prev_btn') or not hasattr(self, 'next_btn'):
+                print("检查标注准备状态：缺少必要的UI控件")
+                return
             
-        # 更新按钮状态
-        self.save_btn.setEnabled(has_image_folder and has_classes and self.current_index >= 0)
-        self.prev_btn.setEnabled(has_image_folder and self.current_index > 0)
-        self.next_btn.setEnabled(has_image_folder and self.current_index < len(self.image_files) - 1)
+            has_image_folder = bool(self.detection_path_edit.text())
+            has_classes = self.detection_class_list.count() > 0
+            
+            # 安全检查image_files
+            if not hasattr(self, 'image_files'):
+                self.image_files = []
+            
+            # 更新标签下拉框
+            if has_classes:
+                self.update_label_combo()
+                
+            # 更新按钮状态
+            self.save_btn.setEnabled(has_image_folder and has_classes and self.current_index >= 0)
+            self.prev_btn.setEnabled(has_image_folder and self.current_index > 0)
+            self.next_btn.setEnabled(has_image_folder and self.current_index < len(self.image_files) - 1)
+        except Exception as e:
+            print(f"检查标注准备状态时出错: {str(e)}")
+            import traceback
+            traceback.print_exc()
     
     def add_defect_class(self):
         """添加缺陷类别"""
@@ -1243,41 +1325,82 @@ class AnnotationTab(BaseTab):
             
     def load_image_files(self, folder):
         """加载图像文件列表"""
-        self.image_files = []
+        if not folder or not os.path.exists(folder):
+            print(f"文件夹不存在或无效: {folder}")
+            self.update_detection_status("错误: 文件夹不存在或无效")
+            return
         
-        # 支持的图像格式
-        for ext in ['*.jpg', '*.jpeg', '*.png', '*.bmp']:
-            pattern = os.path.join(folder, ext)
-            self.image_files.extend(glob.glob(pattern))
+        try:
+            self.image_files = []
             
-        # 更新图像列表
-        self.image_list_widget.clear()
-        for image_file in self.image_files:
-            self.image_list_widget.addItem(os.path.basename(image_file))
+            # 支持的图像格式
+            for ext in ['*.jpg', '*.jpeg', '*.png', '*.bmp']:
+                pattern = os.path.join(folder, ext)
+                found_files = glob.glob(pattern)
+                print(f"使用模式 {pattern} 找到 {len(found_files)} 个文件")
+                self.image_files.extend(found_files)
+                
+                # 同时查找大写扩展名
+                upper_pattern = os.path.join(folder, ext.upper())
+                found_upper = glob.glob(upper_pattern)
+                print(f"使用模式 {upper_pattern} 找到 {len(found_upper)} 个文件")
+                self.image_files.extend(found_upper)
             
-        # 如果有图像，选择第一张
-        if self.image_files:
-            self.current_index = 0
-            self.image_list_widget.setCurrentRow(0)
-            self.update_detection_status(f"已加载 {len(self.image_files)} 张图像")
-        else:
-            self.current_index = -1
-            self.update_detection_status("未找到图像文件")
+            # 更新图像列表
+            if hasattr(self, 'image_list_widget'):
+                self.image_list_widget.clear()
+                for image_file in self.image_files:
+                    self.image_list_widget.addItem(os.path.basename(image_file))
+                
+            # 如果有图像，选择第一张
+            if self.image_files:
+                self.current_index = 0
+                if hasattr(self, 'image_list_widget'):
+                    self.image_list_widget.setCurrentRow(0)
+                self.update_detection_status(f"已加载 {len(self.image_files)} 张图像")
+            else:
+                self.current_index = -1
+                self.update_detection_status("未找到图像文件")
+        except Exception as e:
+            print(f"加载图像文件时出错: {str(e)}")
+            import traceback
+            traceback.print_exc()
+            self.update_detection_status(f"加载图像文件出错: {str(e)}")
             
     def load_image(self, index):
         """加载指定索引的图像"""
-        if index < 0 or index >= len(self.image_files):
-            return
+        try:
+            # 检查image_files是否已初始化
+            if not hasattr(self, 'image_files') or self.image_files is None:
+                self.image_files = []
+                self.update_detection_status("图像列表尚未初始化")
+                return
+                
+            # 检查索引是否有效
+            if index < 0 or index >= len(self.image_files):
+                print(f"索引无效: {index}，有效范围: 0-{len(self.image_files)-1 if self.image_files else -1}")
+                return
+                
+            self.current_index = index
+            image_path = self.image_files[index]
             
-        self.current_index = index
-        image_path = self.image_files[index]
-        
-        # 加载图像到画布
-        if self.annotation_canvas.set_image(image_path):
-            self.update_detection_status(f"已加载图像: {os.path.basename(image_path)}")
-            self.check_detection_ready()
-        else:
-            self.update_detection_status(f"加载图像失败: {os.path.basename(image_path)}")
+            # 检查文件是否存在
+            if not os.path.exists(image_path):
+                self.update_detection_status(f"图像文件不存在: {os.path.basename(image_path)}")
+                return
+                
+            # 加载图像到画布
+            if hasattr(self, 'annotation_canvas') and self.annotation_canvas.set_image(image_path):
+                self.update_detection_status(f"已加载图像: {os.path.basename(image_path)}")
+                if hasattr(self, 'check_detection_ready'):
+                    self.check_detection_ready()
+            else:
+                self.update_detection_status(f"加载图像失败: {os.path.basename(image_path)}")
+        except Exception as e:
+            print(f"加载图像时出错: {str(e)}")
+            import traceback
+            traceback.print_exc()
+            self.update_detection_status(f"加载图像出错: {str(e)}")
             
     def prev_image(self):
         """加载上一张图像"""
@@ -1291,44 +1414,74 @@ class AnnotationTab(BaseTab):
             
     def update_label_combo(self):
         """更新标签下拉框"""
-        self.label_combo.clear()
-        
-        # 添加所有类别
-        for i in range(self.detection_class_list.count()):
-            self.label_combo.addItem(self.detection_class_list.item(i).text())
-            
-        # 如果有类别，设置当前标签
-        if self.label_combo.count() > 0:
-            self.annotation_canvas.set_current_label(self.label_combo.itemText(0))
+        try:
+            if hasattr(self, 'label_combo') and hasattr(self, 'detection_class_list'):
+                self.label_combo.clear()
+                
+                # 添加所有类别
+                for i in range(self.detection_class_list.count()):
+                    self.label_combo.addItem(self.detection_class_list.item(i).text())
+                    
+                # 如果有类别，设置当前标签
+                if self.label_combo.count() > 0 and hasattr(self, 'annotation_canvas'):
+                    self.annotation_canvas.set_current_label(self.label_combo.itemText(0))
+        except Exception as e:
+            print(f"更新标签下拉框时出错: {str(e)}")
+            import traceback
+            traceback.print_exc()
             
     def on_label_changed(self, label):
         """标签改变时调用"""
-        if label:
-            self.annotation_canvas.set_current_label(label)
+        try:
+            if label and hasattr(self, 'annotation_canvas'):
+                self.annotation_canvas.set_current_label(label)
+        except Exception as e:
+            print(f"更改标签时出错: {str(e)}")
+            import traceback
+            traceback.print_exc()
             
     def save_annotations(self):
         """保存当前图像的标注结果"""
-        # 使用默认输出文件夹中的annotations子文件夹
-        if not hasattr(self, 'main_window') or not hasattr(self.main_window, 'config'):
-            QMessageBox.warning(self, "错误", "无法获取默认输出文件夹设置")
-            return
+        try:
+            # 检查是否有图像加载
+            if not hasattr(self, 'image_files') or not self.image_files or self.current_index < 0 or self.current_index >= len(self.image_files):
+                QMessageBox.warning(self, "错误", "没有加载图像或图像索引无效")
+                return
             
-        default_output_folder = self.main_window.config.get('default_output_folder', '')
-        if not default_output_folder:
-            QMessageBox.warning(self, "错误", "请先在设置中配置默认输出文件夹")
-            return
-            
-        output_folder = os.path.join(default_output_folder, 'annotations')
-        os.makedirs(output_folder, exist_ok=True)
-            
-        # 保存标注
-        if self.annotation_canvas.save_annotations(output_folder, self.annotation_format):
-            self.update_detection_status(f"已保存标注结果: {os.path.basename(self.image_files[self.current_index])}")
-            
-            # 自动加载下一张图像
-            self.next_image()
-        else:
-            self.update_detection_status("保存标注结果失败")
+            # 确定保存位置
+            if hasattr(self, 'save_to_annotations_folder_checkbox') and self.save_to_annotations_folder_checkbox.isChecked():
+                # 使用默认输出文件夹中的annotations子文件夹
+                if not hasattr(self, 'main_window') or not hasattr(self.main_window, 'config'):
+                    QMessageBox.warning(self, "错误", "无法获取默认输出文件夹设置")
+                    return
+                    
+                default_output_folder = self.main_window.config.get('default_output_folder', '')
+                if not default_output_folder:
+                    QMessageBox.warning(self, "错误", "请先在设置中配置默认输出文件夹")
+                    return
+                    
+                output_folder = os.path.join(default_output_folder, 'annotations')
+                os.makedirs(output_folder, exist_ok=True)
+            else:
+                # 使用图像所在的文件夹
+                image_path = self.image_files[self.current_index]
+                output_folder = os.path.dirname(image_path)
+                
+            # 保存标注
+            if hasattr(self, 'annotation_canvas') and self.annotation_canvas.save_annotations(output_folder, self.annotation_format):
+                save_location = "标注文件夹" if (hasattr(self, 'save_to_annotations_folder_checkbox') and 
+                                          self.save_to_annotations_folder_checkbox.isChecked()) else "图片目录"
+                self.update_detection_status(f"已保存标注结果到{save_location}: {os.path.basename(self.image_files[self.current_index])}")
+                
+                # 自动加载下一张图像
+                self.next_image()
+            else:
+                self.update_detection_status("保存标注结果失败")
+        except Exception as e:
+            print(f"保存标注时出错: {str(e)}")
+            import traceback
+            traceback.print_exc()
+            QMessageBox.critical(self, "错误", f"保存标注时出错: {str(e)}")
             
     def undo_operation(self):
         """撤销操作"""
@@ -1348,14 +1501,16 @@ class AnnotationTab(BaseTab):
         self.update_detection_status(f"标注格式已设置为: {format_type}")
         
     def update_detection_status(self, message):
-        """更新目标检测状态标签"""
-        self.detection_status_label.setText(message)
+        """更新目标检测界面的状态信息"""
         try:
-            if hasattr(self, 'main_window') and self.main_window is not None:
-                self.main_window.update_status(message)
+            if hasattr(self, 'detection_status_label'):
+                self.detection_status_label.setText(message)
+            # 同时更新主窗口状态栏
+            self.update_status(message)
         except Exception as e:
-            print(f"更新主窗口状态时出错: {str(e)}")
-            
+            print(f"更新状态信息时出错: {str(e)}")
+            # 不再尝试更新UI，避免循环错误
+
     def update_status(self, message):
         """更新状态"""
         try:
@@ -1366,23 +1521,26 @@ class AnnotationTab(BaseTab):
 
     def apply_config(self, config):
         """应用配置设置"""
-        print(f"AnnotationTab.apply_config被调用，配置内容: {config}")
         try:
-            # 使用默认输出文件夹作为处理后文件夹和标注文件夹
+            print(f"AnnotationTab.apply_config被调用，配置内容: {config}")
+            
+            # 加载默认输出文件夹路径
             if 'default_output_folder' in config and config['default_output_folder']:
-                # 设置处理后文件夹
+                print(f"发现默认输出文件夹配置: {config['default_output_folder']}")
+                
+                # 设置分类标注相关路径
                 self.processed_folder = config['default_output_folder']
-                # 如果处理后文件夹输入框已创建，则设置文本
                 if hasattr(self, 'processed_path_edit'):
-                    self.processed_path_edit.setText(self.processed_folder)
-                # 如果目标检测路径输入框已创建，也设置相同的路径
+                    self.processed_path_edit.setText(config['default_output_folder'])
+                    
+                # 设置目标检测相关路径
                 if hasattr(self, 'detection_path_edit'):
-                    self.detection_path_edit.setText(self.processed_folder)
+                    self.detection_path_edit.setText(config['default_output_folder'])
                 
-                # 设置标注文件夹
-                self.annotation_folder = config['default_output_folder']
-                
-                print(f"使用默认输出文件夹设置处理后文件夹和标注文件夹: {self.processed_folder}")
+                # 更新是否设置标注输出文件夹勾选
+                if hasattr(self, 'save_to_annotations_folder_checkbox'):
+                    self.save_to_annotations_folder_checkbox.setChecked(True)
+                    print("已设置保存标注到标注文件夹的选项为选中状态")
             
             # 加载默认类别
             if 'default_classes' in config and config['default_classes']:

@@ -43,7 +43,7 @@ class MainWindow(QMainWindow):
         """)
         
         # 设置窗口标题和大小
-        self.setWindowTitle('图片模型训练系统')
+        self.setWindowTitle('图片模型训练系统 - AGPL-3.0许可')
         self.setGeometry(100, 100, 1200, 800)
         
         # 初始化UI

@@ -37,7 +37,7 @@ class AboutTab(BaseTab):
         version.setAlignment(Qt.AlignCenter)
         info_layout.addWidget(version)
         
-        copyright_label = QLabel("版权所有 © 2023")
+        copyright_label = QLabel("版权所有 © 2023-2024  遵循 AGPL-3.0 许可协议")
         copyright_label.setAlignment(Qt.AlignCenter)
         info_layout.addWidget(copyright_label)
         
@@ -87,6 +87,31 @@ class AboutTab(BaseTab):
         
         tech_group.setLayout(tech_layout)
         main_layout.addWidget(tech_group)
+        
+        # 添加许可证信息
+        license_group = QGroupBox("许可证信息")
+        license_layout = QVBoxLayout()
+        
+        license_text = QTextBrowser()
+        license_text.setOpenExternalLinks(True)
+        license_text.setHtml("""
+        <h3>AGPL许可协议</h3>
+        <p>本软件根据<b>GNU Affero通用公共许可证第3版(AGPL-3.0)</b>发布。</p>
+        
+        <p>根据AGPL-3.0协议:</p>
+        <ul>
+            <li>您可以自由使用、修改和分发本软件</li>
+            <li>如果您修改本软件并提供网络服务，您必须公开您的修改版本源代码</li>
+            <li>任何基于本软件的衍生作品必须以相同的许可证发布</li>
+            <li>您必须保留版权和许可声明</li>
+        </ul>
+        
+        <p>完整的许可证文本可在以下网址查看: <a href="https://www.gnu.org/licenses/agpl-3.0.html">https://www.gnu.org/licenses/agpl-3.0.html</a></p>
+        """)
+        license_layout.addWidget(license_text)
+        
+        license_group.setLayout(license_layout)
+        main_layout.addWidget(license_group)
         
         # 添加弹性空间
         main_layout.addStretch()
