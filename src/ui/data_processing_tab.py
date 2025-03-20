@@ -564,6 +564,7 @@ class DataProcessingTab(BaseTab):
         """重新启用预处理按钮"""
         self.preprocess_btn.setEnabled(True)
         self.update_status("预处理完成，可以再次开始新的预处理。")
+        # 注意：弹窗提示已移至MainWindow.preprocessing_finished方法中
     
     def apply_config(self, config):
         """应用配置信息"""

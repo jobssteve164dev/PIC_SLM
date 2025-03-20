@@ -409,13 +409,15 @@ class ImagePreprocessor(QObject):
                     except Exception as e:
                         self.status_updated.emit(f"色相增强失败: {str(e)}")
                 
-                self.status_updated.emit(f"成功应用 {success_count} 种增强方法: {', '.join(generated_methods)}")
+                if success_count > 0:
+                    self.status_updated.emit(f"对图片 {file_name} 成功应用 {success_count} 种增强方法: {', '.join(generated_methods)}")
             
             else:
                 # 组合模式，使用预定义的增强配置
                 augmentation_level = params.get('augmentation_level', '基础')
                 aug = self._get_augmentation_with_intensity(augmentation_level, aug_intensity)
                 # 为每张图片生成2个增强版本
+                generated_count = 0
                 for j in range(2):
                     if self._stop_preprocessing:
                         return
@@ -424,12 +426,16 @@ class ImagePreprocessor(QObject):
                         aug_name = f'{file_name}_aug_{j}.{img_format}'
                         aug_path = os.path.join(target_dir, aug_name)
                         Image.fromarray(augmented).save(aug_path)
-                        self.status_updated.emit(f"对图片应用了组合增强 #{j+1}")
+                        generated_count += 1
                     except Exception as e:
                         self.status_updated.emit(f"组合增强 #{j+1} 失败: {str(e)}")
+                
+                if generated_count > 0:
+                    self.status_updated.emit(f"对图片 {file_name} 应用了 {generated_count} 个组合增强版本")
                     
         except Exception as e:
-            self.status_updated.emit(f"增强图片 {file_name} 时出错: {str(e)}")
+            import traceback
+            self.status_updated.emit(f"增强图片 {file_name} 时出错: {str(e)}\n{traceback.format_exc()}")
 
     def _preprocess_class_images(self, source_folder: str, target_folder: str, 
                                 image_files: List[str], params: Dict) -> None:
@@ -558,7 +564,6 @@ class ImagePreprocessor(QObject):
                                 Image.fromarray(augmented).save(aug_path)
                                 success_count += 1
                                 generated_methods.append("缩放")
-                                processed_count += 1
                             except Exception as e:
                                 self.status_updated.emit(f"缩放增强失败: {str(e)}")
                         
@@ -574,7 +579,6 @@ class ImagePreprocessor(QObject):
                                 brightened.save(aug_path)
                                 success_count += 1
                                 generated_methods.append("亮度")
-                                processed_count += 1
                             except Exception as e:
                                 self.status_updated.emit(f"亮度增强失败: {str(e)}")
                         
@@ -590,10 +594,9 @@ class ImagePreprocessor(QObject):
                                 contrasted.save(aug_path)
                                 success_count += 1
                                 generated_methods.append("对比度")
-                                processed_count += 1
                             except Exception as e:
                                 self.status_updated.emit(f"对比度增强失败: {str(e)}")
-                        
+                                
                         if params.get('noise'):
                             try:
                                 # 使用增强强度调整噪声增强效果
@@ -604,10 +607,9 @@ class ImagePreprocessor(QObject):
                                 Image.fromarray(augmented).save(aug_path)
                                 success_count += 1
                                 generated_methods.append("噪声")
-                                processed_count += 1
                             except Exception as e:
                                 self.status_updated.emit(f"噪声增强失败: {str(e)}")
-                        
+                            
                         if params.get('blur'):
                             try:
                                 # 使用增强强度调整模糊增强效果
@@ -618,10 +620,9 @@ class ImagePreprocessor(QObject):
                                 Image.fromarray(augmented).save(aug_path)
                                 success_count += 1
                                 generated_methods.append("模糊")
-                                processed_count += 1
                             except Exception as e:
                                 self.status_updated.emit(f"模糊增强失败: {str(e)}")
-                        
+                            
                         if params.get('hue'):
                             try:
                                 # 使用增强强度调整色相增强效果
@@ -637,10 +638,9 @@ class ImagePreprocessor(QObject):
                                 Image.fromarray(augmented).save(aug_path)
                                 success_count += 1
                                 generated_methods.append("色相")
-                                processed_count += 1
                             except Exception as e:
                                 self.status_updated.emit(f"色相增强失败: {str(e)}")
-                        
+                                
                         if i == 0:  # 仅对第一张图片详细记录应用的方法
                             self.status_updated.emit(f"对图片 {img_file} 成功应用 {success_count} 种增强方法: {', '.join(generated_methods)}")
                         
@@ -968,12 +968,12 @@ class ImagePreprocessor(QObject):
             self.status_updated.emit('数据集创建已停止')
             return
             
-        # 处理训练集
+        # 处理训练集 - 应用增强
         self._process_dataset_images(
             preprocessed_folder, train_folder, train_images,
             augmentation_level, True, 50, 75, params)  # 训练集处理占总进度的25%
         
-        # 处理验证集
+        # 处理验证集 - 不应用增强，只复制
         self._process_dataset_images(
             preprocessed_folder, val_folder, val_images,
             augmentation_level, False, 75, 100, params)  # 验证集处理占总进度的25%
@@ -989,7 +989,18 @@ class ImagePreprocessor(QObject):
                                progress_start: int,
                                progress_end: int,
                                params: Dict) -> None:
-        """处理数据集图片，包括复制和数据增强"""
+        """处理数据集图片，包括复制和数据增强
+        
+        参数:
+            source_dir: 源文件夹路径
+            target_dir: 目标文件夹路径
+            images: 要处理的图片文件名列表
+            augmentation_level: 增强级别 ('基础', '中等', '强化')
+            apply_augmentation: 是否应用增强 (True: 训练集, False: 验证集)
+            progress_start: 进度条起始百分比
+            progress_end: 进度条结束百分比
+            params: 包含预处理参数的字典
+        """
         total_images = len(images)
         
         # 获取增强强度参数
@@ -1031,7 +1042,7 @@ class ImagePreprocessor(QObject):
         
         # 为调试添加状态输出
         aug_mode = params.get('augmentation_mode', 'combined')
-        self.status_updated.emit(f"处理数据集图片，增强模式：{aug_mode}")
+        self.status_updated.emit(f"处理数据集图片，增强模式：{aug_mode}, 是否应用增强：{apply_augmentation}")
         if aug_mode == 'separate':
             self.status_updated.emit(f"启用的增强方法：")
             self.status_updated.emit(f"- 水平翻转: {params.get('flip_horizontal', False)}")
@@ -1065,6 +1076,7 @@ class ImagePreprocessor(QObject):
                     processed_count += 1
                 
                 # 对训练集进行数据增强（只有apply_augmentation为True时）
+                # 注意：验证集 apply_augmentation 为 False，不应该应用增强
                 if apply_augmentation:
                     # 如果是独立模式，我们已经在_preprocess_class_images中应用了所有增强
                     # 所以这里不需要再做增强

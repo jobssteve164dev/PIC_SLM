@@ -1,5 +1,5 @@
 from PyQt5.QtWidgets import (QMainWindow, QTabWidget, QVBoxLayout, QWidget,
-                           QStatusBar, QProgressBar, QLabel, QApplication)
+                           QStatusBar, QProgressBar, QLabel, QApplication, QMessageBox)
 from PyQt5.QtCore import Qt, pyqtSignal
 from PyQt5.QtGui import QFont
 import os
@@ -166,6 +166,8 @@ class MainWindow(QMainWindow):
         if hasattr(self, 'data_processing_tab') and self.data_processing_tab:
             self.data_processing_tab.enable_preprocess_button()
         self.update_status("预处理完成！")
+        # 添加弹窗提示
+        QMessageBox.information(self, "处理完成", "图像预处理已完成！")
         
     def on_image_preprocessing_started(self, params):
         """当图像预处理开始时的处理函数"""
