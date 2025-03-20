@@ -109,9 +109,12 @@ class ImagePreprocessor(QObject):
                     self.status_updated.emit('预处理已停止')
                     return
             
-            # 如果没有被停止，发出完成信号
+            # 如果没有被停止，发出完成信号，更新状态消息以区分处理模式
             if not self._stop_preprocessing:
-                self.status_updated.emit('预处理完成')
+                if use_class_balance and class_names:
+                    self.status_updated.emit('类别平衡预处理全部完成')
+                else:
+                    self.status_updated.emit('标准预处理全部完成')
                 self.preprocessing_finished.emit()
             
         except Exception as e:
@@ -244,11 +247,6 @@ class ImagePreprocessor(QObject):
                 val_dest_path = os.path.join(class_val_folder, f"{file_name}.{img_format}")
                 shutil.copy2(output_path, val_dest_path)
         
-        # 如果没有被停止，发出完成信号
-        if not self._stop_preprocessing:
-            self.status_updated.emit('预处理完成')
-            self.preprocessing_finished.emit()
-            
     def _apply_augmentations_to_image(self, image_path: str, target_dir: str, file_name: str, img_format: str, params: Dict) -> None:
         """对单张图片应用所有选择的增强方法"""
         try:
