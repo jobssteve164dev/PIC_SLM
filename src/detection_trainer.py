@@ -889,24 +889,23 @@ class DetectionTrainer(QObject):
         self.logger = logging.getLogger(__name__)
         self.logger.setLevel(logging.INFO)
 
-    def _update_metrics(self, metrics_dict):
+    def _update_metrics(self, metrics):
         """更新训练指标并发送信号"""
         try:
             # 验证数据格式
             required_fields = ['epoch', 'train_loss', 'val_loss', 'val_map', 'learning_rate']
-            if not all(field in metrics_dict for field in required_fields):
-                self.logger.warning(f"缺少必要的训练指标字段: {metrics_dict}")
+            if not all(field in metrics for field in required_fields):
+                self.logger.warning(f"缺少必要的训练指标字段: {metrics}")
                 return
                 
-            # 发送到训练曲线组件
-            self.metrics_updated.emit(metrics_dict)
+            # 发送指标更新信号
+            self.metrics_updated.emit(metrics)
             
-            # 发送到TensorBoard
-            for metric_name, value in metrics_dict.items():
-                if isinstance(value, (int, float)):
-                    self.tensorboard_updated.emit(metric_name, value, metrics_dict.get('epoch', 0))
-                    
-            self.logger.debug(f"已更新训练指标: {metrics_dict}")
+            # 发送TensorBoard更新信号
+            self.tensorboard_updated.emit('train_loss', metrics['train_loss'], metrics['epoch'])
+            self.tensorboard_updated.emit('val_loss', metrics['val_loss'], metrics['epoch'])
+            self.tensorboard_updated.emit('val_map', metrics['val_map'], metrics['epoch'])
+            self.tensorboard_updated.emit('learning_rate', metrics['learning_rate'], metrics['epoch'])
             
         except Exception as e:
             self.logger.error(f"更新训练指标时出错: {str(e)}")
@@ -1688,4 +1687,170 @@ class DetectionTrainer(QObject):
         except Exception as e:
             self.training_error.emit(f"DETR训练过程中出错: {str(e)}")
             import traceback
-            traceback.print_exc() 
+            traceback.print_exc()
+
+    def _calculate_map(self, predictions, targets, iou_threshold=0.5):
+        """计算mAP (mean Average Precision)
+        
+        Args:
+            predictions: 模型预测结果列表，每个元素包含boxes, labels, scores
+            targets: 真实标签列表，每个元素包含boxes, labels
+            iou_threshold: IoU阈值，默认0.5
+            
+        Returns:
+            float: mAP值
+        """
+        try:
+            # 初始化每个类别的AP列表
+            class_aps = []
+            
+            # 获取所有唯一的类别标签
+            all_labels = set()
+            for target in targets:
+                all_labels.update(target['labels'].tolist())
+            
+            # 对每个类别计算AP
+            for label in all_labels:
+                # 收集当前类别的预测和真实标签
+                class_predictions = []
+                class_targets = []
+                
+                for pred, target in zip(predictions, targets):
+                    # 获取当前类别的预测
+                    mask = pred['labels'] == label
+                    if mask.any():
+                        class_predictions.append({
+                            'boxes': pred['boxes'][mask],
+                            'scores': pred['scores'][mask]
+                        })
+                    
+                    # 获取当前类别的真实标签
+                    mask = target['labels'] == label
+                    if mask.any():
+                        class_targets.append({
+                            'boxes': target['boxes'][mask]
+                        })
+                
+                if not class_predictions or not class_targets:
+                    continue
+                
+                # 计算当前类别的AP
+                ap = self._calculate_ap(class_predictions, class_targets, iou_threshold)
+                class_aps.append(ap)
+            
+            # 计算mAP
+            if not class_aps:
+                return 0.0
+                
+            return sum(class_aps) / len(class_aps)
+            
+        except Exception as e:
+            self.logger.error(f"计算mAP时出错: {str(e)}")
+            return 0.0
+            
+    def _calculate_ap(self, predictions, targets, iou_threshold):
+        """计算单个类别的Average Precision
+        
+        Args:
+            predictions: 预测结果列表
+            targets: 真实标签列表
+            iou_threshold: IoU阈值
+            
+        Returns:
+            float: AP值
+        """
+        try:
+            # 收集所有预测框和对应的分数
+            all_boxes = []
+            all_scores = []
+            for pred in predictions:
+                all_boxes.extend(pred['boxes'].tolist())
+                all_scores.extend(pred['scores'].tolist())
+            
+            # 按分数降序排序
+            sorted_indices = np.argsort(all_scores)[::-1]
+            all_boxes = np.array(all_boxes)[sorted_indices]
+            all_scores = np.array(all_scores)[sorted_indices]
+            
+            # 收集所有真实标签框
+            all_target_boxes = []
+            for target in targets:
+                all_target_boxes.extend(target['boxes'].tolist())
+            all_target_boxes = np.array(all_target_boxes)
+            
+            # 计算每个预测框与所有真实标签框的IoU
+            ious = self._calculate_iou_matrix(all_boxes, all_target_boxes)
+            
+            # 计算precision和recall
+            tp = np.zeros(len(all_boxes))
+            fp = np.zeros(len(all_boxes))
+            
+            for i in range(len(all_boxes)):
+                if len(all_target_boxes) > 0:
+                    max_iou = np.max(ious[i])
+                    if max_iou >= iou_threshold:
+                        tp[i] = 1
+                    else:
+                        fp[i] = 1
+                else:
+                    fp[i] = 1
+            
+            # 计算累积值
+            tp_cumsum = np.cumsum(tp)
+            fp_cumsum = np.cumsum(fp)
+            
+            # 计算precision和recall
+            recalls = tp_cumsum / float(len(all_target_boxes))
+            precisions = tp_cumsum / np.maximum(tp_cumsum + fp_cumsum, np.finfo(np.float64).eps)
+            
+            # 计算AP (使用11点插值)
+            ap = 0.0
+            for t in np.arange(0.0, 1.1, 0.1):
+                if np.sum(recalls >= t) == 0:
+                    p = 0
+                else:
+                    p = np.max(precisions[recalls >= t])
+                ap = ap + p / 11.0
+            
+            return ap
+            
+        except Exception as e:
+            self.logger.error(f"计算AP时出错: {str(e)}")
+            return 0.0
+            
+    def _calculate_iou_matrix(self, boxes1, boxes2):
+        """计算两组框之间的IoU矩阵
+        
+        Args:
+            boxes1: 第一组框，shape为(N, 4)
+            boxes2: 第二组框，shape为(M, 4)
+            
+        Returns:
+            numpy.ndarray: IoU矩阵，shape为(N, M)
+        """
+        try:
+            # 确保输入是numpy数组
+            boxes1 = np.array(boxes1)
+            boxes2 = np.array(boxes2)
+            
+            # 计算交集
+            x1 = np.maximum(boxes1[:, 0][:, np.newaxis], boxes2[:, 0])
+            y1 = np.maximum(boxes1[:, 1][:, np.newaxis], boxes2[:, 1])
+            x2 = np.minimum(boxes1[:, 2][:, np.newaxis], boxes2[:, 2])
+            y2 = np.minimum(boxes1[:, 3][:, np.newaxis], boxes2[:, 3])
+            
+            intersection = np.maximum(0, x2 - x1) * np.maximum(0, y2 - y1)
+            
+            # 计算并集
+            area1 = (boxes1[:, 2] - boxes1[:, 0]) * (boxes1[:, 3] - boxes1[:, 1])
+            area2 = (boxes2[:, 2] - boxes2[:, 0]) * (boxes2[:, 3] - boxes2[:, 1])
+            union = area1[:, np.newaxis] + area2 - intersection
+            
+            # 计算IoU
+            iou = intersection / np.maximum(union, np.finfo(np.float64).eps)
+            
+            return iou
+            
+        except Exception as e:
+            self.logger.error(f"计算IoU矩阵时出错: {str(e)}")
+            return np.zeros((len(boxes1), len(boxes2))) 
