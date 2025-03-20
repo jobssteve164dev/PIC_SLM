@@ -1,7 +1,7 @@
 import sys
 import os
 import json
-from PyQt5.QtWidgets import QApplication, QMessageBox, QTabWidget, QVBoxLayout, QWidget
+from PyQt5.QtWidgets import QApplication, QMessageBox, QTabWidget, QVBoxLayout, QWidget, QMainWindow
 from PyQt5.QtCore import QThread, QObject
 from ui.main_window import MainWindow
 from ui.evaluation_tab import EvaluationTab  # 从ui模块导入EvaluationTab
