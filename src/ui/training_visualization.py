@@ -32,12 +32,83 @@ class TrainingVisualizationWidget(QWidget):
         self.epochs = []
         self.train_losses = []
         self.val_losses = []
-        self.train_accs = []
-        self.val_accs = []
         self.maps = []
         self.learning_rates = []
         self.update_frequency = 10  # 默认更新频率
         self.last_update_time = time.time()
+        
+    def init_ui(self):
+        layout = QVBoxLayout(self)
+        
+        # 控制面板
+        control_layout = QHBoxLayout()
+        
+        # 指标选择
+        self.metric_combo = QComboBox()
+        self.metric_combo.addItems(['损失和mAP', '仅损失', '仅mAP'])
+        self.metric_combo.setCurrentIndex(0)
+        self.metric_combo.currentIndexChanged.connect(self.update_display)
+        control_layout.addWidget(QLabel('显示指标:'))
+        control_layout.addWidget(self.metric_combo)
+        
+        # 重置按钮
+        self.reset_btn = QPushButton('重置图表')
+        self.reset_btn.clicked.connect(self.reset_plots)
+        control_layout.addWidget(self.reset_btn)
+        
+        control_layout.addStretch()
+        layout.addLayout(control_layout)
+        
+        # 添加指标标签
+        metrics_layout = QHBoxLayout()
+        
+        # 训练损失标签
+        self.train_loss_label = QLabel('训练损失: 0.0000')
+        metrics_layout.addWidget(self.train_loss_label)
+        
+        # 验证损失标签
+        self.val_loss_label = QLabel('验证损失: 0.0000')
+        metrics_layout.addWidget(self.val_loss_label)
+        
+        # mAP标签
+        self.map_label = QLabel('mAP: 0.0000')
+        metrics_layout.addWidget(self.map_label)
+        
+        # 学习率标签
+        self.lr_label = QLabel('学习率: 0.000000')
+        metrics_layout.addWidget(self.lr_label)
+        
+        layout.addLayout(metrics_layout)
+        
+        # 创建图表
+        self.figure = Figure()
+        
+        # 损失子图
+        self.loss_ax = self.figure.add_subplot(211)
+        self.loss_ax.set_title('训练和验证损失')
+        self.loss_ax.set_xlabel('训练轮次')
+        self.loss_ax.set_ylabel('损失值')
+        
+        # mAP子图
+        self.acc_ax = self.figure.add_subplot(212)
+        self.acc_ax.set_title('验证mAP')
+        self.acc_ax.set_xlabel('训练轮次')
+        self.acc_ax.set_ylabel('mAP')
+        
+        # 创建画布并设置大小策略为扩展
+        self.canvas = FigureCanvas(self.figure)
+        self.canvas.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        layout.addWidget(self.canvas)
+        
+        # 设置整个组件的大小策略为扩展
+        self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        
+        self.figure.tight_layout()
+        
+        # 状态标签
+        self.status_label = QLabel('等待训练开始...')
+        self.status_label.setAlignment(Qt.AlignCenter)
+        layout.addWidget(self.status_label)
         
     def connect_signals(self, trainer):
         """连接训练器的信号"""
@@ -69,11 +140,19 @@ class TrainingVisualizationWidget(QWidget):
             self.last_update_time = current_time
             
             # 更新数据
-            self.epochs.append(metrics['epoch'])
-            self.train_losses.append(metrics['train_loss'])
-            self.val_losses.append(metrics['val_loss'])
-            self.maps.append(metrics['val_map'])
-            self.learning_rates.append(metrics['learning_rate'])
+            epoch = int(metrics['epoch'])
+            if epoch not in self.epochs:
+                self.epochs.append(epoch)
+                self.train_losses.append(metrics['train_loss'])
+                self.val_losses.append(metrics['val_loss'])
+                self.maps.append(metrics['val_map'])
+                self.learning_rates.append(metrics['learning_rate'])
+            else:
+                idx = self.epochs.index(epoch)
+                self.train_losses[idx] = metrics['train_loss']
+                self.val_losses[idx] = metrics['val_loss']
+                self.maps[idx] = metrics['val_map']
+                self.learning_rates[idx] = metrics['learning_rate']
             
             # 更新曲线
             self.update_display()
@@ -101,6 +180,90 @@ class TrainingVisualizationWidget(QWidget):
             
         except Exception as e:
             self.logger.error(f"更新指标标签时出错: {str(e)}")
+            
+    def update_display(self):
+        """根据选择的指标更新显示"""
+        try:
+            # 清除旧图
+            self.loss_ax.clear()
+            self.acc_ax.clear()
+            
+            # 获取当前选择的指标
+            metric_option = self.metric_combo.currentIndex()
+            
+            # 确保所有数据列表长度一致
+            min_len = min(len(self.epochs), len(self.train_losses))
+            epochs = self.epochs[:min_len]
+            train_losses = self.train_losses[:min_len]
+            val_losses = self.val_losses[:min_len]
+            maps = self.maps[:min_len]
+            learning_rates = self.learning_rates[:min_len]
+            
+            # 设置x轴范围
+            max_epoch = max(epochs) if epochs else 1
+            x_ticks = np.arange(0, max_epoch + 1, max(1, max_epoch // 10))
+            
+            # 根据选择的指标显示图表
+            if metric_option == 0 or metric_option == 1:  # 显示损失
+                self.loss_ax.set_title('训练和验证损失')
+                self.loss_ax.set_xlabel('训练轮次')
+                self.loss_ax.set_ylabel('损失值')
+                
+                # 设置网格
+                self.loss_ax.grid(True, linestyle='--', alpha=0.7)
+                
+                # 绘制损失数据
+                if train_losses:
+                    self.loss_ax.plot(epochs, train_losses, 'b-', label='训练损失', marker='o', markersize=4)
+                    
+                    # 设置y轴范围
+                    y_min = min(min(train_losses), min(filter(None, val_losses)))
+                    y_max = max(max(train_losses), max(filter(None, val_losses)))
+                    y_margin = (y_max - y_min) * 0.1
+                    self.loss_ax.set_ylim([max(0, y_min - y_margin), y_max + y_margin])
+                
+                # 绘制验证损失
+                if val_losses:
+                    self.loss_ax.plot(epochs, val_losses, 'r-', label='验证损失', marker='o', markersize=4)
+                
+                self.loss_ax.legend(loc='upper right')
+                self.loss_ax.set_xticks(x_ticks)
+                self.loss_ax.set_visible(True)
+            else:
+                self.loss_ax.set_visible(False)
+            
+            if metric_option == 0 or metric_option == 2:  # 显示mAP
+                self.acc_ax.set_title('验证mAP')
+                self.acc_ax.set_xlabel('训练轮次')
+                self.acc_ax.set_ylabel('mAP')
+                
+                # 设置网格
+                self.acc_ax.grid(True, linestyle='--', alpha=0.7)
+                
+                # 绘制mAP数据
+                if maps:
+                    self.acc_ax.plot(epochs, maps, 'g-', label='验证mAP', marker='o', markersize=4)
+                    
+                    # 设置y轴范围
+                    y_min = min(maps)
+                    y_max = max(maps)
+                    y_margin = (y_max - y_min) * 0.1
+                    self.acc_ax.set_ylim([max(0, y_min - y_margin), min(1, y_max + y_margin)])
+                
+                self.acc_ax.legend(loc='lower right')
+                self.acc_ax.set_xticks(x_ticks)
+                self.acc_ax.set_visible(True)
+            else:
+                self.acc_ax.set_visible(False)
+            
+            # 调整布局并刷新画布
+            self.figure.tight_layout()
+            self.canvas.draw()
+            self.canvas.flush_events()
+            
+        except Exception as e:
+            self.logger.error(f"显示训练图表时出错: {str(e)}")
+            self.status_label.setText(f'显示图表出错: {str(e)}')
             
     def set_update_frequency(self, frequency):
         """设置更新频率"""
@@ -157,221 +320,7 @@ class TrainingVisualizationWidget(QWidget):
             self.logger.info(f"训练数据已保存到: {save_path}")
         except Exception as e:
             self.logger.error(f"保存训练数据时出错: {str(e)}")
-        
-    def init_ui(self):
-        layout = QVBoxLayout(self)
-        
-        # 控制面板
-        control_layout = QHBoxLayout()
-        
-        # 指标选择
-        self.metric_combo = QComboBox()
-        self.metric_combo.addItems(['损失和准确率', '仅损失', '仅准确率'])
-        self.metric_combo.setCurrentIndex(0)
-        self.metric_combo.currentIndexChanged.connect(self.update_display)
-        control_layout.addWidget(QLabel('显示指标:'))
-        control_layout.addWidget(self.metric_combo)
-        
-        # 重置按钮
-        self.reset_btn = QPushButton('重置图表')
-        self.reset_btn.clicked.connect(self.reset_plots)
-        control_layout.addWidget(self.reset_btn)
-        
-        control_layout.addStretch()
-        layout.addLayout(control_layout)
-        
-        # 创建图表 - 不再指定固定大小，让它自适应
-        self.figure = Figure()
-        
-        # 损失子图
-        self.loss_ax = self.figure.add_subplot(211)
-        self.loss_ax.set_title('训练和验证损失')
-        self.loss_ax.set_xlabel('训练轮次')
-        self.loss_ax.set_ylabel('损失值')
-        
-        # 准确率子图
-        self.acc_ax = self.figure.add_subplot(212)
-        self.acc_ax.set_title('训练和验证准确率')
-        self.acc_ax.set_xlabel('训练轮次')
-        self.acc_ax.set_ylabel('准确率')
-        
-        # 创建画布并设置大小策略为扩展
-        self.canvas = FigureCanvas(self.figure)
-        self.canvas.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
-        layout.addWidget(self.canvas)
-        
-        # 设置整个组件的大小策略为扩展
-        self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
-        
-        self.figure.tight_layout()
-        
-        # 状态标签
-        self.status_label = QLabel('等待训练开始...')
-        self.status_label.setAlignment(Qt.AlignCenter)
-        layout.addWidget(self.status_label)
-        
-    @pyqtSlot(dict)
-    def update_plots(self, epoch_results):
-        """更新训练图表"""
-        try:
-            phase = epoch_results['phase']
-            epoch = epoch_results['epoch']
-            loss = epoch_results['loss']
-            accuracy = epoch_results['accuracy']
             
-            # 确保 epoch 是整数
-            epoch = int(epoch)
-            
-            if phase == 'train':
-                # 如果是新的 epoch，添加到列表中
-                if epoch not in self.epochs:
-                    self.epochs.append(epoch)
-                    self.train_losses.append(loss)
-                    self.train_accs.append(accuracy)
-                else:
-                    # 如果 epoch 已存在，更新对应位置的值
-                    idx = self.epochs.index(epoch)
-                    self.train_losses[idx] = loss
-                    self.train_accs[idx] = accuracy
-                
-                self.status_label.setText(f'Epoch {epoch}: 训练损失 = {loss:.4f}, 训练准确率 = {accuracy:.4f}')
-            
-            elif phase == 'val':
-                # 确保验证数据与训练数据长度匹配
-                while len(self.val_losses) < len(self.epochs):
-                    self.val_losses.append(None)
-                while len(self.val_accs) < len(self.epochs):
-                    self.val_accs.append(None)
-                
-                # 更新最新 epoch 的验证数据
-                if self.epochs:
-                    idx = self.epochs.index(epoch)
-                    if idx < len(self.val_losses):
-                        self.val_losses[idx] = loss
-                        self.val_accs[idx] = accuracy
-                    
-                self.status_label.setText(f'Epoch {epoch}: 验证损失 = {loss:.4f}, 验证准确率 = {accuracy:.4f}')
-            
-            self.update_display()
-            
-        except Exception as e:
-            import traceback
-            print(f"更新训练图表时出错: {str(e)}")
-            print(traceback.format_exc())
-            self.status_label.setText(f'更新图表出错: {str(e)}')
-        
-    def update_display(self):
-        """根据选择的指标更新显示"""
-        try:
-            # 清除旧图
-            self.loss_ax.clear()
-            self.acc_ax.clear()
-            
-            # 获取当前选择的指标
-            metric_option = self.metric_combo.currentIndex()
-            
-            # 确保所有数据列表长度一致
-            min_len = min(len(self.epochs), len(self.train_losses))
-            epochs = self.epochs[:min_len]
-            train_losses = self.train_losses[:min_len]
-            train_accs = self.train_accs[:min_len]
-            
-            # 设置x轴范围
-            max_epoch = max(epochs) if epochs else 1
-            x_ticks = np.arange(0, max_epoch + 1, max(1, max_epoch // 10))
-            
-            # 根据选择的指标显示图表
-            if metric_option == 0 or metric_option == 1:  # 显示损失
-                self.loss_ax.set_title('训练和验证损失')
-                self.loss_ax.set_xlabel('训练轮次')
-                self.loss_ax.set_ylabel('损失值')
-                
-                # 设置网格
-                self.loss_ax.grid(True, linestyle='--', alpha=0.7)
-                
-                # 绘制损失数据
-                has_loss_data = False
-                if train_losses:
-                    self.loss_ax.plot(epochs, train_losses, 'b-', label='训练损失', marker='o', markersize=4)
-                    has_loss_data = True
-                    
-                    # 设置y轴范围
-                    y_min = min(min(train_losses), min(filter(None, self.val_losses[:min_len])) if any(filter(None, self.val_losses[:min_len])) else min(train_losses))
-                    y_max = max(max(train_losses), max(filter(None, self.val_losses[:min_len])) if any(filter(None, self.val_losses[:min_len])) else max(train_losses))
-                    y_margin = (y_max - y_min) * 0.1
-                    self.loss_ax.set_ylim([max(0, y_min - y_margin), y_max + y_margin])
-                
-                # 只绘制非空的验证损失数据点
-                val_epochs = []
-                val_losses = []
-                for i, loss in enumerate(self.val_losses[:min_len]):
-                    if loss is not None:
-                        val_epochs.append(epochs[i])
-                        val_losses.append(loss)
-                
-                if val_losses:
-                    self.loss_ax.plot(val_epochs, val_losses, 'r-', label='验证损失', marker='o', markersize=4)
-                    has_loss_data = True
-                
-                if has_loss_data:
-                    self.loss_ax.legend(loc='upper right')
-                    self.loss_ax.set_xticks(x_ticks)
-                
-                self.loss_ax.set_visible(True)
-            else:
-                self.loss_ax.set_visible(False)
-            
-            if metric_option == 0 or metric_option == 2:  # 显示准确率
-                self.acc_ax.set_title('训练和验证准确率')
-                self.acc_ax.set_xlabel('训练轮次')
-                self.acc_ax.set_ylabel('准确率')
-                
-                # 设置网格
-                self.acc_ax.grid(True, linestyle='--', alpha=0.7)
-                
-                # 绘制准确率数据
-                has_acc_data = False
-                if train_accs:
-                    self.acc_ax.plot(epochs, train_accs, 'b-', label='训练准确率', marker='o', markersize=4)
-                    has_acc_data = True
-                    
-                    # 设置y轴范围
-                    y_min = min(min(train_accs), min(filter(None, self.val_accs[:min_len])) if any(filter(None, self.val_accs[:min_len])) else min(train_accs))
-                    y_max = max(max(train_accs), max(filter(None, self.val_accs[:min_len])) if any(filter(None, self.val_accs[:min_len])) else max(train_accs))
-                    y_margin = (y_max - y_min) * 0.1
-                    self.acc_ax.set_ylim([max(0, y_min - y_margin), min(1, y_max + y_margin)])
-                
-                # 只绘制非空的验证准确率数据点
-                val_epochs = []
-                val_accs = []
-                for i, acc in enumerate(self.val_accs[:min_len]):
-                    if acc is not None:
-                        val_epochs.append(epochs[i])
-                        val_accs.append(acc)
-                
-                if val_accs:
-                    self.acc_ax.plot(val_epochs, val_accs, 'r-', label='验证准确率', marker='o', markersize=4)
-                    has_acc_data = True
-                
-                if has_acc_data:
-                    self.acc_ax.legend(loc='lower right')
-                    self.acc_ax.set_xticks(x_ticks)
-                
-                self.acc_ax.set_visible(True)
-            else:
-                self.acc_ax.set_visible(False)
-            
-            # 调整布局并刷新画布
-            self.figure.tight_layout()
-            self.canvas.draw()
-            self.canvas.flush_events()  # 强制刷新画布
-            
-        except Exception as e:
-            import traceback
-            print(f"显示训练图表时出错: {str(e)}")
-            print(traceback.format_exc())
-            self.status_label.setText(f'显示图表出错: {str(e)}')
-    
     def resizeEvent(self, event):
         """重写resizeEvent以在窗口大小改变时调整图表布局"""
         super().resizeEvent(event)
@@ -382,8 +331,8 @@ class TrainingVisualizationWidget(QWidget):
         """重置所有图表数据"""
         self.train_losses = []
         self.val_losses = []
-        self.train_accs = []
-        self.val_accs = []
+        self.maps = []
+        self.learning_rates = []
         self.epochs = []
         self.status_label.setText('图表已重置，等待训练开始...')
         self.update_display()
