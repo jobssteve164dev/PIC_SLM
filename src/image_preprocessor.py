@@ -115,16 +115,25 @@ class ImagePreprocessor(QObject):
                     self.status_updated.emit('类别平衡预处理全部完成')
                 else:
                     self.status_updated.emit('标准预处理全部完成')
-                self.preprocessing_finished.emit()
+                
+            # 无论如何，都发出预处理完成信号 - 确保UI始终得到更新
+            self.preprocessing_finished.emit()
+            print("ImagePreprocessor: 已发出 preprocessing_finished 信号")
             
         except Exception as e:
             import traceback
             self.preprocessing_error.emit(f'预处理过程中出错: {str(e)}\n{traceback.format_exc()}')
+            # 即使出错也发出完成信号，以确保UI恢复正常状态
+            self.preprocessing_finished.emit()
+            print("ImagePreprocessor: 虽然处理出错，但仍发出 preprocessing_finished 信号")
             
     def stop(self):
         """停止预处理过程"""
         self._stop_preprocessing = True
         self.status_updated.emit('正在停止预处理...')
+        # 在停止预处理时也发出完成信号，确保UI恢复正常状态
+        self.preprocessing_finished.emit()
+        print("ImagePreprocessor.stop: 发出 preprocessing_finished 信号")
 
     def _preprocess_with_class_balance(self, params: Dict) -> None:
         """使用类别平衡的方式预处理图片"""

@@ -1,8 +1,9 @@
 from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QPushButton, QLabel, QFileDialog,
                            QHBoxLayout, QComboBox, QSpinBox, QGroupBox, QGridLayout,
                            QSizePolicy, QLineEdit, QCheckBox, QDoubleSpinBox, QRadioButton,
-                           QButtonGroup, QToolTip, QFrame, QListWidget, QInputDialog, QMessageBox)
-from PyQt5.QtCore import Qt, pyqtSignal, QPoint
+                           QButtonGroup, QToolTip, QFrame, QListWidget, QInputDialog, QMessageBox,
+                           QApplication)
+from PyQt5.QtCore import Qt, pyqtSignal, QPoint, QTimer
 from PyQt5.QtGui import QFont, QIcon
 import os
 from .base_tab import BaseTab
@@ -336,8 +337,16 @@ class DataProcessingTab(BaseTab):
         """检查是否可以开始预处理"""
         print(f"检查预处理准备状态: source_folder='{self.source_folder}', output_folder='{self.output_folder}'")
         is_ready = bool(self.source_folder and self.output_folder)
-        print(f"预处理按钮状态: {'启用' if is_ready else '禁用'}")
         self.preprocess_btn.setEnabled(is_ready)
+        # 强制更新按钮状态
+        self.preprocess_btn.repaint()
+        self.preprocess_btn.update()
+        # 刷新整个标签页
+        self.repaint()
+        self.update()
+        print(f"预处理按钮状态: {'启用' if is_ready else '禁用'}")
+        print(f"预处理按钮isEnabled()状态: {self.preprocess_btn.isEnabled()}")
+        return is_ready
     
     def add_defect_class(self):
         """添加缺陷类别"""
@@ -560,9 +569,38 @@ class DataProcessingTab(BaseTab):
         self.update_status("开始图像预处理...")
         self.preprocess_btn.setEnabled(False)
         
+        # 添加安全定时器，确保即使信号连接有问题，按钮也会在一定时间后重新启用
+        QTimer.singleShot(120000, self._ensure_button_enabled)  # 2分钟后强制重新启用按钮
+        print("已设置安全定时器，2分钟后将强制重新启用按钮")
+        
+    def _ensure_button_enabled(self):
+        """确保按钮被重新启用的安全方法"""
+        if hasattr(self, 'preprocess_btn') and not self.preprocess_btn.isEnabled():
+            print("安全定时器触发：强制重新启用预处理按钮")
+            self.preprocess_btn.setEnabled(True)
+            self.preprocess_btn.update()
+            self.repaint()
+            self.update()
+            QApplication.processEvents()
+    
     def enable_preprocess_button(self):
         """重新启用预处理按钮"""
-        self.preprocess_btn.setEnabled(True)
+        print("DataProcessingTab.enable_preprocess_button被调用，重新启用预处理按钮")
+        if hasattr(self, 'preprocess_btn'):
+            # 确保预处理条件满足
+            if self.source_folder and self.output_folder:
+                self.preprocess_btn.setEnabled(True)
+                # 强制重绘按钮以确保视觉状态更新
+                self.preprocess_btn.repaint()
+                self.preprocess_btn.update()
+                # 更新整个标签页以确保所有元素都被正确重绘
+                self.repaint()
+                self.update()
+                print(f"预处理按钮状态: {'启用' if self.preprocess_btn.isEnabled() else '禁用'}")
+            else:
+                print("警告: 源文件夹或输出文件夹为空，无法启用预处理按钮")
+        else:
+            print("错误: 找不到预处理按钮对象")
         self.update_status("预处理完成，可以再次开始新的预处理。")
         # 注意：弹窗提示已移至MainWindow.preprocessing_finished方法中
     
