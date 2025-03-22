@@ -212,9 +212,10 @@ class TrainingVisualizationWidget(QWidget):
         
         self.figure.tight_layout()
         
-        # 状态标签
+        # 创建状态标签，但设置为隐藏
         self.status_label = QLabel('等待训练开始...')
         self.status_label.setAlignment(Qt.AlignCenter)
+        self.status_label.setVisible(False)  # 隐藏这个标签，因为与EvaluationTab中的training_status_label重复
         layout.addWidget(self.status_label)
         
         # 初始化指标说明
@@ -971,8 +972,9 @@ class TrainingVisualizationWidget(QWidget):
         self.figure.tight_layout()
         self.canvas.draw()
         
-        # 更新状态
+        # 更新状态文本但保持隐藏状态
         self.status_label.setText("图表已重置，等待训练开始...")
+        self.status_label.setVisible(False)  # 确保状态标签保持隐藏
 
     def update_metric_explanation(self, index):
         """根据选择的指标更新说明文本"""

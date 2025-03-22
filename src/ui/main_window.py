@@ -70,6 +70,9 @@ class MainWindow(QMainWindow):
         self.tabs.setDocumentMode(True)  # 使标签页看起来更现代
         self.tabs.setTabsClosable(False)  # 不显示关闭按钮
         
+        # 连接标签页切换信号，确保每次切换都刷新布局
+        self.tabs.currentChanged.connect(self.on_tab_changed)
+        
         # 创建各个标签页
         self.data_processing_tab = DataProcessingTab(self.tabs, self)
         print(f"数据处理标签页已创建: {self.data_processing_tab}")
@@ -417,4 +420,55 @@ class MainWindow(QMainWindow):
         """更新预测结果"""
         if hasattr(self, 'prediction_tab'):
             self.prediction_tab.update_prediction_result(result)
-        self.update_status("预测完成") 
+        self.update_status("预测完成")
+
+    # 添加处理标签页切换的方法
+    def on_tab_changed(self, index):
+        """处理标签页切换事件"""
+        current_tab = self.tabs.widget(index)
+        if current_tab:
+            # 立即应用一次快速布局更新
+            current_tab.update()
+            self.update()
+            
+            # 强制处理所有待处理的事件
+            QApplication.processEvents()
+            
+            # 如果当前标签页有refresh_layout方法，延迟调用以确保布局完全刷新
+            if hasattr(current_tab, 'refresh_layout'):
+                # 使用多个定时器，在不同的时间点尝试刷新布局，以确保最终布局正确
+                QTimer.singleShot(10, current_tab.refresh_layout)
+                QTimer.singleShot(100, current_tab.refresh_layout)
+                
+                # 如果是设置标签页，额外再延迟一次刷新以处理可能的问题
+                if current_tab.__class__.__name__ == 'SettingsTab':
+                    QTimer.singleShot(200, current_tab.refresh_layout)
+                    # 调整窗口大小，触发布局重新计算
+                    QTimer.singleShot(300, lambda: self._force_resize())
+    
+    def _force_resize(self):
+        """强制重新调整窗口大小，以触发布局重新计算"""
+        # 保存当前大小
+        current_size = self.size()
+        # 稍微改变大小
+        self.resize(current_size.width() + 1, current_size.height())
+        # 恢复原来的大小
+        QTimer.singleShot(50, lambda: self.resize(current_size))
+        
+    def showEvent(self, event):
+        """窗口显示事件，确保所有标签页布局正确"""
+        super().showEvent(event)
+        
+        # 当窗口首次显示时，强制刷新当前标签页的布局
+        current_index = self.tabs.currentIndex()
+        current_tab = self.tabs.widget(current_index)
+        
+        # 先尝试立即更新
+        self.update()
+        QApplication.processEvents()
+        
+        # 然后延迟执行多次布局刷新
+        if current_tab and hasattr(current_tab, 'refresh_layout'):
+            QTimer.singleShot(100, current_tab.refresh_layout)
+            QTimer.singleShot(300, current_tab.refresh_layout)
+            QTimer.singleShot(500, lambda: self._force_resize()) 

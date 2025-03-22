@@ -1,8 +1,8 @@
 from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QPushButton, QLabel, QFileDialog,
                            QHBoxLayout, QComboBox, QSpinBox, QGroupBox, QGridLayout,
                            QSizePolicy, QLineEdit, QCheckBox, QListWidget, QInputDialog,
-                           QMessageBox, QTabWidget)
-from PyQt5.QtCore import Qt, pyqtSignal
+                           QMessageBox, QTabWidget, QScrollArea)
+from PyQt5.QtCore import Qt, pyqtSignal, QTimer
 from PyQt5.QtGui import QFont
 import os
 import json
@@ -20,10 +20,18 @@ class SettingsTab(BaseTab):
         self.default_classes = []
         self.init_ui()
         
+        # BaseTab已经连接了标签页切换信号，这里不需要重复连接
+        
+        # 添加特殊的延迟重建布局定时器
+        self._rebuild_timer = QTimer(self)
+        self._rebuild_timer.setSingleShot(True)
+        self._rebuild_timer.timeout.connect(self._fix_layout)
+        
     def init_ui(self):
         """初始化UI"""
         # 创建主布局
         main_layout = QVBoxLayout(self.scroll_content)
+        # 确保没有多余的边距造成空白
         main_layout.setContentsMargins(10, 10, 10, 10)
         main_layout.setSpacing(10)
         
@@ -35,14 +43,17 @@ class SettingsTab(BaseTab):
         
         # 创建设置选项卡
         settings_tabs = QTabWidget()
+        settings_tabs.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         
         # 创建常规设置选项卡
         general_tab = QWidget()
         general_layout = QVBoxLayout(general_tab)
+        general_layout.setContentsMargins(10, 10, 10, 10)
         
         # 创建默认文件夹组
         folders_group = QGroupBox("默认文件夹")
         folders_layout = QGridLayout()
+        folders_layout.setContentsMargins(10, 20, 10, 10)
         
         # 源文件夹
         self.default_source_edit = QLineEdit()
@@ -74,6 +85,7 @@ class SettingsTab(BaseTab):
         # 创建默认类别组
         classes_group = QGroupBox("默认缺陷类别")
         classes_layout = QVBoxLayout()
+        classes_layout.setContentsMargins(10, 20, 10, 10)
         
         # 添加类别列表
         self.default_class_list = QListWidget()
@@ -101,10 +113,12 @@ class SettingsTab(BaseTab):
         # 创建高级设置选项卡
         advanced_tab = QWidget()
         advanced_layout = QVBoxLayout(advanced_tab)
+        advanced_layout.setContentsMargins(10, 10, 10, 10)
         
         # 创建模型文件组
         model_group = QGroupBox("默认模型文件")
         model_layout = QGridLayout()
+        model_layout.setContentsMargins(10, 20, 10, 10)
         
         # 模型文件
         self.default_model_edit = QLineEdit()
@@ -168,14 +182,25 @@ class SettingsTab(BaseTab):
         save_btn.setMinimumHeight(40)
         main_layout.addWidget(save_btn)
         
+        # 添加弹性空间
+        main_layout.addStretch(1)
+        
+        # 设置滚动内容大小策略
+        self.scroll_content.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        
         # 设置滚动区域
-        self.layout.addWidget(self.scroll_content)
+        # 确保内容从顶部开始显示，而不是居中显示
+        if hasattr(self, 'layout') and self.layout.count() > 0:
+            scroll_area = self.layout.itemAt(0).widget()
+            if isinstance(scroll_area, QScrollArea):
+                # 设置边框和滚动条
+                scroll_area.setFrameShape(QScrollArea.NoFrame)
+                scroll_area.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+                # 滚动到顶部
+                scroll_area.verticalScrollBar().setValue(0)
         
         # 加载当前设置
         self.load_current_settings()
-        
-        # 添加弹性空间
-        main_layout.addStretch()
     
     def select_default_source_folder(self):
         """选择默认源文件夹"""
@@ -301,5 +326,68 @@ class SettingsTab(BaseTab):
         except Exception as e:
             QMessageBox.critical(self, "错误", f"保存设置失败: {str(e)}")
             print(f"SettingsTab: 保存设置失败: {str(e)}")
+            import traceback
+            traceback.print_exc()
+    
+    def on_tab_changed(self, index):
+        """处理标签页切换事件，设置标签页需要特殊处理"""
+        # 调用基类方法
+        super().on_tab_changed(index)
+        
+        # 添加特殊处理：当切换到设置标签页时，尝试激活完全重建布局
+        if self.main_window and hasattr(self.main_window, 'tabs'):
+            current_widget = self.main_window.tabs.widget(index)
+            if current_widget == self:
+                print("切换到设置标签页，启动布局修复机制")
+                # 使用定时器延迟启动我们的特殊布局修复
+                self._rebuild_timer.start(250)
+                
+                # 使用多个定时器在不同时间点尝试修复，提高成功率
+                QTimer.singleShot(350, self._fix_layout)
+                QTimer.singleShot(500, self._fix_layout)
+    
+    def refresh_layout(self):
+        """强制刷新整个标签页的布局 - 这个方法可以被删除，因为BaseTab已经实现了相同的功能"""
+        # 调用基类的实现
+        super().refresh_layout()
+        
+        # 如果需要，可以在这里添加设置标签页特有的刷新逻辑 
+    
+    def _fix_layout(self):
+        """特殊方法：尝试通过强制措施修复设置标签页的布局问题"""
+        try:
+            # 强制滚动到顶部
+            if hasattr(self, 'layout') and self.layout.count() > 0:
+                scroll_area = self.layout.itemAt(0).widget()
+                if isinstance(scroll_area, QScrollArea):
+                    # 设置滚动条策略确保内容显示
+                    scroll_area.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+                    scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+                    
+                    # 尝试调整视图，确保内容从顶部开始显示
+                    if scroll_area.verticalScrollBar():
+                        scroll_area.verticalScrollBar().setValue(0)
+                        
+                    # 尝试调整内部部件的大小
+                    content_widget = scroll_area.widget()
+                    if content_widget:
+                        # 确保内容部件比可视区域稍大，以触发正确的滚动行为
+                        viewport_height = scroll_area.viewport().height()
+                        if viewport_height > 0:
+                            content_widget.setMinimumHeight(viewport_height)
+                        
+                        # 强制重新计算滚动区域的布局
+                        content_widget.updateGeometry()
+                        scroll_area.updateGeometry()
+            
+            # 触发整个标签页和主窗口的刷新
+            self.update()
+            if self.main_window:
+                # 尝试调整主窗口大小，这常常能触发Qt重新计算所有布局
+                size = self.main_window.size()
+                self.main_window.resize(size.width() + 1, size.height())
+                QTimer.singleShot(50, lambda: self.main_window.resize(size))
+        except Exception as e:
+            print(f"尝试修复设置标签页布局时出错: {str(e)}")
             import traceback
             traceback.print_exc() 
