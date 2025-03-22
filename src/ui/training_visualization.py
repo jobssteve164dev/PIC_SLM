@@ -3,12 +3,17 @@ from PyQt5.QtCore import Qt, pyqtSlot
 from matplotlib.figure import Figure
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 import matplotlib
+# 在UI组件中使用Qt5Agg后端以正确集成到PyQt中
+matplotlib.use('Qt5Agg')
 import numpy as np
 import os
 import webbrowser
 import logging
 import json
 import time
+
+# 创建logger
+logger = logging.getLogger(__name__)
 
 # 配置matplotlib使用中文字体
 matplotlib.rcParams['font.sans-serif'] = ['SimHei', 'Microsoft YaHei', 'SimSun', 'Arial Unicode MS', 'sans-serif']
@@ -443,10 +448,22 @@ class TrainingVisualizationWidget(QWidget):
                     self.loss_ax.plot(epochs, val_losses, 'r-', label='验证损失', marker='o', markersize=4)
                     
                     # 设置y轴范围
-                    y_min = min(min(train_losses), min(filter(None, val_losses)))
-                    y_max = max(max(train_losses), max(filter(None, val_losses)))
-                    y_margin = (y_max - y_min) * 0.1
-                    self.loss_ax.set_ylim([max(0, y_min - y_margin), y_max + y_margin])
+                    filtered_val_losses = list(filter(None, val_losses))
+                    if train_losses and filtered_val_losses:
+                        y_min = min(min(train_losses), min(filtered_val_losses))
+                        y_max = max(max(train_losses), max(filtered_val_losses))
+                        y_margin = (y_max - y_min) * 0.1
+                        self.loss_ax.set_ylim([max(0, y_min - y_margin), y_max + y_margin])
+                    elif train_losses:
+                        y_min = min(train_losses)
+                        y_max = max(train_losses)
+                        y_margin = (y_max - y_min) * 0.1
+                        self.loss_ax.set_ylim([max(0, y_min - y_margin), y_max + y_margin])
+                    elif filtered_val_losses:
+                        y_min = min(filtered_val_losses)
+                        y_max = max(filtered_val_losses)
+                        y_margin = (y_max - y_min) * 0.1
+                        self.loss_ax.set_ylim([max(0, y_min - y_margin), y_max + y_margin])
                 
                 self.loss_ax.legend(loc='upper right')
                 self.loss_ax.set_xticks(x_ticks)
@@ -480,15 +497,21 @@ class TrainingVisualizationWidget(QWidget):
                         self.acc_ax.plot(epochs, train_maps, 'c-', label=train_metric_label, marker='o', markersize=4)
                         
                     # 设置y轴范围 - 考虑训练和验证指标
-                    all_metrics = maps.copy()
+                    all_accuracies = maps.copy()
                     if train_maps:
-                        all_metrics.extend(train_maps)
+                        all_accuracies.extend(train_maps)
                     
-                    if all_metrics:
-                        y_min = min(filter(lambda x: x > 0, all_metrics))
-                        y_max = max(all_metrics)
-                        y_margin = (y_max - y_min) * 0.1
-                        self.acc_ax.set_ylim([max(0, y_min - y_margin), min(1.0, y_max + y_margin)])
+                    if all_accuracies:
+                        # 增加安全检查，确保过滤后的列表不为空
+                        filtered_accuracies = list(filter(lambda x: x > 0, all_accuracies))
+                        if filtered_accuracies:
+                            y_min = min(filtered_accuracies)
+                            y_max = max(all_accuracies)
+                            y_margin = (y_max - y_min) * 0.1
+                            self.acc_ax.set_ylim([max(0, y_min - y_margin), min(1.0, y_max + y_margin)])
+                        else:
+                            # 如果没有大于0的准确率，使用默认范围
+                            self.acc_ax.set_ylim([0, 1.0])
                     
                     self.acc_ax.legend(loc='lower right')
                     self.acc_ax.set_xticks(x_ticks)
@@ -513,10 +536,22 @@ class TrainingVisualizationWidget(QWidget):
                     self.loss_ax.plot(epochs, val_losses, 'r-', label='验证损失', marker='o', markersize=4)
                     
                     # 设置y轴范围
-                    y_min = min(min(train_losses), min(filter(None, val_losses)))
-                    y_max = max(max(train_losses), max(filter(None, val_losses)))
-                    y_margin = (y_max - y_min) * 0.1
-                    self.loss_ax.set_ylim([max(0, y_min - y_margin), y_max + y_margin])
+                    filtered_val_losses = list(filter(None, val_losses))
+                    if train_losses and filtered_val_losses:
+                        y_min = min(min(train_losses), min(filtered_val_losses))
+                        y_max = max(max(train_losses), max(filtered_val_losses))
+                        y_margin = (y_max - y_min) * 0.1
+                        self.loss_ax.set_ylim([max(0, y_min - y_margin), y_max + y_margin])
+                    elif train_losses:
+                        y_min = min(train_losses)
+                        y_max = max(train_losses)
+                        y_margin = (y_max - y_min) * 0.1
+                        self.loss_ax.set_ylim([max(0, y_min - y_margin), y_max + y_margin])
+                    elif filtered_val_losses:
+                        y_min = min(filtered_val_losses)
+                        y_max = max(filtered_val_losses)
+                        y_margin = (y_max - y_min) * 0.1
+                        self.loss_ax.set_ylim([max(0, y_min - y_margin), y_max + y_margin])
                 
                 self.loss_ax.legend(loc='upper right')
                 self.loss_ax.set_xticks(x_ticks)
@@ -548,10 +583,16 @@ class TrainingVisualizationWidget(QWidget):
                     all_accuracies.extend(train_maps)
                 
                 if all_accuracies:
-                    y_min = min(filter(lambda x: x > 0, all_accuracies))
-                    y_max = max(all_accuracies)
-                    y_margin = (y_max - y_min) * 0.1
-                    self.acc_ax.set_ylim([max(0, y_min - y_margin), min(1.0, y_max + y_margin)])
+                    # 增加安全检查，确保过滤后的列表不为空
+                    filtered_accuracies = list(filter(lambda x: x > 0, all_accuracies))
+                    if filtered_accuracies:
+                        y_min = min(filtered_accuracies)
+                        y_max = max(all_accuracies)
+                        y_margin = (y_max - y_min) * 0.1
+                        self.acc_ax.set_ylim([max(0, y_min - y_margin), min(1.0, y_max + y_margin)])
+                    else:
+                        # 如果没有大于0的准确率，使用默认范围
+                        self.acc_ax.set_ylim([0, 1.0])
                 
                 self.acc_ax.legend(loc='lower right')
                 self.acc_ax.set_xticks(x_ticks)
@@ -575,16 +616,22 @@ class TrainingVisualizationWidget(QWidget):
                 if train_maps and any(m > 0 for m in train_maps):
                     self.acc_ax.plot(epochs, train_maps, 'c-', label='训练mAP', marker='o', markersize=4)
                     
-                # 设置y轴范围
+                    # 设置y轴范围
                 all_maps = maps.copy()
                 if train_maps:
                     all_maps.extend(train_maps)
                 
                 if all_maps:
-                    y_min = min(filter(lambda x: x > 0, all_maps))
-                    y_max = max(all_maps)
-                    y_margin = (y_max - y_min) * 0.1
-                    self.acc_ax.set_ylim([max(0, y_min - y_margin), min(1.0, y_max + y_margin)])
+                    # 增加安全检查，确保过滤后的列表不为空
+                    filtered_maps = list(filter(lambda x: x > 0, all_maps))
+                    if filtered_maps:
+                        y_min = min(filtered_maps)
+                        y_max = max(all_maps)
+                        y_margin = (y_max - y_min) * 0.1
+                        self.acc_ax.set_ylim([max(0, y_min - y_margin), min(1.0, y_max + y_margin)])
+                    else:
+                        # 如果没有大于0的mAP，使用默认范围
+                        self.acc_ax.set_ylim([0, 1.0])
                 
                 self.acc_ax.legend(loc='lower right')
                 self.acc_ax.set_xticks(x_ticks)
@@ -1084,18 +1131,12 @@ class TensorBoardWidget(QWidget):
         self.status_label.setWordWrap(True)
         layout.addWidget(self.status_label)
         
-        # 启动TensorBoard按钮
-        self.launch_btn = QPushButton("启动TensorBoard")
-        self.launch_btn.clicked.connect(self.launch_tensorboard)
-        self.launch_btn.setEnabled(False)
-        layout.addWidget(self.launch_btn)
-        
         # 使用说明
         usage_label = QLabel(
             "使用说明:\n"
             "1. 在模型训练选项卡中启用TensorBoard选项\n"
             "2. 开始训练模型\n"
-            "3. 训练过程中或训练完成后，点击'启动TensorBoard'按钮\n"
+            "3. 训练过程中或训练完成后，使用上方的TensorBoard控件\n"
             "4. TensorBoard将在浏览器中打开，显示详细的训练指标和可视化"
         )
         usage_label.setWordWrap(True)
@@ -1122,9 +1163,6 @@ class TensorBoardWidget(QWidget):
                     self.set_tensorboard_dir(default_dir)
                     self.logger.info(f"自动设置TensorBoard目录: {default_dir}")
             
-            # 启用启动按钮
-            self.launch_btn.setEnabled(self.tensorboard_dir is not None)
-            
         except Exception as e:
             self.logger.error(f"处理TensorBoard更新时出错: {str(e)}")
         
@@ -1133,45 +1171,5 @@ class TensorBoardWidget(QWidget):
         if directory and os.path.exists(directory):
             self.tensorboard_dir = directory
             self.status_label.setText(f"TensorBoard日志目录: {directory}")
-            self.launch_btn.setEnabled(True)
         else:
-            self.status_label.setText(f"TensorBoard日志目录不存在: {directory}")
-            self.launch_btn.setEnabled(False)
-            
-    def launch_tensorboard(self):
-        """启动TensorBoard"""
-        if not self.tensorboard_dir or not os.path.exists(self.tensorboard_dir):
-            self.status_label.setText("错误: TensorBoard日志目录不存在")
-            return
-            
-        try:
-            # 使用subprocess启动TensorBoard
-            import subprocess
-            import threading
-            
-            def run_tensorboard():
-                try:
-                    # 启动TensorBoard进程
-                    process = subprocess.Popen(
-                        ["tensorboard", "--logdir", self.tensorboard_dir, "--port", "6006"],
-                        stdout=subprocess.PIPE,
-                        stderr=subprocess.PIPE
-                    )
-                    
-                    # 等待一段时间让TensorBoard启动
-                    import time
-                    time.sleep(3)
-                    
-                    # 在浏览器中打开TensorBoard
-                    webbrowser.open("http://localhost:6006")
-                    
-                    # 更新状态
-                    self.status_label.setText(f"TensorBoard已启动，访问地址: http://localhost:6006")
-                except Exception as e:
-                    self.status_label.setText(f"启动TensorBoard时出错: {str(e)}")
-            
-            # 在新线程中启动TensorBoard
-            threading.Thread(target=run_tensorboard).start()
-            
-        except Exception as e:
-            self.status_label.setText(f"启动TensorBoard时出错: {str(e)}") 
+            self.status_label.setText(f"TensorBoard日志目录不存在: {directory}") 

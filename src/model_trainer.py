@@ -13,6 +13,11 @@ import subprocess
 import sys
 from torch.utils.tensorboard import SummaryWriter
 from detection_trainer import DetectionTrainer
+import time
+
+# 设置matplotlib后端为Agg，解决线程安全问题
+import matplotlib
+matplotlib.use('Agg')  # 必须在导入pyplot之前设置
 
 class TrainingThread(QThread):
     """负责在单独线程中执行训练过程的类"""
@@ -34,6 +39,8 @@ class TrainingThread(QThread):
         self.stop_training = False
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         self.model = None
+        # 添加training_info字典，用于存储训练过程中的信息
+        self.training_info = {}
     
     def run(self):
         """线程运行入口，执行模型训练"""
@@ -163,9 +170,15 @@ class TrainingThread(QThread):
             # 初始化TensorBoard
             writer = None
             if use_tensorboard:
-                tensorboard_dir = os.path.join(model_save_dir, 'tensorboard_logs')
+                # 创建带有时间戳的唯一TensorBoard日志目录
+                timestamp = time.strftime("%Y%m%d-%H%M%S")
+                model_run_name = f"{model_name}_{timestamp}"
+                tensorboard_dir = os.path.join(model_save_dir, 'tensorboard_logs', model_run_name)
                 os.makedirs(tensorboard_dir, exist_ok=True)
                 writer = SummaryWriter(tensorboard_dir)
+                
+                # 在训练信息中记录TensorBoard日志目录路径
+                self.training_info['tensorboard_log_dir'] = tensorboard_dir
                 
                 # 记录模型图
                 try:
@@ -298,6 +311,10 @@ class TrainingThread(QThread):
                                 import io
                                 from PIL import Image
                                 
+                                # 确保使用非交互式后端
+                                plt.switch_backend('Agg')
+                                plt.ioff()  # 关闭交互模式
+                                
                                 # 计算混淆矩阵
                                 cm = confusion_matrix(all_labels, all_preds)
                                 
@@ -342,16 +359,17 @@ class TrainingThread(QThread):
                 # 如果是验证阶段，检查是否为最佳模型
                 if phase == 'val' and epoch_acc > best_acc:
                     best_acc = epoch_acc
-                    # 保存最佳模型
+                    # 保存最佳模型，添加时间戳
                     model_note = self.config.get('model_note', '')
+                    timestamp = time.strftime("%Y%m%d_%H%M%S")
                     model_file_suffix = f"_{model_note}" if model_note else ""
-                    model_save_path = os.path.join(model_save_dir, f'{model_name}{model_file_suffix}_best.pth')
+                    model_save_path = os.path.join(model_save_dir, f'{model_name}{model_file_suffix}_{timestamp}_best.pth')
                     torch.save(self.model.state_dict(), model_save_path)
                     self.status_updated.emit(f'保存最佳模型，Epoch {epoch+1}, Acc: {best_acc:.4f}')
                     
                     # 导出ONNX模型
                     try:
-                        onnx_save_path = os.path.join(model_save_dir, f'{model_name}{model_file_suffix}_best.onnx')
+                        onnx_save_path = os.path.join(model_save_dir, f'{model_name}{model_file_suffix}_{timestamp}_best.onnx')
                         sample_input = torch.randn(1, 3, 224, 224).to(self.device)
                         torch.onnx.export(
                             self.model, 
@@ -367,10 +385,11 @@ class TrainingThread(QThread):
                     except Exception as e:
                         self.status_updated.emit(f'导出ONNX模型时出错: {str(e)}')
 
-            # 保存最终模型
+            # 保存最终模型，添加时间戳
             model_note = self.config.get('model_note', '')
+            timestamp = time.strftime("%Y%m%d_%H%M%S")
             model_file_suffix = f"_{model_note}" if model_note else ""
-            final_model_path = os.path.join(model_save_dir, f'{model_name}{model_file_suffix}_final.pth')
+            final_model_path = os.path.join(model_save_dir, f'{model_name}{model_file_suffix}_{timestamp}_final.pth')
             torch.save(self.model.state_dict(), final_model_path)
             self.status_updated.emit(f'保存最终模型: {final_model_path}')
             
@@ -382,7 +401,8 @@ class TrainingThread(QThread):
                 'learning_rate': learning_rate,
                 'best_accuracy': best_acc.item() if isinstance(best_acc, torch.Tensor) else best_acc,
                 'class_names': class_names,
-                'model_path': final_model_path
+                'model_path': final_model_path,
+                'timestamp': timestamp  # 添加时间戳到训练信息中
             }
             
             with open(os.path.join(model_save_dir, 'training_info.json'), 'w') as f:
@@ -405,17 +425,37 @@ class TrainingThread(QThread):
             if task_type == 'classification':
                 try:
                     if model_name == 'ResNet18':
-                        model = models.resnet18(pretrained=True)
-                        model.fc = nn.Linear(model.fc.in_features, num_classes)
-                        return model
+                        try:
+                            # 使用新的权重参数方式加载模型，避免警告
+                            model = models.resnet18(weights=models.ResNet18_Weights.IMAGENET1K_V1)
+                            model.fc = nn.Linear(model.fc.in_features, num_classes)
+                            return model
+                        except Exception as e:
+                            # 如果新API不可用，使用旧的方式
+                            self.status_updated.emit(f"使用新API加载ResNet18模型失败: {str(e)}")
+                            model = models.resnet18(pretrained=True)
+                            model.fc = nn.Linear(model.fc.in_features, num_classes)
+                            return model
                     elif model_name == 'ResNet34':
-                        model = models.resnet34(pretrained=True)
-                        model.fc = nn.Linear(model.fc.in_features, num_classes)
-                        return model
+                        try:
+                            model = models.resnet34(weights=models.ResNet34_Weights.IMAGENET1K_V1)
+                            model.fc = nn.Linear(model.fc.in_features, num_classes)
+                            return model
+                        except Exception as e:
+                            self.status_updated.emit(f"使用新API加载ResNet34模型失败: {str(e)}")
+                            model = models.resnet34(pretrained=True)
+                            model.fc = nn.Linear(model.fc.in_features, num_classes)
+                            return model
                     elif model_name == 'ResNet50':
-                        model = models.resnet50(pretrained=True)
-                        model.fc = nn.Linear(model.fc.in_features, num_classes)
-                        return model
+                        try:
+                            model = models.resnet50(weights=models.ResNet50_Weights.IMAGENET1K_V1)
+                            model.fc = nn.Linear(model.fc.in_features, num_classes)
+                            return model
+                        except Exception as e:
+                            self.status_updated.emit(f"使用新API加载ResNet50模型失败: {str(e)}")
+                            model = models.resnet50(pretrained=True)
+                            model.fc = nn.Linear(model.fc.in_features, num_classes)
+                            return model
                     elif model_name == 'ResNet101':
                         # 使用新的权重参数方式加载模型，避免警告和下载问题
                         try:
@@ -429,41 +469,95 @@ class TrainingThread(QThread):
                             model.fc = nn.Linear(model.fc.in_features, num_classes)
                             return model
                     elif model_name == 'ResNet152':
-                        model = models.resnet152(pretrained=True)
-                        model.fc = nn.Linear(model.fc.in_features, num_classes)
-                        return model
+                        try:
+                            model = models.resnet152(weights=models.ResNet152_Weights.IMAGENET1K_V1)
+                            model.fc = nn.Linear(model.fc.in_features, num_classes)
+                            return model
+                        except Exception as e:
+                            self.status_updated.emit(f"使用新API加载ResNet152模型失败: {str(e)}")
+                            model = models.resnet152(pretrained=True)
+                            model.fc = nn.Linear(model.fc.in_features, num_classes)
+                            return model
                     elif model_name == 'MobileNetV2':
-                        model = models.mobilenet_v2(pretrained=True)
-                        model.classifier[1] = nn.Linear(model.classifier[1].in_features, num_classes)
-                        return model
+                        try:
+                            model = models.mobilenet_v2(weights=models.MobileNet_V2_Weights.IMAGENET1K_V1)
+                            model.classifier[1] = nn.Linear(model.classifier[1].in_features, num_classes)
+                            return model
+                        except Exception as e:
+                            self.status_updated.emit(f"使用新API加载MobileNetV2模型失败: {str(e)}")
+                            model = models.mobilenet_v2(pretrained=True)
+                            model.classifier[1] = nn.Linear(model.classifier[1].in_features, num_classes)
+                            return model
                     elif model_name == 'MobileNetV3':
-                        model = models.mobilenet_v3_large(pretrained=True)
-                        model.classifier[3] = nn.Linear(model.classifier[3].in_features, num_classes)
-                        return model
+                        try:
+                            model = models.mobilenet_v3_large(weights=models.MobileNet_V3_Large_Weights.IMAGENET1K_V1)
+                            model.classifier[3] = nn.Linear(model.classifier[3].in_features, num_classes)
+                            return model
+                        except Exception as e:
+                            self.status_updated.emit(f"使用新API加载MobileNetV3模型失败: {str(e)}")
+                            model = models.mobilenet_v3_large(pretrained=True)
+                            model.classifier[3] = nn.Linear(model.classifier[3].in_features, num_classes)
+                            return model
                     elif model_name == 'VGG16':
-                        model = models.vgg16(pretrained=True)
-                        model.classifier[6] = nn.Linear(model.classifier[6].in_features, num_classes)
-                        return model
+                        try:
+                            model = models.vgg16(weights=models.VGG16_Weights.IMAGENET1K_V1)
+                            model.classifier[6] = nn.Linear(model.classifier[6].in_features, num_classes)
+                            return model
+                        except Exception as e:
+                            self.status_updated.emit(f"使用新API加载VGG16模型失败: {str(e)}")
+                            model = models.vgg16(pretrained=True)
+                            model.classifier[6] = nn.Linear(model.classifier[6].in_features, num_classes)
+                            return model
                     elif model_name == 'VGG19':
-                        model = models.vgg19(pretrained=True)
-                        model.classifier[6] = nn.Linear(model.classifier[6].in_features, num_classes)
-                        return model
+                        try:
+                            model = models.vgg19(weights=models.VGG19_Weights.IMAGENET1K_V1)
+                            model.classifier[6] = nn.Linear(model.classifier[6].in_features, num_classes)
+                            return model
+                        except Exception as e:
+                            self.status_updated.emit(f"使用新API加载VGG19模型失败: {str(e)}")
+                            model = models.vgg19(pretrained=True)
+                            model.classifier[6] = nn.Linear(model.classifier[6].in_features, num_classes)
+                            return model
                     elif model_name == 'DenseNet121':
-                        model = models.densenet121(pretrained=True)
-                        model.classifier = nn.Linear(model.classifier.in_features, num_classes)
-                        return model
+                        try:
+                            model = models.densenet121(weights=models.DenseNet121_Weights.IMAGENET1K_V1)
+                            model.classifier = nn.Linear(model.classifier.in_features, num_classes)
+                            return model
+                        except Exception as e:
+                            self.status_updated.emit(f"使用新API加载DenseNet121模型失败: {str(e)}")
+                            model = models.densenet121(pretrained=True)
+                            model.classifier = nn.Linear(model.classifier.in_features, num_classes)
+                            return model
                     elif model_name == 'DenseNet169':
-                        model = models.densenet169(pretrained=True)
-                        model.classifier = nn.Linear(model.classifier.in_features, num_classes)
-                        return model
+                        try:
+                            model = models.densenet169(weights=models.DenseNet169_Weights.IMAGENET1K_V1)
+                            model.classifier = nn.Linear(model.classifier.in_features, num_classes)
+                            return model
+                        except Exception as e:
+                            self.status_updated.emit(f"使用新API加载DenseNet169模型失败: {str(e)}")
+                            model = models.densenet169(pretrained=True)
+                            model.classifier = nn.Linear(model.classifier.in_features, num_classes)
+                            return model
                     elif model_name == 'DenseNet201':
-                        model = models.densenet201(pretrained=True)
-                        model.classifier = nn.Linear(model.classifier.in_features, num_classes)
-                        return model
+                        try:
+                            model = models.densenet201(weights=models.DenseNet201_Weights.IMAGENET1K_V1)
+                            model.classifier = nn.Linear(model.classifier.in_features, num_classes)
+                            return model
+                        except Exception as e:
+                            self.status_updated.emit(f"使用新API加载DenseNet201模型失败: {str(e)}")
+                            model = models.densenet201(pretrained=True)
+                            model.classifier = nn.Linear(model.classifier.in_features, num_classes)
+                            return model
                     elif model_name == 'InceptionV3':
-                        model = models.inception_v3(pretrained=True, aux_logits=False)
-                        model.fc = nn.Linear(model.fc.in_features, num_classes)
-                        return model
+                        try:
+                            model = models.inception_v3(weights=models.Inception_V3_Weights.IMAGENET1K_V1, aux_logits=False)
+                            model.fc = nn.Linear(model.fc.in_features, num_classes)
+                            return model
+                        except Exception as e:
+                            self.status_updated.emit(f"使用新API加载InceptionV3模型失败: {str(e)}")
+                            model = models.inception_v3(pretrained=True, aux_logits=False)
+                            model.fc = nn.Linear(model.fc.in_features, num_classes)
+                            return model
                     elif model_name in ['EfficientNetB0', 'EfficientNetB1', 'EfficientNetB2', 'EfficientNetB3', 'EfficientNetB4']:
                         # 检查是否安装了efficientnet_pytorch
                         try:
@@ -801,17 +895,37 @@ class ModelTrainer(QObject):
             if task_type == 'classification':
                 try:
                     if model_name == 'ResNet18':
-                        model = models.resnet18(pretrained=True)
-                        model.fc = nn.Linear(model.fc.in_features, num_classes)
-                        return model
+                        try:
+                            # 使用新的权重参数方式加载模型，避免警告
+                            model = models.resnet18(weights=models.ResNet18_Weights.IMAGENET1K_V1)
+                            model.fc = nn.Linear(model.fc.in_features, num_classes)
+                            return model
+                        except Exception as e:
+                            # 如果新API不可用，使用旧的方式
+                            self.status_updated.emit(f"使用新API加载ResNet18模型失败: {str(e)}")
+                            model = models.resnet18(pretrained=True)
+                            model.fc = nn.Linear(model.fc.in_features, num_classes)
+                            return model
                     elif model_name == 'ResNet34':
-                        model = models.resnet34(pretrained=True)
-                        model.fc = nn.Linear(model.fc.in_features, num_classes)
-                        return model
+                        try:
+                            model = models.resnet34(weights=models.ResNet34_Weights.IMAGENET1K_V1)
+                            model.fc = nn.Linear(model.fc.in_features, num_classes)
+                            return model
+                        except Exception as e:
+                            self.status_updated.emit(f"使用新API加载ResNet34模型失败: {str(e)}")
+                            model = models.resnet34(pretrained=True)
+                            model.fc = nn.Linear(model.fc.in_features, num_classes)
+                            return model
                     elif model_name == 'ResNet50':
-                        model = models.resnet50(pretrained=True)
-                        model.fc = nn.Linear(model.fc.in_features, num_classes)
-                        return model
+                        try:
+                            model = models.resnet50(weights=models.ResNet50_Weights.IMAGENET1K_V1)
+                            model.fc = nn.Linear(model.fc.in_features, num_classes)
+                            return model
+                        except Exception as e:
+                            self.status_updated.emit(f"使用新API加载ResNet50模型失败: {str(e)}")
+                            model = models.resnet50(pretrained=True)
+                            model.fc = nn.Linear(model.fc.in_features, num_classes)
+                            return model
                     elif model_name == 'ResNet101':
                         # 使用新的权重参数方式加载模型，避免警告和下载问题
                         try:
@@ -825,41 +939,95 @@ class ModelTrainer(QObject):
                             model.fc = nn.Linear(model.fc.in_features, num_classes)
                             return model
                     elif model_name == 'ResNet152':
-                        model = models.resnet152(pretrained=True)
-                        model.fc = nn.Linear(model.fc.in_features, num_classes)
-                        return model
+                        try:
+                            model = models.resnet152(weights=models.ResNet152_Weights.IMAGENET1K_V1)
+                            model.fc = nn.Linear(model.fc.in_features, num_classes)
+                            return model
+                        except Exception as e:
+                            self.status_updated.emit(f"使用新API加载ResNet152模型失败: {str(e)}")
+                            model = models.resnet152(pretrained=True)
+                            model.fc = nn.Linear(model.fc.in_features, num_classes)
+                            return model
                     elif model_name == 'MobileNetV2':
-                        model = models.mobilenet_v2(pretrained=True)
-                        model.classifier[1] = nn.Linear(model.classifier[1].in_features, num_classes)
-                        return model
+                        try:
+                            model = models.mobilenet_v2(weights=models.MobileNet_V2_Weights.IMAGENET1K_V1)
+                            model.classifier[1] = nn.Linear(model.classifier[1].in_features, num_classes)
+                            return model
+                        except Exception as e:
+                            self.status_updated.emit(f"使用新API加载MobileNetV2模型失败: {str(e)}")
+                            model = models.mobilenet_v2(pretrained=True)
+                            model.classifier[1] = nn.Linear(model.classifier[1].in_features, num_classes)
+                            return model
                     elif model_name == 'MobileNetV3':
-                        model = models.mobilenet_v3_large(pretrained=True)
-                        model.classifier[3] = nn.Linear(model.classifier[3].in_features, num_classes)
-                        return model
+                        try:
+                            model = models.mobilenet_v3_large(weights=models.MobileNet_V3_Large_Weights.IMAGENET1K_V1)
+                            model.classifier[3] = nn.Linear(model.classifier[3].in_features, num_classes)
+                            return model
+                        except Exception as e:
+                            self.status_updated.emit(f"使用新API加载MobileNetV3模型失败: {str(e)}")
+                            model = models.mobilenet_v3_large(pretrained=True)
+                            model.classifier[3] = nn.Linear(model.classifier[3].in_features, num_classes)
+                            return model
                     elif model_name == 'VGG16':
-                        model = models.vgg16(pretrained=True)
-                        model.classifier[6] = nn.Linear(model.classifier[6].in_features, num_classes)
-                        return model
+                        try:
+                            model = models.vgg16(weights=models.VGG16_Weights.IMAGENET1K_V1)
+                            model.classifier[6] = nn.Linear(model.classifier[6].in_features, num_classes)
+                            return model
+                        except Exception as e:
+                            self.status_updated.emit(f"使用新API加载VGG16模型失败: {str(e)}")
+                            model = models.vgg16(pretrained=True)
+                            model.classifier[6] = nn.Linear(model.classifier[6].in_features, num_classes)
+                            return model
                     elif model_name == 'VGG19':
-                        model = models.vgg19(pretrained=True)
-                        model.classifier[6] = nn.Linear(model.classifier[6].in_features, num_classes)
-                        return model
+                        try:
+                            model = models.vgg19(weights=models.VGG19_Weights.IMAGENET1K_V1)
+                            model.classifier[6] = nn.Linear(model.classifier[6].in_features, num_classes)
+                            return model
+                        except Exception as e:
+                            self.status_updated.emit(f"使用新API加载VGG19模型失败: {str(e)}")
+                            model = models.vgg19(pretrained=True)
+                            model.classifier[6] = nn.Linear(model.classifier[6].in_features, num_classes)
+                            return model
                     elif model_name == 'DenseNet121':
-                        model = models.densenet121(pretrained=True)
-                        model.classifier = nn.Linear(model.classifier.in_features, num_classes)
-                        return model
+                        try:
+                            model = models.densenet121(weights=models.DenseNet121_Weights.IMAGENET1K_V1)
+                            model.classifier = nn.Linear(model.classifier.in_features, num_classes)
+                            return model
+                        except Exception as e:
+                            self.status_updated.emit(f"使用新API加载DenseNet121模型失败: {str(e)}")
+                            model = models.densenet121(pretrained=True)
+                            model.classifier = nn.Linear(model.classifier.in_features, num_classes)
+                            return model
                     elif model_name == 'DenseNet169':
-                        model = models.densenet169(pretrained=True)
-                        model.classifier = nn.Linear(model.classifier.in_features, num_classes)
-                        return model
+                        try:
+                            model = models.densenet169(weights=models.DenseNet169_Weights.IMAGENET1K_V1)
+                            model.classifier = nn.Linear(model.classifier.in_features, num_classes)
+                            return model
+                        except Exception as e:
+                            self.status_updated.emit(f"使用新API加载DenseNet169模型失败: {str(e)}")
+                            model = models.densenet169(pretrained=True)
+                            model.classifier = nn.Linear(model.classifier.in_features, num_classes)
+                            return model
                     elif model_name == 'DenseNet201':
-                        model = models.densenet201(pretrained=True)
-                        model.classifier = nn.Linear(model.classifier.in_features, num_classes)
-                        return model
+                        try:
+                            model = models.densenet201(weights=models.DenseNet201_Weights.IMAGENET1K_V1)
+                            model.classifier = nn.Linear(model.classifier.in_features, num_classes)
+                            return model
+                        except Exception as e:
+                            self.status_updated.emit(f"使用新API加载DenseNet201模型失败: {str(e)}")
+                            model = models.densenet201(pretrained=True)
+                            model.classifier = nn.Linear(model.classifier.in_features, num_classes)
+                            return model
                     elif model_name == 'InceptionV3':
-                        model = models.inception_v3(pretrained=True, aux_logits=False)
-                        model.fc = nn.Linear(model.fc.in_features, num_classes)
-                        return model
+                        try:
+                            model = models.inception_v3(weights=models.Inception_V3_Weights.IMAGENET1K_V1, aux_logits=False)
+                            model.fc = nn.Linear(model.fc.in_features, num_classes)
+                            return model
+                        except Exception as e:
+                            self.status_updated.emit(f"使用新API加载InceptionV3模型失败: {str(e)}")
+                            model = models.inception_v3(pretrained=True, aux_logits=False)
+                            model.fc = nn.Linear(model.fc.in_features, num_classes)
+                            return model
                     elif model_name in ['EfficientNetB0', 'EfficientNetB1', 'EfficientNetB2', 'EfficientNetB3', 'EfficientNetB4']:
                         # 检查是否安装了efficientnet_pytorch
                         try:
@@ -1091,55 +1259,4 @@ class ModelTrainer(QObject):
                     nn.Flatten(),
                     nn.Linear(128, num_classes)
                 )
-                return model
-
-    def train_model_with_config(self, config: Dict[str, Any]) -> None:
-        """
-        使用配置字典启动训练线程
-        
-        参数:
-            config: 训练配置字典，包含所有训练参数
-        """
-        try:
-            # 如果有正在运行的训练线程，先停止它
-            if self.training_thread and self.training_thread.isRunning():
-                self.stop()
-            
-            task_type = config.get('task_type', 'classification')
-            
-            if task_type == 'detection':
-                # 使用DetectionTrainer进行目标检测训练
-                self.detection_trainer = DetectionTrainer()
-                # 连接信号
-                self.detection_trainer.progress_updated.connect(self.progress_updated)
-                self.detection_trainer.status_updated.connect(self.status_updated)
-                self.detection_trainer.training_finished.connect(self.training_finished)
-                self.detection_trainer.training_error.connect(self.training_error)
-                self.detection_trainer.epoch_finished.connect(self.epoch_finished)
-                self.detection_trainer.model_download_failed.connect(self.model_download_failed)
-                
-                # 启动训练
-                self.detection_trainer.train_model(config)
-            else:
-                # 创建新的训练线程用于分类任务
-                self.training_thread = TrainingThread(config)
-                
-                # 连接信号
-                self.training_thread.progress_updated.connect(self.progress_updated)
-                self.training_thread.status_updated.connect(self.status_updated)
-                self.training_thread.training_finished.connect(self.training_finished)
-                self.training_thread.training_error.connect(self.training_error)
-                self.training_thread.epoch_finished.connect(self.epoch_finished)
-                self.training_thread.model_download_failed.connect(self.model_download_failed)
-                
-                # 启动训练线程
-                self.training_thread.start()
-            
-            # 打印训练配置
-            self.status_updated.emit(f"开始训练 {config.get('model_name', 'unknown')} 模型，任务类型: {task_type}")
-            self.status_updated.emit(f"批次大小: {config.get('batch_size', 32)}, 学习率: {config.get('learning_rate', 0.001)}, 训练轮数: {config.get('num_epochs', 20)}")
-            
-        except Exception as e:
-            self.training_error.emit(f"启动训练失败: {str(e)}")
-            import traceback
-            traceback.print_exc() 
+                return model 

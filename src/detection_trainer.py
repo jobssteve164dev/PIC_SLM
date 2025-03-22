@@ -15,6 +15,8 @@ from PIL import Image
 import torchvision
 from detection_utils import DetectionDataset, evaluate_model
 import logging
+import time
+import shutil
 
 class DetectionTrainingThread(QThread):
     """负责在单独线程中执行目标检测训练过程的类"""
@@ -69,11 +71,10 @@ class DetectionTrainingThread(QThread):
             # 根据模型名称选择训练方法
             if model_name.startswith('YOLOv8'):
                 self._train_yolov8(data_dir, model_name, num_epochs, batch_size, learning_rate,
-                                 model_save_dir, iou_threshold, conf_threshold, resolution,
-                                 use_pretrained, pretrained_path, model_note)
+                                 model_save_dir, use_tensorboard, self.config)
             elif model_name == 'Faster R-CNN':
                 self._train_fasterrcnn(data_dir, num_epochs, batch_size, learning_rate,
-                                     model_save_dir, use_pretrained, pretrained_path, model_note)
+                                     model_save_dir, use_tensorboard, self.config)
             elif model_name == 'SSD':
                 self._train_ssd(data_dir, num_epochs, batch_size, learning_rate,
                               model_save_dir, use_pretrained, pretrained_path, model_note)
@@ -314,7 +315,7 @@ class DetectionTrainingThread(QThread):
             import traceback
             traceback.print_exc()
     
-    def _train_fasterrcnn(self, data_dir, num_epochs, batch_size, learning_rate, model_save_dir):
+    def _train_fasterrcnn(self, data_dir, num_epochs, batch_size, learning_rate, model_save_dir, use_tensorboard=True, config=None):
         """使用Faster R-CNN进行目标检测训练"""
         try:
             self.status_updated.emit("开始Faster R-CNN模型训练...")
@@ -360,7 +361,13 @@ class DetectionTrainingThread(QThread):
             optimizer = torch.optim.Adam(params, lr=learning_rate)
             
             # 创建TensorBoard写入器
-            writer = SummaryWriter(os.path.join(model_save_dir, 'runs'))
+            timestamp = time.strftime("%Y%m%d-%H%M%S")
+            tensorboard_dir = os.path.join(model_save_dir, 'tensorboard_logs', f"FasterRCNN_{timestamp}")
+            os.makedirs(tensorboard_dir, exist_ok=True)
+            writer = SummaryWriter(tensorboard_dir)
+            
+            # 保存TensorBoard日志目录路径
+            self.tensorboard_log_dir = tensorboard_dir
             
             # 训练循环
             best_map = 0.0
@@ -410,7 +417,11 @@ class DetectionTrainingThread(QThread):
                 # 保存最佳模型
                 if current_map > best_map:
                     best_map = current_map
-                    model_save_path = os.path.join(model_save_dir, 'fasterrcnn_best.pth')
+                    # 添加时间戳和模型备注
+                    model_note = config.get('model_note', '') if config else ''
+                    timestamp = time.strftime("%Y%m%d_%H%M%S")
+                    model_file_suffix = f"_{model_note}" if model_note else ""
+                    model_save_path = os.path.join(model_save_dir, f'fasterrcnn{model_file_suffix}_{timestamp}_best.pth')
                     torch.save(model.state_dict(), model_save_path)
                 
                 # 发送epoch完成信号
@@ -423,7 +434,11 @@ class DetectionTrainingThread(QThread):
                 self.epoch_finished.emit(epoch_info)
             
             # 保存最终模型
-            final_model_path = os.path.join(model_save_dir, 'fasterrcnn_final.pth')
+            # 添加时间戳和模型备注
+            model_note = config.get('model_note', '') if config else ''
+            timestamp = time.strftime("%Y%m%d_%H%M%S")
+            model_file_suffix = f"_{model_note}" if model_note else ""
+            final_model_path = os.path.join(model_save_dir, f'fasterrcnn{model_file_suffix}_{timestamp}_final.pth')
             torch.save(model.state_dict(), final_model_path)
             
             # 保存训练信息
@@ -434,7 +449,8 @@ class DetectionTrainingThread(QThread):
                 'learning_rate': learning_rate,
                 'best_map': best_map,
                 'model_path': final_model_path,
-                'best_model_path': os.path.join(model_save_dir, 'fasterrcnn_best.pth')
+                'best_model_path': model_save_path,  # 使用最佳模型的路径
+                'timestamp': timestamp  # 添加时间戳到训练信息
             }
             
             with open(os.path.join(model_save_dir, 'training_info.json'), 'w') as f:
@@ -447,7 +463,7 @@ class DetectionTrainingThread(QThread):
             import traceback
             traceback.print_exc()
     
-    def _train_ssd(self, data_dir, num_epochs, batch_size, learning_rate, model_save_dir):
+    def _train_ssd(self, data_dir, num_epochs, batch_size, learning_rate, model_save_dir, use_tensorboard=True, config=None):
         """使用SSD进行目标检测训练"""
         try:
             self.status_updated.emit("开始SSD模型训练...")
@@ -495,7 +511,13 @@ class DetectionTrainingThread(QThread):
             optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
             
             # 创建TensorBoard写入器
-            writer = SummaryWriter(os.path.join(model_save_dir, 'runs'))
+            timestamp = time.strftime("%Y%m%d-%H%M%S")
+            tensorboard_dir = os.path.join(model_save_dir, 'tensorboard_logs', f"SSD_{timestamp}")
+            os.makedirs(tensorboard_dir, exist_ok=True)
+            writer = SummaryWriter(tensorboard_dir)
+            
+            # 保存TensorBoard日志目录路径
+            self.tensorboard_log_dir = tensorboard_dir
             
             # 训练循环
             best_map = 0.0
@@ -545,7 +567,11 @@ class DetectionTrainingThread(QThread):
                 # 保存最佳模型
                 if current_map > best_map:
                     best_map = current_map
-                    model_save_path = os.path.join(model_save_dir, 'ssd_best.pth')
+                    # 添加时间戳和模型备注
+                    model_note = config.get('model_note', '') if config else ''
+                    timestamp = time.strftime("%Y%m%d_%H%M%S")
+                    model_file_suffix = f"_{model_note}" if model_note else ""
+                    model_save_path = os.path.join(model_save_dir, f'ssd{model_file_suffix}_{timestamp}_best.pth')
                     torch.save(model.state_dict(), model_save_path)
                 
                 # 发送epoch完成信号
@@ -558,7 +584,11 @@ class DetectionTrainingThread(QThread):
                 self.epoch_finished.emit(epoch_info)
             
             # 保存最终模型
-            final_model_path = os.path.join(model_save_dir, 'ssd_final.pth')
+            # 添加时间戳和模型备注
+            model_note = config.get('model_note', '') if config else ''
+            timestamp = time.strftime("%Y%m%d_%H%M%S")
+            model_file_suffix = f"_{model_note}" if model_note else ""
+            final_model_path = os.path.join(model_save_dir, f'ssd{model_file_suffix}_{timestamp}_final.pth')
             torch.save(model.state_dict(), final_model_path)
             
             # 保存训练信息
@@ -569,7 +599,8 @@ class DetectionTrainingThread(QThread):
                 'learning_rate': learning_rate,
                 'best_map': best_map,
                 'model_path': final_model_path,
-                'best_model_path': os.path.join(model_save_dir, 'ssd_best.pth')
+                'best_model_path': model_save_path,  # 使用最佳模型的路径
+                'timestamp': timestamp  # 添加时间戳到训练信息
             }
             
             with open(os.path.join(model_save_dir, 'training_info.json'), 'w') as f:
@@ -582,7 +613,7 @@ class DetectionTrainingThread(QThread):
             import traceback
             traceback.print_exc()
 
-    def _train_retinanet(self, data_dir, num_epochs, batch_size, learning_rate, model_save_dir):
+    def _train_retinanet(self, data_dir, num_epochs, batch_size, learning_rate, model_save_dir, use_tensorboard=True, config=None):
         """使用RetinaNet进行目标检测训练"""
         try:
             self.status_updated.emit("开始RetinaNet模型训练...")
@@ -629,7 +660,13 @@ class DetectionTrainingThread(QThread):
             optimizer = torch.optim.Adam(params, lr=learning_rate)
             
             # 创建TensorBoard写入器
-            writer = SummaryWriter(os.path.join(model_save_dir, 'runs'))
+            timestamp = time.strftime("%Y%m%d-%H%M%S")
+            tensorboard_dir = os.path.join(model_save_dir, 'tensorboard_logs', f"RetinaNet_{timestamp}")
+            os.makedirs(tensorboard_dir, exist_ok=True)
+            writer = SummaryWriter(tensorboard_dir)
+            
+            # 保存TensorBoard日志目录路径
+            self.tensorboard_log_dir = tensorboard_dir
             
             # 训练循环
             best_map = 0.0
@@ -679,7 +716,11 @@ class DetectionTrainingThread(QThread):
                 # 保存最佳模型
                 if current_map > best_map:
                     best_map = current_map
-                    model_save_path = os.path.join(model_save_dir, 'retinanet_best.pth')
+                    # 添加时间戳和模型备注
+                    model_note = config.get('model_note', '') if config else ''
+                    timestamp = time.strftime("%Y%m%d_%H%M%S")
+                    model_file_suffix = f"_{model_note}" if model_note else ""
+                    model_save_path = os.path.join(model_save_dir, f'retinanet{model_file_suffix}_{timestamp}_best.pth')
                     torch.save(model.state_dict(), model_save_path)
                 
                 # 发送epoch完成信号
@@ -692,7 +733,11 @@ class DetectionTrainingThread(QThread):
                 self.epoch_finished.emit(epoch_info)
             
             # 保存最终模型
-            final_model_path = os.path.join(model_save_dir, 'retinanet_final.pth')
+            # 添加时间戳和模型备注
+            model_note = config.get('model_note', '') if config else ''
+            timestamp = time.strftime("%Y%m%d_%H%M%S")
+            model_file_suffix = f"_{model_note}" if model_note else ""
+            final_model_path = os.path.join(model_save_dir, f'retinanet{model_file_suffix}_{timestamp}_final.pth')
             torch.save(model.state_dict(), final_model_path)
             
             # 保存训练信息
@@ -703,7 +748,8 @@ class DetectionTrainingThread(QThread):
                 'learning_rate': learning_rate,
                 'best_map': best_map,
                 'model_path': final_model_path,
-                'best_model_path': os.path.join(model_save_dir, 'retinanet_best.pth')
+                'best_model_path': model_save_path,  # 使用最佳模型的路径
+                'timestamp': timestamp  # 添加时间戳到训练信息
             }
             
             with open(os.path.join(model_save_dir, 'training_info.json'), 'w') as f:
@@ -716,7 +762,7 @@ class DetectionTrainingThread(QThread):
             import traceback
             traceback.print_exc()
 
-    def _train_detr(self, data_dir, num_epochs, batch_size, learning_rate, model_save_dir):
+    def _train_detr(self, data_dir, num_epochs, batch_size, learning_rate, model_save_dir, use_tensorboard=True, config=None):
         """使用DETR进行目标检测训练"""
         try:
             self.status_updated.emit("开始DETR模型训练...")
@@ -772,7 +818,13 @@ class DetectionTrainingThread(QThread):
             lr_scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=3)
             
             # 创建TensorBoard写入器
-            writer = SummaryWriter(os.path.join(model_save_dir, 'runs'))
+            timestamp = time.strftime("%Y%m%d-%H%M%S")
+            tensorboard_dir = os.path.join(model_save_dir, 'tensorboard_logs', f"DETR_{timestamp}")
+            os.makedirs(tensorboard_dir, exist_ok=True)
+            writer = SummaryWriter(tensorboard_dir)
+            
+            # 保存TensorBoard日志目录路径
+            self.tensorboard_log_dir = tensorboard_dir
             
             # 训练循环
             best_map = 0.0
@@ -827,7 +879,11 @@ class DetectionTrainingThread(QThread):
                 # 保存最佳模型
                 if current_map > best_map:
                     best_map = current_map
-                    model_save_path = os.path.join(model_save_dir, 'detr_best.pth')
+                    # 添加时间戳和模型备注
+                    model_note = config.get('model_note', '') if config else ''
+                    timestamp = time.strftime("%Y%m%d_%H%M%S")
+                    model_file_suffix = f"_{model_note}" if model_note else ""
+                    model_save_path = os.path.join(model_save_dir, f'detr{model_file_suffix}_{timestamp}_best.pth')
                     torch.save(model.state_dict(), model_save_path)
                 
                 # 发送epoch完成信号
@@ -841,7 +897,11 @@ class DetectionTrainingThread(QThread):
                 self.epoch_finished.emit(epoch_info)
             
             # 保存最终模型
-            final_model_path = os.path.join(model_save_dir, 'detr_final.pth')
+            # 添加时间戳和模型备注
+            model_note = config.get('model_note', '') if config else ''
+            timestamp = time.strftime("%Y%m%d_%H%M%S")
+            model_file_suffix = f"_{model_note}" if model_note else ""
+            final_model_path = os.path.join(model_save_dir, f'detr{model_file_suffix}_{timestamp}_final.pth')
             torch.save(model.state_dict(), final_model_path)
             
             # 保存训练信息
@@ -852,7 +912,8 @@ class DetectionTrainingThread(QThread):
                 'learning_rate': learning_rate,
                 'best_map': best_map,
                 'model_path': final_model_path,
-                'best_model_path': os.path.join(model_save_dir, 'detr_best.pth')
+                'best_model_path': model_save_path,  # 使用最佳模型的路径
+                'timestamp': timestamp  # 添加时间戳到训练信息
             }
             
             with open(os.path.join(model_save_dir, 'training_info.json'), 'w') as f:
@@ -1004,25 +1065,33 @@ class DetectionTrainer(QObject):
             
             # 创建TensorBoard写入器
             if use_tensorboard:
-                self.writer = SummaryWriter(os.path.join(model_save_dir, 'runs'))
-                self.logger.info("已创建TensorBoard写入器")
+                # 创建带有时间戳的唯一TensorBoard日志目录
+                timestamp = time.strftime("%Y%m%d-%H%M%S")
+                model_run_name = f"{model_name}_{timestamp}"
+                tensorboard_dir = os.path.join(model_save_dir, 'tensorboard_logs', model_run_name)
+                os.makedirs(tensorboard_dir, exist_ok=True)
+                self.writer = SummaryWriter(tensorboard_dir)
+                self.logger.info(f"已创建TensorBoard写入器，日志目录: {tensorboard_dir}")
+                
+                # 保存TensorBoard日志目录路径，便于后续访问
+                self.tensorboard_log_dir = tensorboard_dir
             
             # 根据模型名称选择训练方法
             if model_name.startswith('YOLOv8'):
                 self._train_yolov8(data_dir, model_name, num_epochs, batch_size, learning_rate,
-                                 model_save_dir, use_tensorboard)
+                                 model_save_dir, use_tensorboard, config)
             elif model_name == 'Faster R-CNN':
                 self._train_fasterrcnn(data_dir, num_epochs, batch_size, learning_rate,
-                                     model_save_dir, use_tensorboard)
+                                     model_save_dir, use_tensorboard, config)
             elif model_name == 'SSD':
                 self._train_ssd(data_dir, num_epochs, batch_size, learning_rate,
-                              model_save_dir, use_tensorboard)
+                              model_save_dir, use_tensorboard, config)
             elif model_name == 'RetinaNet':
                 self._train_retinanet(data_dir, num_epochs, batch_size, learning_rate,
-                                    model_save_dir, use_tensorboard)
+                                    model_save_dir, use_tensorboard, config)
             elif model_name == 'DETR':
                 self._train_detr(data_dir, num_epochs, batch_size, learning_rate,
-                               model_save_dir, use_tensorboard)
+                               model_save_dir, use_tensorboard, config)
             else:
                 error_msg = f"不支持的模型类型: {model_name}"
                 self.logger.error(error_msg)
@@ -1138,7 +1207,7 @@ class DetectionTrainer(QObject):
             import traceback
             traceback.print_exc()
 
-    def _train_fasterrcnn(self, data_dir, num_epochs, batch_size, learning_rate, model_save_dir):
+    def _train_fasterrcnn(self, data_dir, num_epochs, batch_size, learning_rate, model_save_dir, use_tensorboard=True, config=None):
         """使用Faster R-CNN进行目标检测训练"""
         try:
             self.status_updated.emit("开始Faster R-CNN模型训练...")
@@ -1184,7 +1253,13 @@ class DetectionTrainer(QObject):
             optimizer = torch.optim.Adam(params, lr=learning_rate)
             
             # 创建TensorBoard写入器
-            writer = SummaryWriter(os.path.join(model_save_dir, 'runs'))
+            timestamp = time.strftime("%Y%m%d-%H%M%S")
+            tensorboard_dir = os.path.join(model_save_dir, 'tensorboard_logs', f"FasterRCNN_{timestamp}")
+            os.makedirs(tensorboard_dir, exist_ok=True)
+            writer = SummaryWriter(tensorboard_dir)
+            
+            # 保存TensorBoard日志目录路径
+            self.tensorboard_log_dir = tensorboard_dir
             
             # 训练循环
             best_map = 0.0
@@ -1234,7 +1309,11 @@ class DetectionTrainer(QObject):
                 # 保存最佳模型
                 if current_map > best_map:
                     best_map = current_map
-                    model_save_path = os.path.join(model_save_dir, 'fasterrcnn_best.pth')
+                    # 添加时间戳和模型备注
+                    model_note = config.get('model_note', '') if config else ''
+                    timestamp = time.strftime("%Y%m%d_%H%M%S")
+                    model_file_suffix = f"_{model_note}" if model_note else ""
+                    model_save_path = os.path.join(model_save_dir, f'fasterrcnn{model_file_suffix}_{timestamp}_best.pth')
                     torch.save(model.state_dict(), model_save_path)
                 
                 # 发送epoch完成信号
@@ -1247,7 +1326,11 @@ class DetectionTrainer(QObject):
                 self.epoch_finished.emit(epoch_info)
             
             # 保存最终模型
-            final_model_path = os.path.join(model_save_dir, 'fasterrcnn_final.pth')
+            # 添加时间戳和模型备注
+            model_note = config.get('model_note', '') if config else ''
+            timestamp = time.strftime("%Y%m%d_%H%M%S")
+            model_file_suffix = f"_{model_note}" if model_note else ""
+            final_model_path = os.path.join(model_save_dir, f'fasterrcnn{model_file_suffix}_{timestamp}_final.pth')
             torch.save(model.state_dict(), final_model_path)
             
             # 保存训练信息
@@ -1258,7 +1341,8 @@ class DetectionTrainer(QObject):
                 'learning_rate': learning_rate,
                 'best_map': best_map,
                 'model_path': final_model_path,
-                'best_model_path': os.path.join(model_save_dir, 'fasterrcnn_best.pth')
+                'best_model_path': model_save_path,  # 使用最佳模型的路径
+                'timestamp': timestamp  # 添加时间戳到训练信息
             }
             
             with open(os.path.join(model_save_dir, 'training_info.json'), 'w') as f:
@@ -1271,7 +1355,7 @@ class DetectionTrainer(QObject):
             import traceback
             traceback.print_exc()
 
-    def _train_ssd(self, data_dir, num_epochs, batch_size, learning_rate, model_save_dir):
+    def _train_ssd(self, data_dir, num_epochs, batch_size, learning_rate, model_save_dir, use_tensorboard=True, config=None):
         """使用SSD进行目标检测训练"""
         try:
             self.status_updated.emit("开始SSD模型训练...")
@@ -1319,7 +1403,13 @@ class DetectionTrainer(QObject):
             optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
             
             # 创建TensorBoard写入器
-            writer = SummaryWriter(os.path.join(model_save_dir, 'runs'))
+            timestamp = time.strftime("%Y%m%d-%H%M%S")
+            tensorboard_dir = os.path.join(model_save_dir, 'tensorboard_logs', f"SSD_{timestamp}")
+            os.makedirs(tensorboard_dir, exist_ok=True)
+            writer = SummaryWriter(tensorboard_dir)
+            
+            # 保存TensorBoard日志目录路径
+            self.tensorboard_log_dir = tensorboard_dir
             
             # 训练循环
             best_map = 0.0
@@ -1369,7 +1459,11 @@ class DetectionTrainer(QObject):
                 # 保存最佳模型
                 if current_map > best_map:
                     best_map = current_map
-                    model_save_path = os.path.join(model_save_dir, 'ssd_best.pth')
+                    # 添加时间戳和模型备注
+                    model_note = config.get('model_note', '') if config else ''
+                    timestamp = time.strftime("%Y%m%d_%H%M%S")
+                    model_file_suffix = f"_{model_note}" if model_note else ""
+                    model_save_path = os.path.join(model_save_dir, f'ssd{model_file_suffix}_{timestamp}_best.pth')
                     torch.save(model.state_dict(), model_save_path)
                 
                 # 发送epoch完成信号
@@ -1382,7 +1476,11 @@ class DetectionTrainer(QObject):
                 self.epoch_finished.emit(epoch_info)
             
             # 保存最终模型
-            final_model_path = os.path.join(model_save_dir, 'ssd_final.pth')
+            # 添加时间戳和模型备注
+            model_note = config.get('model_note', '') if config else ''
+            timestamp = time.strftime("%Y%m%d_%H%M%S")
+            model_file_suffix = f"_{model_note}" if model_note else ""
+            final_model_path = os.path.join(model_save_dir, f'ssd{model_file_suffix}_{timestamp}_final.pth')
             torch.save(model.state_dict(), final_model_path)
             
             # 保存训练信息
@@ -1393,7 +1491,8 @@ class DetectionTrainer(QObject):
                 'learning_rate': learning_rate,
                 'best_map': best_map,
                 'model_path': final_model_path,
-                'best_model_path': os.path.join(model_save_dir, 'ssd_best.pth')
+                'best_model_path': model_save_path,  # 使用最佳模型的路径
+                'timestamp': timestamp  # 添加时间戳到训练信息
             }
             
             with open(os.path.join(model_save_dir, 'training_info.json'), 'w') as f:
@@ -1406,7 +1505,7 @@ class DetectionTrainer(QObject):
             import traceback
             traceback.print_exc()
 
-    def _train_retinanet(self, data_dir, num_epochs, batch_size, learning_rate, model_save_dir):
+    def _train_retinanet(self, data_dir, num_epochs, batch_size, learning_rate, model_save_dir, use_tensorboard=True, config=None):
         """使用RetinaNet进行目标检测训练"""
         try:
             self.status_updated.emit("开始RetinaNet模型训练...")
@@ -1453,7 +1552,13 @@ class DetectionTrainer(QObject):
             optimizer = torch.optim.Adam(params, lr=learning_rate)
             
             # 创建TensorBoard写入器
-            writer = SummaryWriter(os.path.join(model_save_dir, 'runs'))
+            timestamp = time.strftime("%Y%m%d-%H%M%S")
+            tensorboard_dir = os.path.join(model_save_dir, 'tensorboard_logs', f"RetinaNet_{timestamp}")
+            os.makedirs(tensorboard_dir, exist_ok=True)
+            writer = SummaryWriter(tensorboard_dir)
+            
+            # 保存TensorBoard日志目录路径
+            self.tensorboard_log_dir = tensorboard_dir
             
             # 训练循环
             best_map = 0.0
@@ -1503,7 +1608,11 @@ class DetectionTrainer(QObject):
                 # 保存最佳模型
                 if current_map > best_map:
                     best_map = current_map
-                    model_save_path = os.path.join(model_save_dir, 'retinanet_best.pth')
+                    # 添加时间戳和模型备注
+                    model_note = config.get('model_note', '') if config else ''
+                    timestamp = time.strftime("%Y%m%d_%H%M%S")
+                    model_file_suffix = f"_{model_note}" if model_note else ""
+                    model_save_path = os.path.join(model_save_dir, f'retinanet{model_file_suffix}_{timestamp}_best.pth')
                     torch.save(model.state_dict(), model_save_path)
                 
                 # 发送epoch完成信号
@@ -1516,7 +1625,11 @@ class DetectionTrainer(QObject):
                 self.epoch_finished.emit(epoch_info)
             
             # 保存最终模型
-            final_model_path = os.path.join(model_save_dir, 'retinanet_final.pth')
+            # 添加时间戳和模型备注
+            model_note = config.get('model_note', '') if config else ''
+            timestamp = time.strftime("%Y%m%d_%H%M%S")
+            model_file_suffix = f"_{model_note}" if model_note else ""
+            final_model_path = os.path.join(model_save_dir, f'retinanet{model_file_suffix}_{timestamp}_final.pth')
             torch.save(model.state_dict(), final_model_path)
             
             # 保存训练信息
@@ -1527,7 +1640,8 @@ class DetectionTrainer(QObject):
                 'learning_rate': learning_rate,
                 'best_map': best_map,
                 'model_path': final_model_path,
-                'best_model_path': os.path.join(model_save_dir, 'retinanet_best.pth')
+                'best_model_path': model_save_path,  # 使用最佳模型的路径
+                'timestamp': timestamp  # 添加时间戳到训练信息
             }
             
             with open(os.path.join(model_save_dir, 'training_info.json'), 'w') as f:
@@ -1540,7 +1654,7 @@ class DetectionTrainer(QObject):
             import traceback
             traceback.print_exc()
 
-    def _train_detr(self, data_dir, num_epochs, batch_size, learning_rate, model_save_dir):
+    def _train_detr(self, data_dir, num_epochs, batch_size, learning_rate, model_save_dir, use_tensorboard=True, config=None):
         """使用DETR进行目标检测训练"""
         try:
             self.status_updated.emit("开始DETR模型训练...")
@@ -1596,7 +1710,13 @@ class DetectionTrainer(QObject):
             lr_scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=3)
             
             # 创建TensorBoard写入器
-            writer = SummaryWriter(os.path.join(model_save_dir, 'runs'))
+            timestamp = time.strftime("%Y%m%d-%H%M%S")
+            tensorboard_dir = os.path.join(model_save_dir, 'tensorboard_logs', f"DETR_{timestamp}")
+            os.makedirs(tensorboard_dir, exist_ok=True)
+            writer = SummaryWriter(tensorboard_dir)
+            
+            # 保存TensorBoard日志目录路径
+            self.tensorboard_log_dir = tensorboard_dir
             
             # 训练循环
             best_map = 0.0
@@ -1651,7 +1771,11 @@ class DetectionTrainer(QObject):
                 # 保存最佳模型
                 if current_map > best_map:
                     best_map = current_map
-                    model_save_path = os.path.join(model_save_dir, 'detr_best.pth')
+                    # 添加时间戳和模型备注
+                    model_note = config.get('model_note', '') if config else ''
+                    timestamp = time.strftime("%Y%m%d_%H%M%S")
+                    model_file_suffix = f"_{model_note}" if model_note else ""
+                    model_save_path = os.path.join(model_save_dir, f'detr{model_file_suffix}_{timestamp}_best.pth')
                     torch.save(model.state_dict(), model_save_path)
                 
                 # 发送epoch完成信号
@@ -1665,7 +1789,11 @@ class DetectionTrainer(QObject):
                 self.epoch_finished.emit(epoch_info)
             
             # 保存最终模型
-            final_model_path = os.path.join(model_save_dir, 'detr_final.pth')
+            # 添加时间戳和模型备注
+            model_note = config.get('model_note', '') if config else ''
+            timestamp = time.strftime("%Y%m%d_%H%M%S")
+            model_file_suffix = f"_{model_note}" if model_note else ""
+            final_model_path = os.path.join(model_save_dir, f'detr{model_file_suffix}_{timestamp}_final.pth')
             torch.save(model.state_dict(), final_model_path)
             
             # 保存训练信息
@@ -1676,7 +1804,8 @@ class DetectionTrainer(QObject):
                 'learning_rate': learning_rate,
                 'best_map': best_map,
                 'model_path': final_model_path,
-                'best_model_path': os.path.join(model_save_dir, 'detr_best.pth')
+                'best_model_path': model_save_path,  # 使用最佳模型的路径
+                'timestamp': timestamp  # 添加时间戳到训练信息
             }
             
             with open(os.path.join(model_save_dir, 'training_info.json'), 'w') as f:

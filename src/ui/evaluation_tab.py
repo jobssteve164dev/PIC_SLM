@@ -7,8 +7,13 @@ from PyQt5.QtGui import QFont
 import os
 import json
 import subprocess
+import sys
 from .base_tab import BaseTab
 from .training_visualization import TensorBoardWidget, TrainingVisualizationWidget
+import torch
+import torchvision
+from PIL import Image
+import time
 
 class EvaluationTab(BaseTab):
     """评估标签页，负责模型评估和比较功能，以及TensorBoard可视化"""
@@ -301,31 +306,260 @@ class EvaluationTab(BaseTab):
         if not selected_models:
             QMessageBox.warning(self, "警告", "请先选择要比较的模型!")
             return
+
+        # 验证是否至少选择了一个模型
+        if not selected_models:
+            QMessageBox.warning(self, "警告", "请选择至少一个模型进行评估")
+            return
             
         # 清空结果表格
         self.result_table.setRowCount(0)
         
-        # 这里应该调用实际的模型评估逻辑
-        # 为了演示，我们使用模拟数据
-        for i, model_name in enumerate(selected_models):
-            # 添加新行
-            row_position = self.result_table.rowCount()
-            self.result_table.insertRow(row_position)
-            
-            # 模拟评估结果
-            accuracy = 0.85 + (i * 0.02)  # 模拟不同的准确率
-            loss = 0.3 - (i * 0.05)  # 模拟不同的损失
-            params = 1000000 + (i * 500000)  # 模拟不同的参数量
-            inference_time = 10 + (i * 2)  # 模拟不同的推理时间
-            
-            # 填充表格
-            self.result_table.setItem(row_position, 0, QTableWidgetItem(model_name))
-            self.result_table.setItem(row_position, 1, QTableWidgetItem(f"{accuracy:.2%}"))
-            self.result_table.setItem(row_position, 2, QTableWidgetItem(f"{loss:.4f}"))
-            self.result_table.setItem(row_position, 3, QTableWidgetItem(f"{params:,}"))
-            self.result_table.setItem(row_position, 4, QTableWidgetItem(f"{inference_time} ms"))
+        self.update_status("正在评估模型...")
         
-        self.update_status(f"已比较 {len(selected_models)} 个模型")
+        try:
+            # 添加src目录到sys.path，确保能导入相关模块
+            sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+            
+            # 导入预测器和评估工具
+            from predictor import Predictor
+            
+            # 从配置文件获取默认设置
+            config_file = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'config.json')
+            
+            # 读取配置
+            data_dir = ""
+            class_info_path = ""
+            
+            if os.path.exists(config_file):
+                with open(config_file, 'r', encoding='utf-8') as f:
+                    config = json.load(f)
+                    data_dir = config.get('default_output_folder', '')
+                    class_info_path = config.get('default_class_info_file', '')
+            else:
+                # 如果找不到配置文件，使用默认路径
+                data_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+            
+            # 验证类别信息文件是否存在
+            if not class_info_path or not os.path.exists(class_info_path):
+                # 尝试在模型目录中查找任何类别信息文件
+                json_files = [f for f in os.listdir(self.models_dir) if f.endswith('_classes.json') or f == 'class_info.json']
+                if json_files:
+                    class_info_path = os.path.join(self.models_dir, json_files[0])
+                else:
+                    QMessageBox.warning(self, "错误", "找不到类别信息文件，请在设置中配置默认类别信息文件")
+                    return
+            
+            # 验证类别信息文件
+            try:
+                with open(class_info_path, 'r', encoding='utf-8') as f:
+                    class_info = json.load(f)
+                print(f"使用类别信息文件: {class_info_path}")
+                print(f"类别信息: {class_info}")
+            except Exception as e:
+                QMessageBox.warning(self, "错误", f"无法读取类别信息文件: {str(e)}")
+                return
+                
+            # 判断数据集类型（分类或检测）
+            if os.path.exists(os.path.join(data_dir, 'dataset', 'val')):
+                # 分类数据集
+                test_dir = os.path.join(data_dir, 'dataset', 'val')
+                task_type = "分类模型"
+            elif os.path.exists(os.path.join(data_dir, 'detection_data')):
+                # 检测数据集
+                test_dir = os.path.join(data_dir, 'detection_data')
+                task_type = "检测模型"
+            else:
+                QMessageBox.warning(self, "错误", "找不到有效的测试数据集目录")
+                return
+                
+            # 为每个选中的模型进行评估
+            for i, model_filename in enumerate(selected_models):
+                model_path = os.path.join(self.models_dir, model_filename)
+                
+                # 创建预测器
+                predictor = Predictor()
+                
+                # 尝试猜测模型架构
+                if "resnet18" in model_filename.lower():
+                    model_arch = "ResNet18"
+                elif "resnet34" in model_filename.lower():
+                    model_arch = "ResNet34"
+                elif "resnet50" in model_filename.lower():
+                    model_arch = "ResNet50"
+                elif "mobilenet" in model_filename.lower():
+                    model_arch = "MobileNetV2"
+                elif "efficientnet" in model_filename.lower():
+                    model_arch = "EfficientNetB0"
+                elif "vgg16" in model_filename.lower():
+                    model_arch = "VGG16"
+                else:
+                    # 默认使用ResNet18
+                    model_arch = "ResNet18"
+                
+                # 更新状态
+                self.update_status(f"正在评估模型 {model_filename}...")
+                
+                # 加载模型
+                model_info = {
+                    'model_path': model_path,
+                    'class_info_path': class_info_path,
+                    'model_type': task_type,
+                    'model_arch': model_arch
+                }
+                
+                try:
+                    # 加载模型
+                    predictor.load_model_with_info(model_info)
+                    
+                    # 模型评估
+                    accuracy = 0.0
+                    loss = 0.0
+                    params_count = 0
+                    total_time = 0.0
+                    total_samples = 0
+                    
+                    # 计算模型参数数量
+                    params_count = sum(p.numel() for p in predictor.model.parameters())
+                    
+                    # 对分类模型进行评估
+                    if task_type == "分类模型":
+                        # 准备测试样本
+                        test_samples = []
+                        class_dirs = [d for d in os.listdir(test_dir) if os.path.isdir(os.path.join(test_dir, d))]
+                        
+                        for class_dir in class_dirs:
+                            class_label = class_dir
+                            class_path = os.path.join(test_dir, class_dir)
+                            image_files = [f for f in os.listdir(class_path) if f.endswith(('.jpg', '.jpeg', '.png'))]
+                            
+                            for img_file in image_files[:100]:  # 限制每个类别的样本数量
+                                img_path = os.path.join(class_path, img_file)
+                                test_samples.append((img_path, class_label))
+                        
+                        # 定义损失函数
+                        criterion = torch.nn.CrossEntropyLoss()
+                        
+                        # 评估准确率、损失和推理时间
+                        correct = 0
+                        total_loss = 0.0
+                        
+                        # 获取类别到索引的映射
+                        class_to_idx = {class_name: idx for idx, class_name in enumerate(predictor.class_names)}
+                        
+                        # 设置模型为评估模式
+                        predictor.model.eval()
+                        
+                        with torch.no_grad():
+                            for img_path, true_label in test_samples:
+                                start_time = time.time()
+                                
+                                # 使用预测器获取原始预测结果
+                                result = predictor.predict_image(img_path)
+                                
+                                end_time = time.time()
+                                
+                                inference_time = end_time - start_time
+                                total_time += inference_time
+                                total_samples += 1
+                                
+                                if result:
+                                    top_prediction = result['predictions'][0]
+                                    predicted_label = top_prediction['class_name']
+                                    
+                                    # 计算损失
+                                    # 先加载和处理图像，与预测器中相同的方式
+                                    image = Image.open(img_path).convert('RGB')
+                                    transform = predictor.transform  # 从预测器获取转换
+                                    
+                                    # 如果预测器没有公开transform属性，则创建一个标准的测试转换
+                                    if not hasattr(predictor, 'transform'):
+                                        transform = torchvision.transforms.Compose([
+                                            torchvision.transforms.Resize(256),
+                                            torchvision.transforms.CenterCrop(224),
+                                            torchvision.transforms.ToTensor(),
+                                            torchvision.transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
+                                        ])
+                                    
+                                    img_tensor = transform(image).unsqueeze(0).to(predictor.device)
+                                    
+                                    # 获取目标类别的索引
+                                    target_idx = class_to_idx.get(true_label)
+                                    if target_idx is not None:
+                                        target = torch.tensor([target_idx], device=predictor.device)
+                                        
+                                        # 前向传播
+                                        outputs = predictor.model(img_tensor)
+                                        
+                                        # 计算损失
+                                        batch_loss = criterion(outputs, target)
+                                        total_loss += batch_loss.item()
+                                    
+                                    # 检查预测是否正确
+                                    if predicted_label == true_label:
+                                        correct += 1
+                        
+                        # 计算平均损失和准确率
+                        if total_samples > 0:
+                            loss = total_loss / total_samples
+                            accuracy = correct / total_samples
+                    
+                    # 对检测模型进行评估
+                    elif task_type == "检测模型":
+                        # 检测模型的评估方法与分类模型不同
+                        # 这里简化实现，只计算推理时间
+                        test_img_dir = os.path.join(test_dir, 'images', 'val')
+                        if os.path.exists(test_img_dir):
+                            image_files = [f for f in os.listdir(test_img_dir) if f.endswith(('.jpg', '.jpeg', '.png'))]
+                            
+                            for img_file in image_files[:50]:  # 限制样本数量
+                                img_path = os.path.join(test_img_dir, img_file)
+                                start_time = time.time()
+                                predictor.predict_image(img_path)
+                                end_time = time.time()
+                                
+                                inference_time = end_time - start_time
+                                total_time += inference_time
+                                total_samples += 1
+                    
+                    # 计算平均推理时间
+                    avg_inference_time = 0
+                    if total_samples > 0:
+                        avg_inference_time = (total_time / total_samples) * 1000  # 转换为毫秒
+                    
+                    # 添加新行到表格
+                    row_position = self.result_table.rowCount()
+                    self.result_table.insertRow(row_position)
+                    
+                    # 填充表格
+                    self.result_table.setItem(row_position, 0, QTableWidgetItem(model_filename))
+                    self.result_table.setItem(row_position, 1, QTableWidgetItem(f"{accuracy:.2%}"))
+                    self.result_table.setItem(row_position, 2, QTableWidgetItem(f"{loss:.4f}"))
+                    self.result_table.setItem(row_position, 3, QTableWidgetItem(f"{params_count:,}"))
+                    self.result_table.setItem(row_position, 4, QTableWidgetItem(f"{avg_inference_time:.2f} ms"))
+                    
+                except Exception as model_error:
+                    import traceback
+                    error_msg = f"评估模型 {model_filename} 时出错: {str(model_error)}\n{traceback.format_exc()}"
+                    print(error_msg)
+                    QMessageBox.warning(self, "错误", error_msg)
+                    
+                    # 即使出错也添加一行表示该模型
+                    row_position = self.result_table.rowCount()
+                    self.result_table.insertRow(row_position)
+                    self.result_table.setItem(row_position, 0, QTableWidgetItem(model_filename))
+                    self.result_table.setItem(row_position, 1, QTableWidgetItem("评估失败"))
+                    self.result_table.setItem(row_position, 2, QTableWidgetItem("评估失败"))
+                    self.result_table.setItem(row_position, 3, QTableWidgetItem("评估失败"))
+                    self.result_table.setItem(row_position, 4, QTableWidgetItem("评估失败"))
+            
+            self.update_status(f"已完成 {len(selected_models)} 个模型的评估")
+            
+        except Exception as e:
+            import traceback
+            error_msg = f"模型评估过程出错: {str(e)}\n{traceback.format_exc()}"
+            print(error_msg)
+            QMessageBox.critical(self, "错误", error_msg)
     
     def start_tensorboard(self):
         """启动TensorBoard"""
@@ -338,10 +572,22 @@ class EvaluationTab(BaseTab):
             if self.tensorboard_process and self.tensorboard_process.poll() is None:
                 QMessageBox.warning(self, "警告", "TensorBoard已经在运行!")
                 return
+            
+            # 确定要监控的日志目录
+            log_dir = self.log_dir
+            
+            # 如果指向的是model_save_dir，则尝试找到其下的tensorboard_logs目录
+            tensorboard_parent = os.path.join(log_dir, 'tensorboard_logs')
+            if os.path.exists(tensorboard_parent) and os.path.isdir(tensorboard_parent):
+                # 使用tensorboard_logs作为根目录，这样可以显示所有训练运行
+                log_dir = tensorboard_parent
+                self.update_status(f"已找到tensorboard_logs目录: {log_dir}")
                 
             # 启动TensorBoard进程
             port = 6006  # 默认TensorBoard端口
-            cmd = f"tensorboard --logdir={self.log_dir} --port={port}"
+            cmd = f"tensorboard --logdir={log_dir} --port={port}"
+            
+            self.update_status(f"启动TensorBoard，命令: {cmd}")
             
             if os.name == 'nt':  # Windows
                 self.tensorboard_process = subprocess.Popen(
@@ -357,9 +603,13 @@ class EvaluationTab(BaseTab):
             self.stop_btn.setEnabled(True)
             
             # 更新TensorBoard小部件
-            self.tensorboard_widget.set_tensorboard_dir(self.log_dir)
+            self.tensorboard_widget.set_tensorboard_dir(log_dir)
             
-            self.tb_status_label.setText(f"TensorBoard已启动，端口: {port}")
+            # 打开网页浏览器
+            import webbrowser
+            webbrowser.open(f"http://localhost:{port}")
+            
+            self.tb_status_label.setText(f"TensorBoard已启动，端口: {port}，日志目录: {log_dir}")
             self.update_status(f"TensorBoard已启动，端口: {port}")
         except Exception as e:
             QMessageBox.critical(self, "错误", f"启动TensorBoard失败: {str(e)}")

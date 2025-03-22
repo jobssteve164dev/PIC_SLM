@@ -21,6 +21,11 @@ from predictor import Predictor
 from image_preprocessor import ImagePreprocessor
 from annotation_tool import AnnotationTool
 from config_loader import ConfigLoader
+
+# 配置matplotlib使用Agg后端（非交互式）以避免线程安全问题
+import matplotlib
+matplotlib.use('Agg')
+
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_qt5agg import FigureCanvas
 
@@ -337,7 +342,15 @@ def main():
         
         # 获取数据目录（根据任务类型选择）
         if task_type == 'classification':
-            data_dir = self.training_tab.classification_path_edit.text()
+            # 直接使用annotation_folder而不是从控件获取
+            data_dir = self.training_tab.annotation_folder
+            
+            # 用于日志调试
+            print(f"准备训练配置，使用分类数据集路径: {data_dir}")
+            
+            # 确保控件显示的路径与实际使用的路径一致
+            self.training_tab.classification_path_edit.setText(data_dir)
+            
             model_name = params.get('model', 'ResNet50')
             batch_size = params.get('batch_size', 32)
             epochs = params.get('epochs', 20)
@@ -347,7 +360,15 @@ def main():
             pretrained_path = params.get('pretrained_path', '')  # 获取本地预训练模型路径
             metrics = params.get('metrics', ['accuracy'])  # 直接使用传入的metrics列表
         else:  # detection
-            data_dir = self.training_tab.detection_path_edit.text()
+            # 直接使用annotation_folder而不是从控件获取
+            data_dir = self.training_tab.annotation_folder
+            
+            # 用于日志调试
+            print(f"准备训练配置，使用目标检测数据集路径: {data_dir}")
+            
+            # 确保控件显示的路径与实际使用的路径一致
+            self.training_tab.detection_path_edit.setText(data_dir)
+            
             model_name = params.get('model', 'YOLOv5')
             batch_size = params.get('batch_size', 16)
             epochs = params.get('epochs', 50)

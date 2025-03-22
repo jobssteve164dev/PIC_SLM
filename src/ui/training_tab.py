@@ -373,9 +373,14 @@ class TrainingTab(BaseTab):
         
         folder_layout.addWidget(self.classification_path_edit)
         
+        refresh_btn = QPushButton("刷新")
+        refresh_btn.clicked.connect(self.select_classification_folder)
+        refresh_btn.setToolTip("刷新训练数据集文件夹的路径和状态")
+        folder_layout.addWidget(refresh_btn)
+        
         browse_btn = QPushButton("浏览...")
-        browse_btn.clicked.connect(self.select_classification_folder)
-        browse_btn.setToolTip("选择包含训练数据的根目录，每个子文件夹代表一个类别")
+        browse_btn.clicked.connect(self.browse_classification_folder)
+        browse_btn.setToolTip("浏览选择包含训练数据的根目录，每个子文件夹代表一个类别")
         folder_layout.addWidget(browse_btn)
         
         folder_group.setLayout(folder_layout)
@@ -613,9 +618,14 @@ class TrainingTab(BaseTab):
         
         folder_layout.addWidget(self.detection_path_edit)
         
+        refresh_btn = QPushButton("刷新")
+        refresh_btn.clicked.connect(self.select_detection_folder)
+        refresh_btn.setToolTip("刷新目标检测数据集文件夹的路径和状态")
+        folder_layout.addWidget(refresh_btn)
+        
         browse_btn = QPushButton("浏览...")
-        browse_btn.clicked.connect(self.select_detection_folder)
-        browse_btn.setToolTip("选择包含已标注目标检测数据的文件夹，包括图像和标注文件")
+        browse_btn.clicked.connect(self.browse_detection_folder)
+        browse_btn.setToolTip("浏览选择包含已标注目标检测数据的文件夹，包括图像和标注文件")
         folder_layout.addWidget(browse_btn)
         
         folder_group.setLayout(folder_layout)
@@ -1081,9 +1091,62 @@ class TrainingTab(BaseTab):
     
     def train_model(self):
         """开始训练模型"""
-        if not self.check_training_ready():
-            QMessageBox.warning(self, "警告", "请先选择标注文件夹")
+        # 先根据当前任务类型自动刷新数据集目录，确保使用最新的数据集状态
+        try:
+            # 获取配置文件中的默认输出文件夹
+            config_file = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'config.json')
+            default_output_folder = ""
+            
+            if os.path.exists(config_file):
+                with open(config_file, 'r', encoding='utf-8') as f:
+                    config = json.load(f)
+                    default_output_folder = config.get('default_output_folder', '')
+            
+            if not default_output_folder:
+                if hasattr(self, 'main_window') and hasattr(self.main_window, 'config'):
+                    default_output_folder = self.main_window.config.get('default_output_folder', '')
+                
+            if not default_output_folder:
+                QMessageBox.warning(self, "错误", "未配置默认输出文件夹，请先在设置中配置")
+                return
+                
+            # 确定数据集路径
+            if self.task_type == "classification":
+                dataset_folder = os.path.join(default_output_folder, 'dataset')
+                if not os.path.exists(dataset_folder):
+                    QMessageBox.warning(self, "错误", f"未找到分类数据集文件夹: {dataset_folder}")
+                    return
+                self.annotation_folder = dataset_folder
+                self.classification_path_edit.setText(dataset_folder)
+                self.update_status(f"已自动刷新分类数据集目录: {dataset_folder}")
+            else:
+                detection_data_folder = os.path.join(default_output_folder, 'detection_data')
+                if not os.path.exists(detection_data_folder):
+                    QMessageBox.warning(self, "错误", f"未找到目标检测数据集文件夹: {detection_data_folder}")
+                    return
+                self.annotation_folder = detection_data_folder
+                self.detection_path_edit.setText(detection_data_folder)
+                self.update_status(f"已自动刷新目标检测数据集目录: {detection_data_folder}")
+                
+            # 强制刷新，确保训练前再次验证数据集
+            self.check_training_ready()
+        except Exception as e:
+            print(f"自动刷新数据集目录失败: {str(e)}")
+            QMessageBox.warning(self, "错误", f"自动刷新数据集目录失败: {str(e)}")
             return
+            
+        # 再次检查是否满足训练条件
+        if not self.check_training_ready():
+            QMessageBox.warning(self, "警告", "训练条件检查失败，请确认数据集文件夹结构正确")
+            return
+            
+        # 确保annotation_folder已正确设置且存在
+        if not self.annotation_folder or not os.path.exists(self.annotation_folder):
+            QMessageBox.warning(self, "错误", f"数据集路径无效: {self.annotation_folder}")
+            return
+            
+        # 打印路径信息以便调试
+        print(f"开始训练，使用数据集路径: {self.annotation_folder}")
         
         # 更新UI状态
         self.train_btn.setEnabled(False)
@@ -1092,7 +1155,7 @@ class TrainingTab(BaseTab):
         self.update_progress(0)
         
         # 更新训练状态标签
-        self.training_status_label.setText("正在准备训练...")
+        self.training_status_label.setText(f"正在准备训练，使用数据集: {os.path.basename(self.annotation_folder)}")
         
         # 发射训练开始信号
         self.training_started.emit()
@@ -1405,3 +1468,109 @@ class TrainingTab(BaseTab):
             self.stop_btn.setEnabled(False)
             import traceback
             traceback.print_exc()
+
+    def browse_classification_folder(self):
+        """打开文件对话框浏览选择分类数据集文件夹"""
+        try:
+            # 获取上次使用的目录或默认目录
+            last_dir = ""
+            config_file = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'config.json')
+            if os.path.exists(config_file):
+                with open(config_file, 'r', encoding='utf-8') as f:
+                    config = json.load(f)
+                    last_dir = config.get('default_output_folder', '')
+            
+            # 打开文件对话框
+            folder_path = QFileDialog.getExistingDirectory(
+                self, 
+                "选择图像分类数据集文件夹", 
+                last_dir,
+                QFileDialog.ShowDirsOnly | QFileDialog.DontResolveSymlinks
+            )
+            
+            if folder_path:
+                # 检查文件夹结构是否符合要求
+                train_folder = os.path.join(folder_path, 'train')
+                val_folder = os.path.join(folder_path, 'val')
+                
+                if not os.path.exists(train_folder):
+                    QMessageBox.warning(self, "无效的数据集", "所选文件夹内未找到train子文件夹，请确保数据集包含train和val文件夹")
+                    return
+                    
+                if not os.path.exists(val_folder):
+                    QMessageBox.warning(self, "无效的数据集", "所选文件夹内未找到val子文件夹，请确保数据集包含train和val文件夹")
+                    return
+                
+                # 检查是否存在类别子文件夹
+                class_folders = [f for f in os.listdir(train_folder) if os.path.isdir(os.path.join(train_folder, f))]
+                if not class_folders:
+                    QMessageBox.warning(self, "无效的数据集", "train文件夹内未找到任何类别子文件夹")
+                    return
+                
+                # 设置路径
+                self.annotation_folder = folder_path
+                self.classification_path_edit.setText(folder_path)
+                self.check_training_ready()
+                
+                # 显示成功信息
+                self.update_status(f"成功加载分类数据集，包含 {len(class_folders)} 个类别")
+                # 更新训练状态标签
+                self.training_status_label.setText(f"已选择数据集: {os.path.basename(folder_path)}")
+                
+        except Exception as e:
+            print(f"浏览选择分类文件夹时出错: {str(e)}")
+            QMessageBox.warning(self, "错误", f"选择文件夹时出错: {str(e)}")
+
+    def browse_detection_folder(self):
+        """打开文件对话框浏览选择目标检测数据集文件夹"""
+        try:
+            # 获取上次使用的目录或默认目录
+            last_dir = ""
+            config_file = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'config.json')
+            if os.path.exists(config_file):
+                with open(config_file, 'r', encoding='utf-8') as f:
+                    config = json.load(f)
+                    last_dir = config.get('default_output_folder', '')
+            
+            # 打开文件对话框
+            folder_path = QFileDialog.getExistingDirectory(
+                self, 
+                "选择目标检测数据集文件夹", 
+                last_dir,
+                QFileDialog.ShowDirsOnly | QFileDialog.DontResolveSymlinks
+            )
+            
+            if folder_path:
+                # 检查文件夹结构是否符合要求
+                images_folder = os.path.join(folder_path, 'images')
+                labels_folder = os.path.join(folder_path, 'labels')
+                
+                if not os.path.exists(images_folder):
+                    QMessageBox.warning(self, "无效的数据集", "所选文件夹内未找到images子文件夹，请确保数据集符合YOLO格式")
+                    return
+                    
+                if not os.path.exists(labels_folder):
+                    QMessageBox.warning(self, "无效的数据集", "所选文件夹内未找到labels子文件夹，请确保数据集符合YOLO格式")
+                    return
+                
+                # 检查是否存在train和val子文件夹
+                train_images = os.path.join(images_folder, 'train')
+                val_images = os.path.join(images_folder, 'val')
+                
+                if not (os.path.exists(train_images) and os.path.exists(val_images)):
+                    QMessageBox.warning(self, "无效的数据集", "未找到images/train和images/val文件夹，请确保数据集符合YOLO格式")
+                    return
+                
+                # 设置路径
+                self.annotation_folder = folder_path
+                self.detection_path_edit.setText(folder_path)
+                self.check_training_ready()
+                
+                # 显示成功信息
+                self.update_status(f"成功加载目标检测数据集: {os.path.basename(folder_path)}")
+                # 更新训练状态标签
+                self.training_status_label.setText(f"已选择数据集: {os.path.basename(folder_path)}")
+                
+        except Exception as e:
+            print(f"浏览选择检测文件夹时出错: {str(e)}")
+            QMessageBox.warning(self, "错误", f"选择文件夹时出错: {str(e)}")
