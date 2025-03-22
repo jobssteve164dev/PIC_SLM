@@ -189,42 +189,50 @@ class EvaluationTab(BaseTab):
         info_label.setAlignment(Qt.AlignCenter)
         training_curve_layout.addWidget(info_label)
         
-        # 添加训练参数说明
-        explanation_group = QGroupBox("曲线参数说明")
-        explanation_layout = QVBoxLayout()
+        # 添加训练参数说明 - 移除旧的静态参数说明
+        # explanation_group = QGroupBox("曲线参数说明")
+        # explanation_layout = QVBoxLayout()
+        # params_explanation = """
+        # <b>基础评估指标</b>：
+        # <b>训练损失</b>：模型在训练集上的误差，值越小表示模型在训练数据上拟合得越好。
+        # <b>验证损失</b>：模型在验证集上的误差，是评估模型泛化能力的重要指标。
+        # <b>训练准确率</b>：模型在训练集上的准确率，表示模型对训练数据的拟合程度。
+        # <b>验证准确率</b>：模型在验证集上的准确率，反映模型在未见过数据上的表现。
+        # <b>精确率(Precision)</b>：正确预测为正例的数量占所有预测为正例的比例。
+        # <b>召回率(Recall)</b>：正确预测为正例的数量占所有实际正例的比例。
+        # <b>F1-Score</b>：精确率和召回率的调和平均值，平衡了这两个指标。
+        # 
+        # <b>分类特有指标</b>：
+        # <b>ROC-AUC</b>：ROC曲线下的面积，衡量分类器的性能，越接近1越好。
+        # <b>平均精度(Average Precision)</b>：PR曲线下的面积，在不平衡数据集上比AUC更有参考价值。
+        # <b>Top-K准确率</b>：预测的前K个类别中包含正确类别的比例。
+        # <b>平衡准确率</b>：考虑了类别不平衡问题的准确率指标。
+        # 
+        # <b>检测特有指标</b>：
+        # <b>mAP</b>：平均精度均值，目标检测的主要评价指标。
+        # <b>mAP50</b>：IOU阈值为0.5时的平均精度均值。
+        # <b>mAP75</b>：IOU阈值为0.75时的平均精度均值，要求更加严格。
+        # <b>类别损失</b>：分类分支的损失值。
+        # <b>目标损失</b>：物体存在置信度的损失值。
+        # <b>框损失</b>：边界框回归的损失值。
+        # """
+        # 
+        # params_label = QLabel(params_explanation)
+        # params_label.setWordWrap(True)
+        # explanation_layout.addWidget(params_label)
+        # explanation_group.setLayout(explanation_layout)
+        # training_curve_layout.addWidget(explanation_group)
         
-        # 添加各指标说明
-        params_explanation = """
-        <b>训练损失</b>：模型在训练集上的误差，值越小表示模型在训练数据上拟合得越好。
-        <b>验证损失</b>：模型在验证集上的误差，是评估模型泛化能力的重要指标。
-        <b>训练准确率</b>：模型在训练集上的准确率，表示模型对训练数据的拟合程度。
-        <b>验证准确率</b>：模型在验证集上的准确率，反映模型在未见过数据上的表现。
-        """
-        
-        params_label = QLabel(params_explanation)
-        params_label.setWordWrap(True)
-        explanation_layout.addWidget(params_label)
-        
-        # 添加模型状态判断说明
-        model_state_explanation = """
-        <b>正常训练</b>：训练损失和验证损失都在下降，训练准确率和验证准确率都在上升。
-        <b>过拟合</b>：训练损失继续下降但验证损失开始上升，或训练准确率继续上升但验证准确率开始下降，表明模型过度拟合了训练数据，失去泛化能力。
-        <b>欠拟合</b>：训练损失和验证损失都较高且下降缓慢，训练准确率和验证准确率都较低且提升缓慢，表明模型能力不足或训练不充分。
-        <b>何时停止训练</b>：当验证损失在多个轮次后不再下降或开始上升时，应考虑停止训练以避免过拟合。
-        """
-        
-        state_label = QLabel(model_state_explanation)
-        state_label.setWordWrap(True)
-        explanation_layout.addWidget(state_label)
-        
-        explanation_group.setLayout(explanation_layout)
-        training_curve_layout.addWidget(explanation_group)
+        # 添加训练开始/停止按键的提示
+        control_tip = QLabel("训练停止条件：当验证损失在多个轮次后不再下降，或达到设定的最大轮次。")
+        control_tip.setWordWrap(True)
+        training_curve_layout.addWidget(control_tip)
         
         # 添加训练可视化组件
         self.training_visualization = TrainingVisualizationWidget()
         training_curve_layout.addWidget(self.training_visualization)
         
-        # 添加状态标签
+        # 添加当前训练状态标签
         self.training_status_label = QLabel("等待训练开始...")
         self.training_status_label.setAlignment(Qt.AlignCenter)
         training_curve_layout.addWidget(self.training_status_label)
@@ -387,41 +395,142 @@ class EvaluationTab(BaseTab):
                     self.last_train_loss = 0.0
                 if not hasattr(self, 'last_val_loss'):
                     self.last_val_loss = 0.0
+                
+                # 初始化性能指标变量 - 区分分类和检测
+                # 分类任务指标
+                if not hasattr(self, 'last_val_accuracy'):
+                    self.last_val_accuracy = 0.0
+                if not hasattr(self, 'last_train_accuracy'):
+                    self.last_train_accuracy = 0.0
+                if not hasattr(self, 'last_roc_auc'):
+                    self.last_roc_auc = 0.0
+                if not hasattr(self, 'last_average_precision'):
+                    self.last_average_precision = 0.0
+                if not hasattr(self, 'last_top_k_accuracy'):
+                    self.last_top_k_accuracy = 0.0
+                if not hasattr(self, 'last_balanced_accuracy'):
+                    self.last_balanced_accuracy = 0.0
+                
+                # 检测任务指标
                 if not hasattr(self, 'last_val_map'):
                     self.last_val_map = 0.0
+                if not hasattr(self, 'last_train_map'):
+                    self.last_train_map = 0.0
+                if not hasattr(self, 'last_map50'):
+                    self.last_map50 = 0.0
+                if not hasattr(self, 'last_map75'):
+                    self.last_map75 = 0.0
+                
+                # 共用指标
+                if not hasattr(self, 'last_precision'):
+                    self.last_precision = 0.0
+                if not hasattr(self, 'last_recall'):
+                    self.last_recall = 0.0
+                if not hasattr(self, 'last_f1_score'):
+                    self.last_f1_score = 0.0
+                if not hasattr(self, 'last_class_loss'):
+                    self.last_class_loss = 0.0
+                if not hasattr(self, 'last_obj_loss'):
+                    self.last_obj_loss = 0.0
+                if not hasattr(self, 'last_box_loss'):
+                    self.last_box_loss = 0.0
                 
                 # 数据格式转换
                 is_train = data.get('phase') == 'train'
                 epoch = data.get('epoch', 0)
                 loss = float(data.get('loss', 0))
-                accuracy = float(data.get('accuracy', 0))
                 learning_rate = float(data.get('learning_rate', 0.001))
                 
-                # 更新对应的损失值
+                # 根据任务类型获取性能指标
+                is_classification = 'accuracy' in data
+                
+                # 更新对应的损失值和指标值
                 if is_train:
                     self.last_train_loss = loss
+                    
+                    # 更新训练阶段指标
+                    if is_classification:
+                        self.last_train_accuracy = float(data.get('accuracy', 0.0))
+                    else:
+                        self.last_train_map = float(data.get('mAP', 0.0))
                 else:
                     self.last_val_loss = loss
-                    self.last_val_map = accuracy  # 对于检测模型，accuracy通常是mAP
+                    
+                    # 根据任务类型更新相应指标
+                    if is_classification:
+                        # 分类任务指标
+                        self.last_val_accuracy = float(data.get('accuracy', 0.0))
+                        self.last_roc_auc = float(data.get('roc_auc', 0.0))
+                        self.last_average_precision = float(data.get('average_precision', 0.0))
+                        self.last_top_k_accuracy = float(data.get('top_k_accuracy', 0.0))
+                        self.last_balanced_accuracy = float(data.get('balanced_accuracy', 0.0))
+                    else:
+                        # 检测任务指标
+                        self.last_val_map = float(data.get('mAP', 0.0))
+                        self.last_map50 = float(data.get('mAP50', 0.0))
+                        self.last_map75 = float(data.get('mAP75', 0.0))
+                        self.last_class_loss = float(data.get('class_loss', 0.0))
+                        self.last_obj_loss = float(data.get('obj_loss', 0.0))
+                        self.last_box_loss = float(data.get('box_loss', 0.0))
+                    
+                    # 共用指标
+                    self.last_precision = float(data.get('precision', 0.0))
+                    self.last_recall = float(data.get('recall', 0.0))
+                    self.last_f1_score = float(data.get('f1_score', 0.0))
                 
                 # 构建TrainingVisualizationWidget期望的指标格式
                 metrics = {
                     'epoch': epoch,
                     'train_loss': self.last_train_loss,
                     'val_loss': self.last_val_loss,
-                    'val_map': self.last_val_map,
-                    'learning_rate': learning_rate
+                    'learning_rate': learning_rate,
+                    'precision': self.last_precision,
+                    'recall': self.last_recall,
+                    'f1_score': self.last_f1_score
                 }
+                
+                # 根据任务类型添加相应的性能指标
+                if is_classification:
+                    # 添加分类特有指标
+                    metrics['val_accuracy'] = self.last_val_accuracy
+                    metrics['train_accuracy'] = self.last_train_accuracy
+                    metrics['roc_auc'] = self.last_roc_auc
+                    metrics['average_precision'] = self.last_average_precision
+                    metrics['top_k_accuracy'] = self.last_top_k_accuracy
+                    metrics['balanced_accuracy'] = self.last_balanced_accuracy
+                else:
+                    # 添加检测特有指标
+                    metrics['val_map'] = self.last_val_map
+                    metrics['train_map'] = self.last_train_map
+                    metrics['mAP50'] = self.last_map50
+                    metrics['mAP75'] = self.last_map75
+                    metrics['class_loss'] = self.last_class_loss
+                    metrics['obj_loss'] = self.last_obj_loss
+                    metrics['box_loss'] = self.last_box_loss
                 
                 # 更新可视化
                 self.training_visualization.update_metrics(metrics)
                 
                 # 更新状态标签
                 phase_text = "训练" if is_train else "验证"
-                self.training_status_label.setText(
-                    f"轮次 {epoch}: {phase_text}损失 = {loss:.4f}, "
-                    f"{'训练准确率' if is_train else 'mAP'} = {accuracy:.4f}"
-                )
+                
+                # 根据任务类型显示不同的状态文本
+                if is_classification:
+                    accuracy_value = float(data.get('accuracy', 0.0))
+                    status_text = f"轮次 {epoch}: {phase_text}损失 = {loss:.4f}, {phase_text}准确率 = {accuracy_value:.4f}"
+                    
+                    # 添加分类额外指标到状态
+                    if not is_train and self.last_precision > 0:
+                        status_text += f", 精确率 = {self.last_precision:.4f}, 召回率 = {self.last_recall:.4f}"
+                else:
+                    map_value = float(data.get('mAP', 0.0))
+                    status_text = f"轮次 {epoch}: {phase_text}损失 = {loss:.4f}, {phase_text}mAP = {map_value:.4f}"
+                    
+                    # 添加检测额外指标到状态
+                    if not is_train and self.last_map50 > 0:
+                        status_text += f", mAP50 = {self.last_map50:.4f}, mAP75 = {self.last_map75:.4f}"
+                
+                self.training_status_label.setText(status_text)
                 
         except Exception as e:
             import traceback
@@ -436,8 +545,46 @@ class EvaluationTab(BaseTab):
                 self.last_train_loss = 0.0
             if hasattr(self, 'last_val_loss'):
                 self.last_val_loss = 0.0
+            
+            # 重置分类指标
+            if hasattr(self, 'last_val_accuracy'):
+                self.last_val_accuracy = 0.0
+            if hasattr(self, 'last_train_accuracy'):
+                self.last_train_accuracy = 0.0
+            
+            # 重置检测指标
             if hasattr(self, 'last_val_map'):
                 self.last_val_map = 0.0
+            if hasattr(self, 'last_train_map'):
+                self.last_train_map = 0.0
+                
+            # 重置其他指标
+            if hasattr(self, 'last_precision'):
+                self.last_precision = 0.0
+            if hasattr(self, 'last_recall'):
+                self.last_recall = 0.0
+            if hasattr(self, 'last_f1_score'):
+                self.last_f1_score = 0.0
+            if hasattr(self, 'last_map50'):
+                self.last_map50 = 0.0
+            if hasattr(self, 'last_map75'):
+                self.last_map75 = 0.0
+            if hasattr(self, 'last_class_loss'):
+                self.last_class_loss = 0.0
+            if hasattr(self, 'last_obj_loss'):
+                self.last_obj_loss = 0.0
+            if hasattr(self, 'last_box_loss'):
+                self.last_box_loss = 0.0
+                
+            # 重置分类特有指标
+            if hasattr(self, 'last_roc_auc'):
+                self.last_roc_auc = 0.0
+            if hasattr(self, 'last_average_precision'):
+                self.last_average_precision = 0.0
+            if hasattr(self, 'last_top_k_accuracy'):
+                self.last_top_k_accuracy = 0.0
+            if hasattr(self, 'last_balanced_accuracy'):
+                self.last_balanced_accuracy = 0.0
             
             # 调用TrainingVisualizationWidget的reset_plots方法
             self.training_visualization.reset_plots()

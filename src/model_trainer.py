@@ -791,7 +791,7 @@ class ModelTrainer(QObject):
             
         except Exception as e:
             print(f"停止训练时出错: {str(e)}")
-            
+        
         # 无论线程是否正常结束，都发射一次训练停止信号
         self.training_stopped.emit()
 

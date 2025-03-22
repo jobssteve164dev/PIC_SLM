@@ -1,12 +1,22 @@
 import sys
 import os
 import json
+
+print("程序开始执行...")
+print(f"Python版本: {sys.version}")
+print(f"当前工作目录: {os.getcwd()}")
+
 from PyQt5.QtWidgets import QApplication, QMessageBox, QTabWidget, QVBoxLayout, QWidget, QMainWindow
+print("PyQt5模块已导入")
 from PyQt5.QtCore import QThread, QObject
 from ui.main_window import MainWindow
+print("MainWindow已导入")
 from ui.evaluation_tab import EvaluationTab  # 从ui模块导入EvaluationTab
+print("EvaluationTab已导入")
 from data_processor import DataProcessor
+print("DataProcessor已导入")
 from model_trainer import ModelTrainer
+print("ModelTrainer已导入")
 from predictor import Predictor
 from image_preprocessor import ImagePreprocessor
 from annotation_tool import AnnotationTool
