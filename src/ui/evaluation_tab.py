@@ -269,10 +269,13 @@ class EvaluationTab(BaseTab):
         self.model_dir_edit.setReadOnly(True)
         self.model_dir_button = QPushButton("浏览...")
         self.model_dir_button.clicked.connect(self.browse_param_dir)
+        self.refresh_button = QPushButton("刷新")
+        self.refresh_button.clicked.connect(self.load_model_configs)
         
         dir_layout.addWidget(self.model_dir_label)
         dir_layout.addWidget(self.model_dir_edit)
         dir_layout.addWidget(self.model_dir_button)
+        dir_layout.addWidget(self.refresh_button)
         
         params_compare_layout.addLayout(dir_layout)
         
@@ -280,7 +283,7 @@ class EvaluationTab(BaseTab):
         content_layout = QHBoxLayout()
         
         # 左侧模型列表
-        model_group = QGroupBox("模型列表")
+        model_group = QGroupBox("参数列表")
         model_layout = QVBoxLayout()
         
         self.model_list = QListWidget()
@@ -927,6 +930,15 @@ class EvaluationTab(BaseTab):
         # 确保在关闭窗口时停止TensorBoard进程
         self.stop_tensorboard()
         super().closeEvent(event) 
+        
+    def showEvent(self, event):
+        """当标签页显示时刷新参数列表"""
+        super().showEvent(event)
+        # 获取当前标签页索引
+        current_index = self.stacked_widget.currentIndex()
+        # 如果当前是参数对比页面且目录已设置，刷新参数列表
+        if current_index == 3 and self.model_dir:
+            self.load_model_configs()
 
     def apply_config(self, config):
         """应用配置，包括模型目录等"""
@@ -1006,8 +1018,11 @@ class EvaluationTab(BaseTab):
         self.model_configs = []
         
         if not self.model_dir or not os.path.exists(self.model_dir):
-            self.status_updated.emit("模型目录不存在")
+            self.status_updated.emit("参数目录不存在")
             return
+            
+        # 显示加载状态
+        self.status_updated.emit(f"正在加载参数文件...")
             
         # 查找模型目录下所有的配置文件
         config_files = []
@@ -1016,7 +1031,7 @@ class EvaluationTab(BaseTab):
                 config_files.append(file)
                 
         if not config_files:
-            self.status_updated.emit(f"在 {self.model_dir} 中未找到模型配置文件")
+            self.status_updated.emit(f"在 {self.model_dir} 中未找到参数配置文件")
             return
             
         # 加载配置文件
@@ -1049,7 +1064,7 @@ class EvaluationTab(BaseTab):
             except Exception as e:
                 self.status_updated.emit(f"加载配置文件 {config_file} 时出错: {str(e)}")
                 
-        self.status_updated.emit(f"已加载 {len(self.model_configs)} 个模型配置")
+        self.status_updated.emit(f"已加载 {len(self.model_configs)} 个参数配置")
         
     def select_all_models(self):
         """选择所有模型"""

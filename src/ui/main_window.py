@@ -434,13 +434,6 @@ class MainWindow(QMainWindow):
             # 强制处理所有待处理的事件
             QApplication.processEvents()
             
-            # 如果是训练参数对比标签页，刷新参数列表
-            if hasattr(current_tab, '__class__') and current_tab.__class__.__name__ == 'TrainingParamsComparisonTab':
-                if hasattr(current_tab, 'load_model_configs'):
-                    # 检查是否有参数目录
-                    if current_tab.model_dir and os.path.exists(current_tab.model_dir):
-                        current_tab.load_model_configs()
-            
             # 如果当前标签页有refresh_layout方法，延迟调用以确保布局完全刷新
             if hasattr(current_tab, 'refresh_layout'):
                 # 使用多个定时器，在不同的时间点尝试刷新布局，以确保最终布局正确
