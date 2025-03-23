@@ -264,11 +264,11 @@ class EvaluationTab(BaseTab):
         
         # 模型目录选择部分
         dir_layout = QHBoxLayout()
-        self.model_dir_label = QLabel("模型目录:")
+        self.model_dir_label = QLabel("参数目录:")
         self.model_dir_edit = QLineEdit()
         self.model_dir_edit.setReadOnly(True)
         self.model_dir_button = QPushButton("浏览...")
-        self.model_dir_button.clicked.connect(self.browse_model_dir)
+        self.model_dir_button.clicked.connect(self.browse_param_dir)
         
         dir_layout.addWidget(self.model_dir_label)
         dir_layout.addWidget(self.model_dir_edit)
@@ -940,9 +940,13 @@ class EvaluationTab(BaseTab):
                 self.models_path_edit.setText(model_dir)
                 self.models_dir = model_dir
                 
-                # 同时也应用到参数对比界面的模型目录
-                self.model_dir = model_dir
-                self.model_dir_edit.setText(model_dir)
+        # 设置参数目录
+        if 'default_param_save_dir' in config:
+            param_dir = config['default_param_save_dir']
+            if os.path.exists(param_dir):
+                # 同时也应用到参数对比界面的参数目录
+                self.model_dir = param_dir
+                self.model_dir_edit.setText(param_dir)
                 self.load_model_configs()
                 
         # 设置TensorBoard日志目录
@@ -978,9 +982,23 @@ class EvaluationTab(BaseTab):
         """浏览模型目录"""
         dir_path = QFileDialog.getExistingDirectory(self, "选择模型目录")
         if dir_path:
+            self.models_dir = dir_path
+            self.models_path_edit.setText(dir_path)
+            self.refresh_model_list()
+            
+    def browse_param_dir(self):
+        """浏览参数目录"""
+        dir_path = QFileDialog.getExistingDirectory(self, "选择参数目录")
+        if dir_path:
+            # 标准化路径格式
+            dir_path = os.path.normpath(dir_path)
             self.model_dir = dir_path
             self.model_dir_edit.setText(dir_path)
             self.load_model_configs()
+            
+            # 如果有主窗口并且有设置标签页，则更新设置
+            if self.main_window and hasattr(self.main_window, 'settings_tab'):
+                self.main_window.settings_tab.default_param_save_dir_edit.setText(dir_path)
             
     def load_model_configs(self):
         """加载模型配置文件"""
@@ -1015,9 +1033,12 @@ class EvaluationTab(BaseTab):
                     model_name = config.get('model_name', 'Unknown')
                     model_note = config.get('model_note', '')
                     task_type = config.get('task_type', 'Unknown')
+                    timestamp = config.get('timestamp', '')
                     
-                    # 显示名称格式：模型名称 - 任务类型 (备注)
+                    # 显示名称格式：模型名称 - 任务类型 - 时间戳 (备注)
                     display_name = f"{model_name} - {task_type}"
+                    if timestamp:
+                        display_name += f" - {timestamp}"
                     if model_note:
                         display_name += f" ({model_note})"
                         

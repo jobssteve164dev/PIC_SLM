@@ -129,7 +129,7 @@ class DetectionTrainingThread(QThread):
             if model_name in ['yolov5', 'yolov5s', 'yolov5m', 'yolov5l', 'yolov5x']:
                 self._train_yolov5(data_dir, num_epochs, batch_size, learning_rate, model_save_dir)
             elif model_name in ['yolov8', 'yolov8n', 'yolov8s', 'yolov8m', 'yolov8l', 'yolov8x']:
-                self._train_yolov8(data_dir, num_epochs, batch_size, learning_rate, model_save_dir)
+                self._train_yolov8(data_dir, num_epochs, batch_size, learning_rate, model_save_dir, use_tensorboard, self.config)
             elif model_name in ['fasterrcnn', 'faster-rcnn']:
                 self._train_fasterrcnn(data_dir, num_epochs, batch_size, learning_rate, model_save_dir)
             elif model_name == 'ssd':
@@ -231,84 +231,159 @@ class DetectionTrainingThread(QThread):
             import traceback
             traceback.print_exc()
     
-    def _train_yolov8(self, data_dir, num_epochs, batch_size, learning_rate, model_save_dir):
+    def _train_yolov8(self, data_dir, model_name, num_epochs, batch_size, learning_rate, model_save_dir, use_tensorboard, config=None):
         """使用YOLOv8进行目标检测训练"""
         try:
             self.status_updated.emit("开始YOLOv8模型训练...")
             
-            # 检查是否安装了ultralytics包
+            # 检查ultralytics包
             try:
                 from ultralytics import YOLO
             except ImportError:
-                self.status_updated.emit("正在安装ultralytics包...")
-                subprocess.check_call([sys.executable, "-m", "pip", "install", "ultralytics"])
-                from ultralytics import YOLO
+                self.model_download_failed.emit("YOLOv8", "https://github.com/ultralytics/ultralytics")
+                self.training_error.emit("未安装ultralytics包，请使用pip install ultralytics安装")
+                return
+                
+            # 提取YOLOv8的型号大小 (s, m, l, x)
+            yolo_size = 's'  # 默认使用YOLOv8s
+            if model_name in ['YOLOv8s', 'YOLOv8m', 'YOLOv8l', 'YOLOv8x']:
+                yolo_size = model_name[-1].lower()
+                
+            # 配置训练参数
+            model_path = f'yolov8{yolo_size}'
+            model = YOLO(model_path)
             
-            # 创建YOLO模型
-            model = YOLO('yolov8n.pt')  # 使用预训练的YOLOv8n模型
+            # 准备训练数据路径
+            # YOLO格式需要data.yaml文件
+            data_yaml_path = os.path.join(data_dir, 'data.yaml')
             
-            # 准备训练配置
-            train_config = {
-                'data': os.path.join(data_dir, 'data.yaml'),
+            if not os.path.exists(data_yaml_path):
+                error_msg = f"训练数据配置文件不存在: {data_yaml_path}"
+                self.status_updated.emit(error_msg)
+                self.training_error.emit(error_msg)
+                return
+                
+            # 处理空model_note的情况
+            model_note = config.get('model_note', '') if config else ''
+            timestamp = time.strftime("%Y%m%d-%H%M%S")
+            
+            # 获取参数保存目录，如果未指定则使用模型保存目录
+            param_save_dir = config.get('default_param_save_dir', model_save_dir) if config else model_save_dir
+            
+            # 标准化路径格式
+            model_save_dir = os.path.normpath(model_save_dir)
+            param_save_dir = os.path.normpath(param_save_dir)
+            
+            os.makedirs(param_save_dir, exist_ok=True)
+            os.makedirs(model_save_dir, exist_ok=True)
+            
+            # 生成使用统一格式的保存路径
+            model_save_path = os.path.join(model_save_dir, f'{model_name}_{timestamp}_{model_note}_best.pt')
+            
+            # 设置训练参数
+            train_args = {
+                'data': data_yaml_path,
                 'epochs': num_epochs,
                 'batch': batch_size,
-                'imgsz': 640,
-                'device': 'cuda' if torch.cuda.is_available() else 'cpu',
-                'workers': 4,
-                'project': model_save_dir,
-                'name': 'yolov8_train',
+                'imgsz': config.get('resolution', 640) if config else 640,
+                'device': '0' if torch.cuda.is_available() else 'cpu',
+                'project': os.path.dirname(model_save_dir),
+                'name': os.path.basename(model_save_dir),
                 'exist_ok': True,
                 'pretrained': True,
-                'optimizer': 'Adam',
+                'optimizer': config.get('optimizer', 'SGD') if config else 'SGD',
                 'lr0': learning_rate,
-                'lrf': 0.01,
-                'momentum': 0.937,
-                'weight_decay': 0.0005,
-                'warmup_epochs': 3,
-                'warmup_momentum': 0.8,
-                'warmup_bias_lr': 0.1,
-                'box': 0.05,
-                'cls': 0.5,
-                'cls_pw': 1.0,
-                'obj': 1.0,
-                'obj_pw': 1.0,
-                'iou_t': 0.2,
-                'anchor_t': 4.0,
-                'fl_gamma': 0.0,
-                'label_smoothing': 0.0,
-                'nbs': 64,
-                'overlap_mask': True,
-                'mask_ratio': 4,
-                'dropout': 0.0,
-                'val': True,
-                'save': True,
                 'save_json': False,
-                'save_hybrid': False,
-                'conf': 0.001,
-                'iou': 0.6,
-                'max_det': 300,
-                'half': False,
-                'dnn': False,
-                'plots': True
+                'save': True,
+                'save_period': -1,  # 每个epoch都保存
+                'patience': config.get('patience', 50) if config else 50,
+                'verbose': True,
+                'seed': 42
             }
             
             # 开始训练
-            results = model.train(**train_config)
+            self.status_updated.emit(f"启动YOLOv8{yolo_size}训练，epochs={num_epochs}, batch={batch_size}, lr={learning_rate}")
             
-            # 保存训练结果
-            training_info = {
-                'model_name': 'YOLOv8',
-                'num_epochs': num_epochs,
-                'batch_size': batch_size,
-                'learning_rate': learning_rate,
-                'best_map': float(results.best_map),
-                'model_path': os.path.join(model_save_dir, 'yolov8_train/weights/best.pt')
-            }
+            # 创建训练结果回调
+            class YOLOCallback:
+                def __init__(self, trainer):
+                    self.trainer = trainer
+                    self.best_map = 0.0
+                    self.best_map_path = ''
+                    
+                def on_train_start(self):
+                    self.trainer.status_updated.emit("YOLOv8训练开始")
+                    
+                def on_train_epoch_end(self, epoch, metrics):
+                    # 更新进度
+                    progress = int(((epoch + 1) / num_epochs) * 100)
+                    self.trainer.progress_updated.emit(progress)
+                    
+                    # 记录指标
+                    try:
+                        val_map = metrics.get('metrics/mAP50-95', 0.0)
+                        train_loss = metrics.get('train/box_loss', 0.0)
+                        val_loss = metrics.get('val/box_loss', 0.0)
+                        
+                        # 发送epoch完成信号
+                        epoch_info = {
+                            'epoch': epoch + 1,
+                            'train_loss': train_loss,
+                            'val_loss': val_loss,
+                            'val_map': val_map
+                        }
+                        self.trainer.epoch_finished.emit(epoch_info)
+                        
+                        # 如果有TensorBoard，记录指标
+                        if self.trainer.writer:
+                            self.trainer.writer.add_scalar('Loss/train', train_loss, epoch)
+                            self.trainer.writer.add_scalar('Loss/val', val_loss, epoch)
+                            self.trainer.writer.add_scalar('mAP/val', val_map, epoch)
+                            
+                            # 发送TensorBoard更新信号
+                            self.trainer.tensorboard_updated.emit(
+                                self.trainer.tensorboard_log_dir, val_map, epoch + 1)
+                                
+                        # 记录最佳模型
+                        if val_map > self.best_map:
+                            self.best_map = val_map
+                            self.trainer.status_updated.emit(f"新的最佳mAP: {val_map:.4f} (Epoch {epoch+1})")
+                    except Exception as e:
+                        print(f"处理YOLO训练指标时出错: {str(e)}")
+                    
+                def on_train_end(self, results):
+                    # 训练结束，重命名最佳模型
+                    try:
+                        # 获取YOLO保存的最佳模型路径
+                        yolo_best_path = getattr(results, 'best', None)
+                        
+                        if yolo_best_path and os.path.exists(yolo_best_path):
+                            # 将YOLO生成的模型复制到我们指定的统一命名路径
+                            from shutil import copyfile
+                            copyfile(yolo_best_path, model_save_path)
+                            self.trainer.status_updated.emit(f"最佳模型已保存到: {model_save_path}")
+                            
+                            # 保存训练信息
+                            training_info = {
+                                'model_name': model_name,
+                                'num_epochs': num_epochs,
+                                'batch_size': batch_size,
+                                'learning_rate': learning_rate,
+                                'best_map': self.best_map,
+                                'model_path': model_save_path,
+                                'timestamp': timestamp  # 添加时间戳到训练信息
+                            }
+                            
+                            with open(os.path.join(model_save_dir, 'training_info.json'), 'w') as f:
+                                json.dump(training_info, f, indent=4)
+                    except Exception as e:
+                        self.trainer.status_updated.emit(f"保存最佳模型时出错: {str(e)}")
             
-            with open(os.path.join(model_save_dir, 'training_info.json'), 'w') as f:
-                json.dump(training_info, f, indent=4)
+            # 创建回调并开始训练
+            callback = YOLOCallback(self)
+            results = model.train(**train_args, callbacks=[callback])
             
-            self.status_updated.emit(f'YOLOv8训练完成，最佳mAP: {results.best_map:.4f}')
+            self.status_updated.emit(f"YOLOv8训练完成，最佳mAP: {callback.best_map:.4f}")
             
         except Exception as e:
             self.training_error.emit(f"YOLOv8训练过程中出错: {str(e)}")
@@ -417,11 +492,10 @@ class DetectionTrainingThread(QThread):
                 # 保存最佳模型
                 if current_map > best_map:
                     best_map = current_map
-                    # 添加时间戳和模型备注
+                    # 使用统一的命名格式
                     model_note = config.get('model_note', '') if config else ''
-                    timestamp = time.strftime("%Y%m%d_%H%M%S")
-                    model_file_suffix = f"_{model_note}" if model_note else ""
-                    model_save_path = os.path.join(model_save_dir, f'fasterrcnn{model_file_suffix}_{timestamp}_best.pth')
+                    timestamp = time.strftime("%Y%m%d-%H%M%S")
+                    model_save_path = os.path.join(model_save_dir, f'fasterrcnn_{timestamp}_{model_note}_best.pth')
                     torch.save(model.state_dict(), model_save_path)
                 
                 # 发送epoch完成信号
@@ -434,11 +508,10 @@ class DetectionTrainingThread(QThread):
                 self.epoch_finished.emit(epoch_info)
             
             # 保存最终模型
-            # 添加时间戳和模型备注
+            # 使用统一的命名格式
             model_note = config.get('model_note', '') if config else ''
-            timestamp = time.strftime("%Y%m%d_%H%M%S")
-            model_file_suffix = f"_{model_note}" if model_note else ""
-            final_model_path = os.path.join(model_save_dir, f'fasterrcnn{model_file_suffix}_{timestamp}_final.pth')
+            timestamp = time.strftime("%Y%m%d-%H%M%S")
+            final_model_path = os.path.join(model_save_dir, f'fasterrcnn_{timestamp}_{model_note}_final.pth')
             torch.save(model.state_dict(), final_model_path)
             
             # 保存训练信息
@@ -567,11 +640,10 @@ class DetectionTrainingThread(QThread):
                 # 保存最佳模型
                 if current_map > best_map:
                     best_map = current_map
-                    # 添加时间戳和模型备注
+                    # 使用统一的命名格式
                     model_note = config.get('model_note', '') if config else ''
-                    timestamp = time.strftime("%Y%m%d_%H%M%S")
-                    model_file_suffix = f"_{model_note}" if model_note else ""
-                    model_save_path = os.path.join(model_save_dir, f'ssd{model_file_suffix}_{timestamp}_best.pth')
+                    timestamp = time.strftime("%Y%m%d-%H%M%S")
+                    model_save_path = os.path.join(model_save_dir, f'ssd_{timestamp}_{model_note}_best.pth')
                     torch.save(model.state_dict(), model_save_path)
                 
                 # 发送epoch完成信号
@@ -584,11 +656,10 @@ class DetectionTrainingThread(QThread):
                 self.epoch_finished.emit(epoch_info)
             
             # 保存最终模型
-            # 添加时间戳和模型备注
+            # 使用统一的命名格式
             model_note = config.get('model_note', '') if config else ''
-            timestamp = time.strftime("%Y%m%d_%H%M%S")
-            model_file_suffix = f"_{model_note}" if model_note else ""
-            final_model_path = os.path.join(model_save_dir, f'ssd{model_file_suffix}_{timestamp}_final.pth')
+            timestamp = time.strftime("%Y%m%d-%H%M%S")
+            final_model_path = os.path.join(model_save_dir, f'ssd_{timestamp}_{model_note}_final.pth')
             torch.save(model.state_dict(), final_model_path)
             
             # 保存训练信息
@@ -716,11 +787,10 @@ class DetectionTrainingThread(QThread):
                 # 保存最佳模型
                 if current_map > best_map:
                     best_map = current_map
-                    # 添加时间戳和模型备注
+                    # 使用统一的命名格式
                     model_note = config.get('model_note', '') if config else ''
-                    timestamp = time.strftime("%Y%m%d_%H%M%S")
-                    model_file_suffix = f"_{model_note}" if model_note else ""
-                    model_save_path = os.path.join(model_save_dir, f'retinanet{model_file_suffix}_{timestamp}_best.pth')
+                    timestamp = time.strftime("%Y%m%d-%H%M%S")
+                    model_save_path = os.path.join(model_save_dir, f'retinanet_{timestamp}_{model_note}_best.pth')
                     torch.save(model.state_dict(), model_save_path)
                 
                 # 发送epoch完成信号
@@ -733,11 +803,10 @@ class DetectionTrainingThread(QThread):
                 self.epoch_finished.emit(epoch_info)
             
             # 保存最终模型
-            # 添加时间戳和模型备注
+            # 使用统一的命名格式
             model_note = config.get('model_note', '') if config else ''
-            timestamp = time.strftime("%Y%m%d_%H%M%S")
-            model_file_suffix = f"_{model_note}" if model_note else ""
-            final_model_path = os.path.join(model_save_dir, f'retinanet{model_file_suffix}_{timestamp}_final.pth')
+            timestamp = time.strftime("%Y%m%d-%H%M%S")
+            final_model_path = os.path.join(model_save_dir, f'retinanet_{timestamp}_{model_note}_final.pth')
             torch.save(model.state_dict(), final_model_path)
             
             # 保存训练信息
@@ -879,11 +948,10 @@ class DetectionTrainingThread(QThread):
                 # 保存最佳模型
                 if current_map > best_map:
                     best_map = current_map
-                    # 添加时间戳和模型备注
+                    # 使用统一的命名格式
                     model_note = config.get('model_note', '') if config else ''
-                    timestamp = time.strftime("%Y%m%d_%H%M%S")
-                    model_file_suffix = f"_{model_note}" if model_note else ""
-                    model_save_path = os.path.join(model_save_dir, f'detr{model_file_suffix}_{timestamp}_best.pth')
+                    timestamp = time.strftime("%Y%m%d-%H%M%S")
+                    model_save_path = os.path.join(model_save_dir, f'detr_{timestamp}_{model_note}_best.pth')
                     torch.save(model.state_dict(), model_save_path)
                 
                 # 发送epoch完成信号
@@ -891,17 +959,15 @@ class DetectionTrainingThread(QThread):
                     'epoch': epoch + 1,
                     'train_loss': avg_loss,
                     'val_loss': avg_val_loss,
-                    'val_map': current_map,
-                    'learning_rate': optimizer.param_groups[0]['lr']
+                    'val_map': current_map
                 }
                 self.epoch_finished.emit(epoch_info)
             
             # 保存最终模型
-            # 添加时间戳和模型备注
+            # 使用统一的命名格式
             model_note = config.get('model_note', '') if config else ''
-            timestamp = time.strftime("%Y%m%d_%H%M%S")
-            model_file_suffix = f"_{model_note}" if model_note else ""
-            final_model_path = os.path.join(model_save_dir, f'detr{model_file_suffix}_{timestamp}_final.pth')
+            timestamp = time.strftime("%Y%m%d-%H%M%S")
+            final_model_path = os.path.join(model_save_dir, f'detr_{timestamp}_{model_note}_final.pth')
             torch.save(model.state_dict(), final_model_path)
             
             # 保存训练信息
@@ -1100,19 +1166,19 @@ class DetectionTrainer(QObject):
             # 根据模型名称选择训练方法
             if model_name.startswith('YOLOv8'):
                 self._train_yolov8(data_dir, model_name, num_epochs, batch_size, learning_rate,
-                                 model_save_dir, use_tensorboard, config)
+                                 model_save_dir, use_tensorboard, self.config)
             elif model_name == 'Faster R-CNN':
                 self._train_fasterrcnn(data_dir, num_epochs, batch_size, learning_rate,
-                                     model_save_dir, use_tensorboard, config)
+                                     model_save_dir, use_tensorboard, self.config)
             elif model_name == 'SSD':
                 self._train_ssd(data_dir, num_epochs, batch_size, learning_rate,
-                              model_save_dir, use_tensorboard, config)
+                              model_save_dir, use_tensorboard, self.config)
             elif model_name == 'RetinaNet':
                 self._train_retinanet(data_dir, num_epochs, batch_size, learning_rate,
-                                    model_save_dir, use_tensorboard, config)
+                                    model_save_dir, use_tensorboard, self.config)
             elif model_name == 'DETR':
                 self._train_detr(data_dir, num_epochs, batch_size, learning_rate,
-                               model_save_dir, use_tensorboard, config)
+                               model_save_dir, use_tensorboard, self.config)
             else:
                 error_msg = f"不支持的模型类型: {model_name}"
                 self.logger.error(error_msg)
@@ -1144,84 +1210,159 @@ class DetectionTrainer(QObject):
             self.logger.error(f"停止训练时出错: {str(e)}")
             self.training_error.emit(f"停止训练失败: {str(e)}")
 
-    def _train_yolov8(self, data_dir, model_name, num_epochs, batch_size, learning_rate, model_save_dir, use_tensorboard):
+    def _train_yolov8(self, data_dir, model_name, num_epochs, batch_size, learning_rate, model_save_dir, use_tensorboard, config=None):
         """使用YOLOv8进行目标检测训练"""
         try:
             self.status_updated.emit("开始YOLOv8模型训练...")
             
-            # 检查是否安装了ultralytics包
+            # 检查ultralytics包
             try:
                 from ultralytics import YOLO
             except ImportError:
-                self.status_updated.emit("正在安装ultralytics包...")
-                subprocess.check_call([sys.executable, "-m", "pip", "install", "ultralytics"])
-                from ultralytics import YOLO
+                self.model_download_failed.emit("YOLOv8", "https://github.com/ultralytics/ultralytics")
+                self.training_error.emit("未安装ultralytics包，请使用pip install ultralytics安装")
+                return
+                
+            # 提取YOLOv8的型号大小 (s, m, l, x)
+            yolo_size = 's'  # 默认使用YOLOv8s
+            if model_name in ['YOLOv8s', 'YOLOv8m', 'YOLOv8l', 'YOLOv8x']:
+                yolo_size = model_name[-1].lower()
+                
+            # 配置训练参数
+            model_path = f'yolov8{yolo_size}'
+            model = YOLO(model_path)
             
-            # 创建YOLO模型
-            model = YOLO('yolov8n.pt')  # 使用预训练的YOLOv8n模型
+            # 准备训练数据路径
+            # YOLO格式需要data.yaml文件
+            data_yaml_path = os.path.join(data_dir, 'data.yaml')
             
-            # 准备训练配置
-            train_config = {
-                'data': os.path.join(data_dir, 'data.yaml'),
+            if not os.path.exists(data_yaml_path):
+                error_msg = f"训练数据配置文件不存在: {data_yaml_path}"
+                self.status_updated.emit(error_msg)
+                self.training_error.emit(error_msg)
+                return
+                
+            # 处理空model_note的情况
+            model_note = config.get('model_note', '') if config else ''
+            timestamp = time.strftime("%Y%m%d-%H%M%S")
+            
+            # 获取参数保存目录，如果未指定则使用模型保存目录
+            param_save_dir = config.get('default_param_save_dir', model_save_dir) if config else model_save_dir
+            
+            # 标准化路径格式
+            model_save_dir = os.path.normpath(model_save_dir)
+            param_save_dir = os.path.normpath(param_save_dir)
+            
+            os.makedirs(param_save_dir, exist_ok=True)
+            os.makedirs(model_save_dir, exist_ok=True)
+            
+            # 生成使用统一格式的保存路径
+            model_save_path = os.path.join(model_save_dir, f'{model_name}_{timestamp}_{model_note}_best.pt')
+            
+            # 设置训练参数
+            train_args = {
+                'data': data_yaml_path,
                 'epochs': num_epochs,
                 'batch': batch_size,
-                'imgsz': 640,
-                'device': 'cuda' if torch.cuda.is_available() else 'cpu',
-                'workers': 4,
-                'project': model_save_dir,
-                'name': 'yolov8_train',
+                'imgsz': config.get('resolution', 640) if config else 640,
+                'device': '0' if torch.cuda.is_available() else 'cpu',
+                'project': os.path.dirname(model_save_dir),
+                'name': os.path.basename(model_save_dir),
                 'exist_ok': True,
                 'pretrained': True,
-                'optimizer': 'Adam',
+                'optimizer': config.get('optimizer', 'SGD') if config else 'SGD',
                 'lr0': learning_rate,
-                'lrf': 0.01,
-                'momentum': 0.937,
-                'weight_decay': 0.0005,
-                'warmup_epochs': 3,
-                'warmup_momentum': 0.8,
-                'warmup_bias_lr': 0.1,
-                'box': 0.05,
-                'cls': 0.5,
-                'cls_pw': 1.0,
-                'obj': 1.0,
-                'obj_pw': 1.0,
-                'iou_t': 0.2,
-                'anchor_t': 4.0,
-                'fl_gamma': 0.0,
-                'label_smoothing': 0.0,
-                'nbs': 64,
-                'overlap_mask': True,
-                'mask_ratio': 4,
-                'dropout': 0.0,
-                'val': True,
-                'save': True,
                 'save_json': False,
-                'save_hybrid': False,
-                'conf': 0.001,
-                'iou': 0.6,
-                'max_det': 300,
-                'half': False,
-                'dnn': False,
-                'plots': True
+                'save': True,
+                'save_period': -1,  # 每个epoch都保存
+                'patience': config.get('patience', 50) if config else 50,
+                'verbose': True,
+                'seed': 42
             }
             
             # 开始训练
-            results = model.train(**train_config)
+            self.status_updated.emit(f"启动YOLOv8{yolo_size}训练，epochs={num_epochs}, batch={batch_size}, lr={learning_rate}")
             
-            # 保存训练结果
-            training_info = {
-                'model_name': 'YOLOv8',
-                'num_epochs': num_epochs,
-                'batch_size': batch_size,
-                'learning_rate': learning_rate,
-                'best_map': float(results.best_map),
-                'model_path': os.path.join(model_save_dir, 'yolov8_train/weights/best.pt')
-            }
+            # 创建训练结果回调
+            class YOLOCallback:
+                def __init__(self, trainer):
+                    self.trainer = trainer
+                    self.best_map = 0.0
+                    self.best_map_path = ''
+                    
+                def on_train_start(self):
+                    self.trainer.status_updated.emit("YOLOv8训练开始")
+                    
+                def on_train_epoch_end(self, epoch, metrics):
+                    # 更新进度
+                    progress = int(((epoch + 1) / num_epochs) * 100)
+                    self.trainer.progress_updated.emit(progress)
+                    
+                    # 记录指标
+                    try:
+                        val_map = metrics.get('metrics/mAP50-95', 0.0)
+                        train_loss = metrics.get('train/box_loss', 0.0)
+                        val_loss = metrics.get('val/box_loss', 0.0)
+                        
+                        # 发送epoch完成信号
+                        epoch_info = {
+                            'epoch': epoch + 1,
+                            'train_loss': train_loss,
+                            'val_loss': val_loss,
+                            'val_map': val_map
+                        }
+                        self.trainer.epoch_finished.emit(epoch_info)
+                        
+                        # 如果有TensorBoard，记录指标
+                        if self.trainer.writer:
+                            self.trainer.writer.add_scalar('Loss/train', train_loss, epoch)
+                            self.trainer.writer.add_scalar('Loss/val', val_loss, epoch)
+                            self.trainer.writer.add_scalar('mAP/val', val_map, epoch)
+                            
+                            # 发送TensorBoard更新信号
+                            self.trainer.tensorboard_updated.emit(
+                                self.trainer.tensorboard_log_dir, val_map, epoch + 1)
+                                
+                        # 记录最佳模型
+                        if val_map > self.best_map:
+                            self.best_map = val_map
+                            self.trainer.status_updated.emit(f"新的最佳mAP: {val_map:.4f} (Epoch {epoch+1})")
+                    except Exception as e:
+                        print(f"处理YOLO训练指标时出错: {str(e)}")
+                    
+                def on_train_end(self, results):
+                    # 训练结束，重命名最佳模型
+                    try:
+                        # 获取YOLO保存的最佳模型路径
+                        yolo_best_path = getattr(results, 'best', None)
+                        
+                        if yolo_best_path and os.path.exists(yolo_best_path):
+                            # 将YOLO生成的模型复制到我们指定的统一命名路径
+                            from shutil import copyfile
+                            copyfile(yolo_best_path, model_save_path)
+                            self.trainer.status_updated.emit(f"最佳模型已保存到: {model_save_path}")
+                            
+                            # 保存训练信息
+                            training_info = {
+                                'model_name': model_name,
+                                'num_epochs': num_epochs,
+                                'batch_size': batch_size,
+                                'learning_rate': learning_rate,
+                                'best_map': self.best_map,
+                                'model_path': model_save_path,
+                                'timestamp': timestamp  # 添加时间戳到训练信息
+                            }
+                            
+                            with open(os.path.join(model_save_dir, 'training_info.json'), 'w') as f:
+                                json.dump(training_info, f, indent=4)
+                    except Exception as e:
+                        self.trainer.status_updated.emit(f"保存最佳模型时出错: {str(e)}")
             
-            with open(os.path.join(model_save_dir, 'training_info.json'), 'w') as f:
-                json.dump(training_info, f, indent=4)
+            # 创建回调并开始训练
+            callback = YOLOCallback(self)
+            results = model.train(**train_args, callbacks=[callback])
             
-            self.status_updated.emit(f'YOLOv8训练完成，最佳mAP: {results.best_map:.4f}')
+            self.status_updated.emit(f"YOLOv8训练完成，最佳mAP: {callback.best_map:.4f}")
             
         except Exception as e:
             self.training_error.emit(f"YOLOv8训练过程中出错: {str(e)}")
@@ -1330,11 +1471,10 @@ class DetectionTrainer(QObject):
                 # 保存最佳模型
                 if current_map > best_map:
                     best_map = current_map
-                    # 添加时间戳和模型备注
+                    # 使用统一的命名格式
                     model_note = config.get('model_note', '') if config else ''
-                    timestamp = time.strftime("%Y%m%d_%H%M%S")
-                    model_file_suffix = f"_{model_note}" if model_note else ""
-                    model_save_path = os.path.join(model_save_dir, f'fasterrcnn{model_file_suffix}_{timestamp}_best.pth')
+                    timestamp = time.strftime("%Y%m%d-%H%M%S")
+                    model_save_path = os.path.join(model_save_dir, f'fasterrcnn_{timestamp}_{model_note}_best.pth')
                     torch.save(model.state_dict(), model_save_path)
                 
                 # 发送epoch完成信号
@@ -1347,11 +1487,10 @@ class DetectionTrainer(QObject):
                 self.epoch_finished.emit(epoch_info)
             
             # 保存最终模型
-            # 添加时间戳和模型备注
+            # 使用统一的命名格式
             model_note = config.get('model_note', '') if config else ''
-            timestamp = time.strftime("%Y%m%d_%H%M%S")
-            model_file_suffix = f"_{model_note}" if model_note else ""
-            final_model_path = os.path.join(model_save_dir, f'fasterrcnn{model_file_suffix}_{timestamp}_final.pth')
+            timestamp = time.strftime("%Y%m%d-%H%M%S")
+            final_model_path = os.path.join(model_save_dir, f'fasterrcnn_{timestamp}_{model_note}_final.pth')
             torch.save(model.state_dict(), final_model_path)
             
             # 保存训练信息

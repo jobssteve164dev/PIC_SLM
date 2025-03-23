@@ -180,6 +180,18 @@ class SettingsTab(BaseTab):
         model_layout.addWidget(self.default_tensorboard_log_dir_edit, 4, 1)
         model_layout.addWidget(tensorboard_log_dir_btn, 4, 2)
         
+        # 训练参数保存文件夹
+        self.default_param_save_dir_edit = QLineEdit()
+        self.default_param_save_dir_edit.setReadOnly(True)
+        self.default_param_save_dir_edit.setPlaceholderText("默认训练参数保存文件夹")
+        
+        param_save_dir_btn = QPushButton("浏览...")
+        param_save_dir_btn.clicked.connect(self.select_default_param_save_dir)
+        
+        model_layout.addWidget(QLabel("默认训练参数保存文件夹:"), 5, 0)
+        model_layout.addWidget(self.default_param_save_dir_edit, 5, 1)
+        model_layout.addWidget(param_save_dir_btn, 5, 2)
+        
         model_group.setLayout(model_layout)
         advanced_layout.addWidget(model_group)
         
@@ -218,12 +230,16 @@ class SettingsTab(BaseTab):
         """选择默认源文件夹"""
         folder = QFileDialog.getExistingDirectory(self, "选择默认源文件夹")
         if folder:
+            # 标准化路径格式
+            folder = os.path.normpath(folder)
             self.default_source_edit.setText(folder)
     
     def select_default_output_folder(self):
         """选择默认输出文件夹"""
         folder = QFileDialog.getExistingDirectory(self, "选择默认输出文件夹")
         if folder:
+            # 标准化路径格式
+            folder = os.path.normpath(folder)
             self.default_output_edit.setText(folder)
     
     def settings_add_defect_class(self):
@@ -248,33 +264,51 @@ class SettingsTab(BaseTab):
     
     def select_default_model_file(self):
         """选择默认模型文件"""
-        file, _ = QFileDialog.getOpenFileName(self, "选择默认模型文件", "", "模型文件 (*.h5 *.pb *.tflite *.pth);;所有文件 (*)")
-        if file:
-            self.default_model_edit.setText(file)
+        file_path, _ = QFileDialog.getOpenFileName(self, "选择默认模型文件", "", "模型文件 (*.pth *.pt *.h5)")
+        if file_path:
+            # 标准化路径格式
+            file_path = os.path.normpath(file_path)
+            self.default_model_edit.setText(file_path)
     
     def select_default_class_info_file(self):
         """选择默认类别信息文件"""
-        file, _ = QFileDialog.getOpenFileName(self, "选择默认类别信息文件", "", "JSON文件 (*.json);;所有文件 (*)")
-        if file:
-            self.default_class_info_edit.setText(file)
-            
+        file_path, _ = QFileDialog.getOpenFileName(self, "选择默认类别信息文件", "", "JSON文件 (*.json)")
+        if file_path:
+            # 标准化路径格式
+            file_path = os.path.normpath(file_path)
+            self.default_class_info_edit.setText(file_path)
+    
     def select_default_model_eval_dir(self):
         """选择默认模型评估文件夹"""
         folder = QFileDialog.getExistingDirectory(self, "选择默认模型评估文件夹")
         if folder:
+            # 标准化路径格式
+            folder = os.path.normpath(folder)
             self.default_model_eval_dir_edit.setText(folder)
     
     def select_default_model_save_dir(self):
         """选择默认模型保存文件夹"""
         folder = QFileDialog.getExistingDirectory(self, "选择默认模型保存文件夹")
         if folder:
+            # 标准化路径格式
+            folder = os.path.normpath(folder)
             self.default_model_save_dir_edit.setText(folder)
     
     def select_default_tensorboard_log_dir(self):
         """选择默认TensorBoard日志文件夹"""
         folder = QFileDialog.getExistingDirectory(self, "选择默认TensorBoard日志文件夹")
         if folder:
+            # 标准化路径格式
+            folder = os.path.normpath(folder)
             self.default_tensorboard_log_dir_edit.setText(folder)
+    
+    def select_default_param_save_dir(self):
+        """选择默认训练参数保存文件夹"""
+        folder = QFileDialog.getExistingDirectory(self, "选择默认训练参数保存文件夹")
+        if folder:
+            # 标准化路径格式
+            folder = os.path.normpath(folder)
+            self.default_param_save_dir_edit.setText(folder)
     
     def load_current_settings(self):
         """加载当前设置"""
@@ -308,6 +342,7 @@ class SettingsTab(BaseTab):
         self.default_model_eval_dir_edit.setText(self.config.get('default_model_eval_dir', ''))
         self.default_model_save_dir_edit.setText(self.config.get('default_model_save_dir', ''))
         self.default_tensorboard_log_dir_edit.setText(self.config.get('default_tensorboard_log_dir', ''))
+        self.default_param_save_dir_edit.setText(self.config.get('default_param_save_dir', ''))
         
         # 设置默认类别
         self.default_classes = self.config.get('default_classes', [])
@@ -327,6 +362,7 @@ class SettingsTab(BaseTab):
                 'default_model_eval_dir': self.default_model_eval_dir_edit.text(),
                 'default_model_save_dir': self.default_model_save_dir_edit.text(),
                 'default_tensorboard_log_dir': self.default_tensorboard_log_dir_edit.text(),
+                'default_param_save_dir': self.default_param_save_dir_edit.text(),
                 'default_classes': self.default_classes
             }
             

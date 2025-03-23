@@ -29,15 +29,18 @@ class TrainingParamsComparisonTab(BaseTab):
         
         # 模型目录选择部分
         dir_layout = QHBoxLayout()
-        self.model_dir_label = QLabel("模型目录:")
+        self.model_dir_label = QLabel("参数目录:")
         self.model_dir_edit = QLineEdit()
         self.model_dir_edit.setReadOnly(True)
         self.model_dir_button = QPushButton("浏览...")
-        self.model_dir_button.clicked.connect(self.browse_model_dir)
+        self.model_dir_button.clicked.connect(self.browse_param_dir)
+        self.refresh_button = QPushButton("刷新")
+        self.refresh_button.clicked.connect(self.load_model_configs)
         
         dir_layout.addWidget(self.model_dir_label)
         dir_layout.addWidget(self.model_dir_edit)
         dir_layout.addWidget(self.model_dir_button)
+        dir_layout.addWidget(self.refresh_button)
         
         main_layout.addLayout(dir_layout)
         
@@ -45,7 +48,7 @@ class TrainingParamsComparisonTab(BaseTab):
         content_layout = QHBoxLayout()
         
         # 左侧模型列表
-        model_group = QGroupBox("模型列表")
+        model_group = QGroupBox("参数列表")
         model_layout = QVBoxLayout()
         
         self.model_list = QListWidget()
@@ -88,6 +91,12 @@ class TrainingParamsComparisonTab(BaseTab):
         
         main_layout.addLayout(content_layout)
         
+    def showEvent(self, event):
+        """标签页显示时自动刷新参数列表"""
+        super().showEvent(event)
+        if self.model_dir:
+            self.load_model_configs()
+    
     def browse_model_dir(self):
         """浏览模型目录"""
         dir_path = QFileDialog.getExistingDirectory(self, "选择模型目录")
@@ -96,13 +105,27 @@ class TrainingParamsComparisonTab(BaseTab):
             self.model_dir_edit.setText(dir_path)
             self.load_model_configs()
             
+    def browse_param_dir(self):
+        """浏览参数目录"""
+        dir_path = QFileDialog.getExistingDirectory(self, "选择参数目录")
+        if dir_path:
+            # 标准化路径格式
+            dir_path = os.path.normpath(dir_path)
+            self.model_dir = dir_path
+            self.model_dir_edit.setText(dir_path)
+            self.load_model_configs()
+            
+            # 如果有主窗口并且有设置标签页，则更新设置
+            if self.main_window and hasattr(self.main_window, 'settings_tab'):
+                self.main_window.settings_tab.default_param_save_dir_edit.setText(dir_path)
+            
     def load_model_configs(self):
         """加载模型配置文件"""
         self.model_list.clear()
         self.model_configs = []
         
         if not self.model_dir or not os.path.exists(self.model_dir):
-            self.status_updated.emit("模型目录不存在")
+            self.status_updated.emit("参数目录不存在")
             return
             
         # 查找模型目录下所有的配置文件
@@ -129,9 +152,12 @@ class TrainingParamsComparisonTab(BaseTab):
                     model_name = config.get('model_name', 'Unknown')
                     model_note = config.get('model_note', '')
                     task_type = config.get('task_type', 'Unknown')
+                    timestamp = config.get('timestamp', '')
                     
-                    # 显示名称格式：模型名称 - 任务类型 (备注)
+                    # 显示名称格式：模型名称 - 任务类型 - 时间戳 (备注)
                     display_name = f"{model_name} - {task_type}"
+                    if timestamp:
+                        display_name += f" - {timestamp}"
                     if model_note:
                         display_name += f" ({model_note})"
                         
@@ -142,7 +168,7 @@ class TrainingParamsComparisonTab(BaseTab):
             except Exception as e:
                 self.status_updated.emit(f"加载配置文件 {config_file} 时出错: {str(e)}")
                 
-        self.status_updated.emit(f"已加载 {len(self.model_configs)} 个模型配置")
+        self.status_updated.emit(f"已加载 {len(self.model_configs)} 个训练参数配置")
         
     def select_all_models(self):
         """选择所有模型"""
@@ -250,7 +276,8 @@ class TrainingParamsComparisonTab(BaseTab):
             
     def apply_config(self, config):
         """应用配置"""
-        if config and 'default_model_eval_dir' in config:
-            self.model_dir = config['default_model_eval_dir']
-            self.model_dir_edit.setText(self.model_dir)
-            self.load_model_configs() 
+        if config:
+            if 'default_param_save_dir' in config:
+                self.model_dir = config['default_param_save_dir']
+                self.model_dir_edit.setText(self.model_dir)
+                self.load_model_configs() 

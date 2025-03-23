@@ -359,17 +359,16 @@ class TrainingThread(QThread):
                 # 如果是验证阶段，检查是否为最佳模型
                 if phase == 'val' and epoch_acc > best_acc:
                     best_acc = epoch_acc
-                    # 保存最佳模型，添加时间戳
+                    # 保存最佳模型，使用统一的命名格式
                     model_note = self.config.get('model_note', '')
-                    timestamp = time.strftime("%Y%m%d_%H%M%S")
-                    model_file_suffix = f"_{model_note}" if model_note else ""
-                    model_save_path = os.path.join(model_save_dir, f'{model_name}{model_file_suffix}_{timestamp}_best.pth')
+                    timestamp = time.strftime("%Y%m%d-%H%M%S")
+                    model_save_path = os.path.join(model_save_dir, f'{model_name}_{timestamp}_{model_note}_best.pth')
                     torch.save(self.model.state_dict(), model_save_path)
                     self.status_updated.emit(f'保存最佳模型，Epoch {epoch+1}, Acc: {best_acc:.4f}')
                     
-                    # 导出ONNX模型
+                    # 导出ONNX模型，也使用统一的命名格式
                     try:
-                        onnx_save_path = os.path.join(model_save_dir, f'{model_name}{model_file_suffix}_{timestamp}_best.onnx')
+                        onnx_save_path = os.path.join(model_save_dir, f'{model_name}_{timestamp}_{model_note}_best.onnx')
                         sample_input = torch.randn(1, 3, 224, 224).to(self.device)
                         torch.onnx.export(
                             self.model, 
@@ -385,11 +384,10 @@ class TrainingThread(QThread):
                     except Exception as e:
                         self.status_updated.emit(f'导出ONNX模型时出错: {str(e)}')
 
-            # 保存最终模型，添加时间戳
+            # 保存最终模型，使用统一的命名格式
             model_note = self.config.get('model_note', '')
-            timestamp = time.strftime("%Y%m%d_%H%M%S")
-            model_file_suffix = f"_{model_note}" if model_note else ""
-            final_model_path = os.path.join(model_save_dir, f'{model_name}{model_file_suffix}_{timestamp}_final.pth')
+            timestamp = time.strftime("%Y%m%d-%H%M%S")
+            final_model_path = os.path.join(model_save_dir, f'{model_name}_{timestamp}_{model_note}_final.pth')
             torch.save(self.model.state_dict(), final_model_path)
             self.status_updated.emit(f'保存最终模型: {final_model_path}')
             
@@ -829,21 +827,29 @@ class ModelTrainer(QObject):
             model_name = config.get('model_name', 'Unknown')
             model_note = config.get('model_note', '')
             
-            # 构建模型文件名和配置文件名
+            # 构建统一的文件名基础部分
             model_filename = f"{model_name}_{timestamp}"
             if model_note:
                 model_filename += f"_{model_note}"
             
-            # 保存训练参数到配置文件
+            # 获取模型保存目录和参数保存目录
             model_save_dir = config.get('model_save_dir', 'models/saved_models')
+            param_save_dir = config.get('default_param_save_dir', model_save_dir)  # 如果未指定参数保存目录，则使用模型保存目录
+            
+            # 标准化路径格式，确保所有路径使用相同的格式
+            model_save_dir = os.path.normpath(model_save_dir)
+            param_save_dir = os.path.normpath(param_save_dir)
+            
+            # 确保目录存在
             os.makedirs(model_save_dir, exist_ok=True)
+            os.makedirs(param_save_dir, exist_ok=True)
             
             # 在配置中添加保存的文件名信息，供后续使用
             config['model_filename'] = model_filename
             config['timestamp'] = timestamp
             
-            # 保存配置文件
-            config_file_path = os.path.join(model_save_dir, f"{model_filename}_config.json")
+            # 保存配置文件，使用统一的文件名格式，保存到参数保存目录
+            config_file_path = os.path.join(param_save_dir, f"{model_filename}_config.json")
             try:
                 with open(config_file_path, 'w', encoding='utf-8') as f:
                     json.dump(config, f, ensure_ascii=False, indent=4)
@@ -899,9 +905,10 @@ class ModelTrainer(QObject):
                 
             else:
                 self.training_error.emit(f"不支持的任务类型: {task_type}")
-        
+                return
+                
         except Exception as e:
-            self.training_error.emit(f"启动训练时发生错误: {str(e)}")
+            self.training_error.emit(f"启动训练过程时出错: {str(e)}")
             import traceback
             traceback.print_exc()
 

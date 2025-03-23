@@ -359,11 +359,19 @@ def main():
         config = config_loader.get_config()
         model_save_dir = config.get('default_model_save_dir', '')
         
-        # 如果设置中没有指定，则使用默认路径
+        # 获取参数保存目录
+        param_save_dir = config.get('default_param_save_dir', '')
+        
+        # 如果设置中没有指定模型保存目录，则使用默认路径
         if not model_save_dir:
             model_save_dir = os.path.join('models', 'saved_models')
             
+        # 如果设置中没有指定参数保存目录，则使用模型保存目录
+        if not param_save_dir:
+            param_save_dir = model_save_dir
+            
         os.makedirs(model_save_dir, exist_ok=True)
+        os.makedirs(param_save_dir, exist_ok=True)
         
         # 获取数据目录（根据任务类型选择）
         if task_type == 'classification':
@@ -415,6 +423,7 @@ def main():
             'batch_size': batch_size,
             'learning_rate': learning_rate,
             'model_save_dir': model_save_dir,
+            'default_param_save_dir': param_save_dir,  # 添加参数保存目录
             'task_type': task_type,
             'optimizer': optimizer,
             'use_pretrained': use_pretrained,
