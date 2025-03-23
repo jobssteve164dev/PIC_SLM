@@ -30,7 +30,6 @@ import matplotlib.pyplot as plt
 from matplotlib.backends.backend_qt5agg import FigureCanvas
 
 # 配置matplotlib全局字体设置
-import matplotlib
 matplotlib.rcParams['font.sans-serif'] = ['SimHei', 'Microsoft YaHei', 'SimSun', 'Arial Unicode MS', 'sans-serif']
 matplotlib.rcParams['axes.unicode_minus'] = False  # 解决负号显示问题
 matplotlib.rcParams['font.size'] = 12  # 设置字体大小
@@ -392,6 +391,17 @@ def main():
             use_pretrained = params.get('use_pretrained', True)
             pretrained_path = params.get('pretrained_path', '')  # 获取本地预训练模型路径
             metrics = params.get('metrics', ['accuracy'])  # 直接使用传入的metrics列表
+            
+            # 添加额外的分类训练参数
+            weight_decay = params.get('weight_decay', 0.0001)
+            lr_scheduler = params.get('lr_scheduler', 'StepLR')
+            use_augmentation = params.get('use_augmentation', True)
+            early_stopping = params.get('early_stopping', True)
+            early_stopping_patience = params.get('early_stopping_patience', 10)
+            gradient_clipping = params.get('gradient_clipping', False)
+            gradient_clipping_value = params.get('gradient_clipping_value', 1.0)
+            mixed_precision = params.get('mixed_precision', True)
+            
         else:  # detection
             # 直接使用annotation_folder而不是从控件获取
             data_dir = self.training_tab.annotation_folder
@@ -414,6 +424,19 @@ def main():
             # 目标检测特有参数
             iou_threshold = params.get('iou_threshold', 0.5)
             conf_threshold = params.get('conf_threshold', 0.25)
+            
+            # 添加额外的目标检测训练参数
+            weight_decay = params.get('weight_decay', 0.0005)
+            lr_scheduler = params.get('lr_scheduler', 'StepLR')
+            use_augmentation = params.get('use_augmentation', True)
+            early_stopping = params.get('early_stopping', True)
+            early_stopping_patience = params.get('early_stopping_patience', 10)
+            gradient_clipping = params.get('gradient_clipping', False)
+            gradient_clipping_value = params.get('gradient_clipping_value', 1.0)
+            mixed_precision = params.get('mixed_precision', True)
+            use_mosaic = params.get('use_mosaic', True)
+            use_multiscale = params.get('use_multiscale', True)
+            use_ema = params.get('use_ema', True)
         
         # 创建训练配置
         training_config = {
@@ -430,7 +453,17 @@ def main():
             'pretrained_path': pretrained_path,  # 添加本地预训练模型路径
             'metrics': metrics,
             'use_tensorboard': True,
-            'model_note': params.get('model_note', '')  # 添加模型命名备注
+            'model_note': params.get('model_note', ''),  # 添加模型命名备注
+            
+            # 添加所有共用训练参数
+            'weight_decay': weight_decay,
+            'lr_scheduler': lr_scheduler,
+            'use_augmentation': use_augmentation,
+            'early_stopping': early_stopping,
+            'early_stopping_patience': early_stopping_patience,
+            'gradient_clipping': gradient_clipping,
+            'gradient_clipping_value': gradient_clipping_value,
+            'mixed_precision': mixed_precision
         }
         
         # 添加任务特有参数
@@ -440,7 +473,10 @@ def main():
                 'conf_threshold': conf_threshold,
                 'resolution': params.get('resolution', '640x640'),
                 'nms_threshold': 0.45,  # 默认值
-                'use_fpn': True         # 默认值
+                'use_fpn': True,        # 默认值
+                'use_mosaic': use_mosaic,
+                'use_multiscale': use_multiscale,
+                'use_ema': use_ema
             })
         
         # 更新UI状态 - 修复：使用update_status方法代替status_bar.showMessage

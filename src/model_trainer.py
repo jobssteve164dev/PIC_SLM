@@ -18,6 +18,7 @@ import time
 # 设置matplotlib后端为Agg，解决线程安全问题
 import matplotlib
 matplotlib.use('Agg')  # 必须在导入pyplot之前设置
+import matplotlib.pyplot as plt
 
 class TrainingThread(QThread):
     """负责在单独线程中执行训练过程的类"""
@@ -307,7 +308,6 @@ class TrainingThread(QThread):
                         if phase == 'val':
                             try:
                                 from sklearn.metrics import confusion_matrix
-                                import matplotlib.pyplot as plt
                                 import io
                                 from PIL import Image
                                 

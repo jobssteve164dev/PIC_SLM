@@ -10,6 +10,7 @@ import platform
 from .base_tab import BaseTab
 from .training_help_dialog import TrainingHelpDialog
 import json
+import subprocess
 
 class ModelDownloadDialog(QDialog):
     """模型下载失败时显示的对话框，提供下载链接和文件夹打开按钮"""
@@ -121,7 +122,6 @@ class ModelDownloadDialog(QDialog):
                 import subprocess
                 subprocess.run(["open", cache_dir])
             else:  # Linux
-                import subprocess
                 subprocess.run(["xdg-open", cache_dir])
             
         except Exception as e:
@@ -1289,7 +1289,16 @@ class TrainingTab(BaseTab):
                 "pretrained_path": pretrained_path,
                 "pretrained_model": pretrained_model,  # 添加预训练模型名称
                 "use_augmentation": self.classification_augmentation_checkbox.isChecked(),
-                "model_note": model_note  # 添加模型命名备注
+                "model_note": model_note,  # 添加模型命名备注
+                
+                # 添加已有但之前未收集的参数
+                "weight_decay": self.classification_weight_decay_spin.value(),
+                "lr_scheduler": self.classification_lr_scheduler_combo.currentText(),
+                "early_stopping": self.classification_early_stopping_checkbox.isChecked(),
+                "early_stopping_patience": self.classification_early_stopping_patience_spin.value(),
+                "gradient_clipping": self.classification_gradient_clipping_checkbox.isChecked(),
+                "gradient_clipping_value": self.classification_gradient_clipping_value_spin.value(),
+                "mixed_precision": self.classification_mixed_precision_checkbox.isChecked()
             })
         else:
             # 获取所有选中的评估指标
@@ -1320,10 +1329,22 @@ class TrainingTab(BaseTab):
                 "pretrained_path": pretrained_path,
                 "pretrained_model": pretrained_model,  # 添加预训练模型名称
                 "use_augmentation": self.detection_augmentation_checkbox.isChecked(),
-                "model_note": model_note  # 添加模型命名备注
+                "model_note": model_note,  # 添加模型命名备注
+                
+                # 添加已有但之前未收集的参数
+                "weight_decay": self.detection_weight_decay_spin.value(),
+                "lr_scheduler": self.detection_lr_scheduler_combo.currentText(),
+                "early_stopping": self.detection_early_stopping_checkbox.isChecked(),
+                "early_stopping_patience": self.detection_early_stopping_patience_spin.value(),
+                "gradient_clipping": self.detection_gradient_clipping_checkbox.isChecked(),
+                "gradient_clipping_value": self.detection_gradient_clipping_value_spin.value(),
+                "mixed_precision": self.detection_mixed_precision_checkbox.isChecked(),
+                "use_mosaic": self.detection_mosaic_checkbox.isChecked(),
+                "use_multiscale": self.detection_multiscale_checkbox.isChecked(),
+                "use_ema": self.detection_ema_checkbox.isChecked()
             })
             
-        return params 
+        return params
 
     def toggle_pretrained_controls(self, enabled, is_classification=True):
         """切换预训练模型控件的启用状态"""
@@ -1380,29 +1401,19 @@ class TrainingTab(BaseTab):
             model_trainer.training_stopped.connect(self.on_training_stopped) 
 
     def open_model_folder(self):
-        """打开模型保存文件夹"""
-        try:
-            # 获取程序根目录
-            root_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-            # 模型保存目录在models/saved_models目录下
-            model_dir = os.path.join(root_dir, "models", "saved_models")
-            
-            if not os.path.exists(model_dir):
-                QMessageBox.warning(self, "警告", "模型保存文件夹不存在，请先完成训练。")
-                return
-                
-            # 打开文件夹
+        """打开保存模型的文件夹"""
+        model_save_folder = self.model_save_folder.text()
+        if os.path.exists(model_save_folder):
             if platform.system() == "Windows":
-                os.startfile(model_dir)
+                os.startfile(model_save_folder)
             elif platform.system() == "Darwin":  # macOS
-                import subprocess
-                subprocess.run(["open", model_dir])
+                subprocess.run(["open", model_save_folder])
             else:  # Linux
-                import subprocess
-                subprocess.run(["xdg-open", model_dir])
-                
-        except Exception as e:
-            QMessageBox.warning(self, "错误", f"无法打开模型保存文件夹: {str(e)}")
+                subprocess.run(["xdg-open", model_save_folder])
+        else:
+            QMessageBox.warning(self, "文件夹未找到", f"模型保存文件夹不存在: {model_save_folder}")
+            return False
+        return True
 
     def goto_annotation_tab(self):
         """切换到标注标签页"""
