@@ -196,6 +196,14 @@ def main():
                 print(f"检测路径控件文本: {window.training_tab.detection_path_edit.text()}")
         else:
             print("警告: 训练标签页没有apply_config方法")
+            
+    # 应用评估标签页的配置
+    if hasattr(window, 'evaluation_tab') and hasattr(window.evaluation_tab, 'apply_config'):
+        print("正在应用配置到评估标签页...")
+        if config:
+            window.evaluation_tab.apply_config(config)
+        elif 'direct_config' in locals():
+            window.evaluation_tab.apply_config(direct_config)
     
     # 创建工作线程
     thread = QThread()

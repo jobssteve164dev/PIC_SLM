@@ -1,6 +1,6 @@
 {
-    "model_name": "VGG19",
-    "num_epochs": 20,
+    "model_name": "MobileNetV2",
+    "num_epochs": 5,
     "batch_size": 32,
     "learning_rate": 0.001,
     "best_accuracy": 0.16666666666666666,
@@ -12,6 +12,6 @@
         "Spur",
         "Spurious_copper"
     ],
-    "model_path": "f:/Qsync/00.AI_PROJECT/\u56fe\u7247\u5206\u7c7b\u6a21\u578b\u8bad\u7ec3/C1/models/saved_models\\VGG19_20250323_072205_final.pth",
-    "timestamp": "20250323_072205"
+    "model_path": "f:/Qsync/00.AI_PROJECT/\u56fe\u7247\u5206\u7c7b\u6a21\u578b\u8bad\u7ec3/C1/models/saved_models\\MobileNetV2_0323_20250323_221840_final.pth",
+    "timestamp": "20250323_221840"
 }

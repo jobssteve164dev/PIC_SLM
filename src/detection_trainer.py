@@ -939,16 +939,37 @@ class DetectionTrainer(QObject):
     training_stopped = pyqtSignal()
     metrics_updated = pyqtSignal(dict)
     tensorboard_updated = pyqtSignal(str, float, int)
-
-    def __init__(self):
+    
+    def __init__(self, config=None):
         super().__init__()
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         self.model = None
         self.stop_training = False
         self.training_thread = None
         self.writer = None
+        self.config = config
         self.logger = logging.getLogger(__name__)
         self.logger.setLevel(logging.INFO)
+        
+    def start_training(self, config=None):
+        """启动训练过程，使用传入的配置或初始化时的配置"""
+        try:
+            # 如果传入了新的配置，则使用新配置，否则使用初始化时的配置
+            if config is not None:
+                self.config = config
+            
+            # 确保有配置可用
+            if self.config is None:
+                self.training_error.emit("没有可用的训练配置")
+                return
+                
+            # 直接调用已有的train_model方法
+            self.train_model(self.config)
+            
+        except Exception as e:
+            self.training_error.emit(f"启动训练时出错: {str(e)}")
+            import traceback
+            traceback.print_exc()
 
     def _update_metrics(self, metrics):
         """更新训练指标并发送信号"""

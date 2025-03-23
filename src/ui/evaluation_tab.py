@@ -1,7 +1,7 @@
 from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QPushButton, QLabel, QFileDialog,
                            QHBoxLayout, QComboBox, QGroupBox, QGridLayout, QListWidget,
                            QSizePolicy, QLineEdit, QMessageBox, QTableWidget, QTableWidgetItem,
-                           QHeaderView, QStackedWidget, QListWidgetItem)
+                           QHeaderView, QStackedWidget, QListWidgetItem, QFormLayout, QCheckBox)
 from PyQt5.QtCore import Qt, pyqtSignal
 from PyQt5.QtGui import QFont
 import os
@@ -24,6 +24,11 @@ class EvaluationTab(BaseTab):
         self.models_list = []
         self.log_dir = ""
         self.tensorboard_process = None
+        
+        # 初始化训练参数对比相关属性
+        self.model_dir = ""
+        self.model_configs = []
+        
         self.init_ui()
         
     def init_ui(self):
@@ -54,6 +59,12 @@ class EvaluationTab(BaseTab):
         self.tb_btn.clicked.connect(lambda: self.switch_view(1))
         switch_layout.addWidget(self.tb_btn)
         
+        # 添加训练参数对比按钮
+        self.params_compare_btn = QPushButton("训练参数对比")
+        self.params_compare_btn.setCheckable(True)
+        self.params_compare_btn.clicked.connect(lambda: self.switch_view(3))
+        switch_layout.addWidget(self.params_compare_btn)
+        
         self.eval_btn = QPushButton("模型评估")
         self.eval_btn.setCheckable(True)
         self.eval_btn.clicked.connect(lambda: self.switch_view(2))
@@ -79,6 +90,11 @@ class EvaluationTab(BaseTab):
         self.eval_widget = QWidget()
         self.setup_eval_ui()
         self.stacked_widget.addWidget(self.eval_widget)
+        
+        # 创建训练参数对比视图
+        self.params_compare_widget = QWidget()
+        self.setup_params_compare_ui()
+        self.stacked_widget.addWidget(self.params_compare_widget)
         
         # 添加弹性空间
         main_layout.addStretch()
@@ -242,6 +258,71 @@ class EvaluationTab(BaseTab):
         self.training_status_label.setAlignment(Qt.AlignCenter)
         training_curve_layout.addWidget(self.training_status_label)
     
+    def setup_params_compare_ui(self):
+        """设置训练参数对比UI"""
+        params_compare_layout = QVBoxLayout(self.params_compare_widget)
+        
+        # 模型目录选择部分
+        dir_layout = QHBoxLayout()
+        self.model_dir_label = QLabel("模型目录:")
+        self.model_dir_edit = QLineEdit()
+        self.model_dir_edit.setReadOnly(True)
+        self.model_dir_button = QPushButton("浏览...")
+        self.model_dir_button.clicked.connect(self.browse_model_dir)
+        
+        dir_layout.addWidget(self.model_dir_label)
+        dir_layout.addWidget(self.model_dir_edit)
+        dir_layout.addWidget(self.model_dir_button)
+        
+        params_compare_layout.addLayout(dir_layout)
+        
+        # 模型列表和参数表格布局
+        content_layout = QHBoxLayout()
+        
+        # 左侧模型列表
+        model_group = QGroupBox("模型列表")
+        model_layout = QVBoxLayout()
+        
+        self.model_list = QListWidget()
+        self.model_list.setSelectionMode(QListWidget.MultiSelection)
+        
+        model_buttons = QHBoxLayout()
+        self.select_all_button = QPushButton("全选")
+        self.select_all_button.clicked.connect(self.select_all_models)
+        self.deselect_all_button = QPushButton("取消全选")
+        self.deselect_all_button.clicked.connect(self.deselect_all_models)
+        self.compare_button = QPushButton("参数对比")
+        self.compare_button.clicked.connect(self.compare_params)
+        
+        model_buttons.addWidget(self.select_all_button)
+        model_buttons.addWidget(self.deselect_all_button)
+        model_buttons.addWidget(self.compare_button)
+        
+        model_layout.addWidget(self.model_list)
+        model_layout.addLayout(model_buttons)
+        
+        model_group.setLayout(model_layout)
+        
+        # 右侧参数表格
+        params_group = QGroupBox("参数对比")
+        params_layout = QVBoxLayout()
+        
+        self.params_table = QTableWidget()
+        self.params_table.setColumnCount(1)  # 初始只有参数名列
+        self.params_table.setHorizontalHeaderLabels(["参数名"])
+        self.params_table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+        self.params_table.verticalHeader().setVisible(False)
+        
+        params_layout.addWidget(self.params_table)
+        
+        params_group.setLayout(params_layout)
+        
+        # 添加到主布局
+        content_layout.addWidget(model_group, 1)
+        content_layout.addWidget(params_group, 3)
+        
+        params_compare_layout.addLayout(content_layout)
+    
     def switch_view(self, index):
         """切换视图"""
         self.stacked_widget.setCurrentIndex(index)
@@ -250,6 +331,7 @@ class EvaluationTab(BaseTab):
         self.training_curve_btn.setChecked(index == 0)
         self.tb_btn.setChecked(index == 1)
         self.eval_btn.setChecked(index == 2)
+        self.params_compare_btn.setChecked(index == 3)
     
     def select_models_dir(self):
         """选择模型目录"""
@@ -847,43 +929,31 @@ class EvaluationTab(BaseTab):
         super().closeEvent(event) 
 
     def apply_config(self, config):
-        """应用配置，从配置中加载默认设置"""
+        """应用配置，包括模型目录等"""
         if not config:
-            print("EvaluationTab: 配置为空，无法应用")
             return
             
-        print(f"EvaluationTab正在应用配置: {config}")
-            
-        # 加载默认模型评估文件夹
-        default_model_eval_dir = config.get('default_model_eval_dir', '')
-        if default_model_eval_dir and os.path.exists(default_model_eval_dir):
-            self.models_dir = default_model_eval_dir
-            self.models_path_edit.setText(default_model_eval_dir)
-            self.refresh_model_list()
-            print(f"EvaluationTab: 已应用默认模型评估文件夹: {default_model_eval_dir}")
-        else:
-            print(f"EvaluationTab: 默认模型评估文件夹无效或不存在: {default_model_eval_dir}")
-            
-        # 加载TensorBoard日志目录
-        log_dir = config.get('default_tensorboard_log_dir', '')
-        if log_dir and os.path.exists(log_dir):
-            self.log_dir = log_dir
-            self.log_path_edit.setText(log_dir)
-            self.start_btn.setEnabled(True)
-            self.tensorboard_widget.set_tensorboard_dir(log_dir)
-            print(f"EvaluationTab: 已应用TensorBoard日志目录: {log_dir}")
-        else:
-            # 尝试使用旧的配置项
-            old_log_dir = config.get('tensorboard_log_dir', '')
-            if old_log_dir and os.path.exists(old_log_dir):
-                self.log_dir = old_log_dir
-                self.log_path_edit.setText(old_log_dir)
+        # 设置模型评估目录
+        if 'default_model_eval_dir' in config:
+            model_dir = config['default_model_eval_dir']
+            if os.path.exists(model_dir):
+                self.models_path_edit.setText(model_dir)
+                self.models_dir = model_dir
+                
+                # 同时也应用到参数对比界面的模型目录
+                self.model_dir = model_dir
+                self.model_dir_edit.setText(model_dir)
+                self.load_model_configs()
+                
+        # 设置TensorBoard日志目录
+        if 'default_tensorboard_log_dir' in config:
+            log_dir = config['default_tensorboard_log_dir']
+            if os.path.exists(log_dir):
+                self.log_path_edit.setText(log_dir)
+                self.log_dir = log_dir
                 self.start_btn.setEnabled(True)
-                self.tensorboard_widget.set_tensorboard_dir(old_log_dir)
-                print(f"EvaluationTab: 已应用旧的TensorBoard日志目录: {old_log_dir}")
-            else:
-                print(f"EvaluationTab: TensorBoard日志目录无效或不存在: {log_dir}")
-    
+                self.tensorboard_widget.set_tensorboard_dir(log_dir)
+                
     def setup_trainer(self, trainer):
         """设置训练器并连接信号"""
         try:
@@ -898,4 +968,168 @@ class EvaluationTab(BaseTab):
             import traceback
             print(f"设置训练器时出错: {str(e)}")
             print(traceback.format_exc())
-            return False 
+            return False
+
+    def go_to_params_compare_tab(self):
+        """切换到训练参数对比视图"""
+        self.switch_view(3)
+        
+    def browse_model_dir(self):
+        """浏览模型目录"""
+        dir_path = QFileDialog.getExistingDirectory(self, "选择模型目录")
+        if dir_path:
+            self.model_dir = dir_path
+            self.model_dir_edit.setText(dir_path)
+            self.load_model_configs()
+            
+    def load_model_configs(self):
+        """加载模型配置文件"""
+        self.model_list.clear()
+        self.model_configs = []
+        
+        if not self.model_dir or not os.path.exists(self.model_dir):
+            self.status_updated.emit("模型目录不存在")
+            return
+            
+        # 查找模型目录下所有的配置文件
+        config_files = []
+        for file in os.listdir(self.model_dir):
+            if file.endswith('_config.json'):
+                config_files.append(file)
+                
+        if not config_files:
+            self.status_updated.emit(f"在 {self.model_dir} 中未找到模型配置文件")
+            return
+            
+        # 加载配置文件
+        for config_file in config_files:
+            try:
+                with open(os.path.join(self.model_dir, config_file), 'r', encoding='utf-8') as f:
+                    config = json.load(f)
+                    self.model_configs.append({
+                        'filename': config_file,
+                        'config': config
+                    })
+                    
+                    # 创建显示项目
+                    model_name = config.get('model_name', 'Unknown')
+                    model_note = config.get('model_note', '')
+                    task_type = config.get('task_type', 'Unknown')
+                    
+                    # 显示名称格式：模型名称 - 任务类型 (备注)
+                    display_name = f"{model_name} - {task_type}"
+                    if model_note:
+                        display_name += f" ({model_note})"
+                        
+                    item = QListWidgetItem(display_name)
+                    item.setFlags(item.flags() | Qt.ItemIsUserCheckable)
+                    item.setCheckState(Qt.Unchecked)
+                    self.model_list.addItem(item)
+            except Exception as e:
+                self.status_updated.emit(f"加载配置文件 {config_file} 时出错: {str(e)}")
+                
+        self.status_updated.emit(f"已加载 {len(self.model_configs)} 个模型配置")
+        
+    def select_all_models(self):
+        """选择所有模型"""
+        for i in range(self.model_list.count()):
+            item = self.model_list.item(i)
+            item.setCheckState(Qt.Checked)
+            
+    def deselect_all_models(self):
+        """取消选择所有模型"""
+        for i in range(self.model_list.count()):
+            item = self.model_list.item(i)
+            item.setCheckState(Qt.Unchecked)
+            
+    def compare_params(self):
+        """比较所选模型的训练参数"""
+        selected_indices = []
+        
+        # 获取所有选中的模型索引
+        for i in range(self.model_list.count()):
+            item = self.model_list.item(i)
+            if item.checkState() == Qt.Checked:
+                selected_indices.append(i)
+                
+        if not selected_indices:
+            QMessageBox.warning(self, "警告", "请至少选择一个模型进行比较")
+            return
+            
+        # 准备表格显示
+        selected_configs = [self.model_configs[i] for i in selected_indices]
+        self.update_params_table(selected_configs)
+        
+    def update_params_table(self, selected_configs):
+        """更新参数对比表格"""
+        if not selected_configs:
+            return
+            
+        # 清空表格
+        self.params_table.clear()
+        
+        # 设置列数为参数名+每个模型一列
+        self.params_table.setColumnCount(1 + len(selected_configs))
+        
+        # 设置列标题
+        headers = ["参数名"]
+        for config in selected_configs:
+            model_name = config['config'].get('model_name', 'Unknown')
+            model_note = config['config'].get('model_note', '')
+            if model_note:
+                headers.append(f"{model_name} ({model_note})")
+            else:
+                headers.append(model_name)
+                
+        self.params_table.setHorizontalHeaderLabels(headers)
+        
+        # 收集所有可能的参数名称
+        all_params = set()
+        for config in selected_configs:
+            all_params.update(config['config'].keys())
+            
+        # 排序参数名称，使得重要参数排在前面
+        important_params = [
+            'task_type', 'model_name', 'model_note', 'data_dir', 
+            'num_epochs', 'batch_size', 'learning_rate', 'optimizer',
+            'use_pretrained', 'pretrained_path', 'metrics',
+            'use_tensorboard', 'iou_threshold', 'conf_threshold', 
+            'resolution', 'nms_threshold', 'use_fpn'
+        ]
+        
+        sorted_params = []
+        # 先添加重要参数（如果存在）
+        for param in important_params:
+            if param in all_params:
+                sorted_params.append(param)
+                all_params.remove(param)
+        
+        # 再添加剩余参数（按字母排序）
+        sorted_params.extend(sorted(all_params))
+        
+        # 设置行数
+        self.params_table.setRowCount(len(sorted_params))
+        
+        # 填充表格内容
+        for row, param in enumerate(sorted_params):
+            # 设置参数名
+            self.params_table.setItem(row, 0, QTableWidgetItem(param))
+            
+            # 设置每个模型的参数值
+            for col, config in enumerate(selected_configs, start=1):
+                value = config['config'].get(param, '')
+                
+                # 格式化值，使其更易读
+                if isinstance(value, bool):
+                    value = "是" if value else "否"
+                elif isinstance(value, list):
+                    value = ", ".join(map(str, value))
+                elif isinstance(value, dict):
+                    value = json.dumps(value, ensure_ascii=False)
+                    
+                self.params_table.setItem(row, col, QTableWidgetItem(str(value)))
+                
+        # 调整表格列宽
+        self.params_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeToContents)
+        for i in range(1, self.params_table.columnCount()):
+            self.params_table.horizontalHeader().setSectionResizeMode(i, QHeaderView.Stretch) 

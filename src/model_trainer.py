@@ -815,91 +815,93 @@ class ModelTrainer(QObject):
         self.detection_trainer = None
 
     def train_model_with_config(self, config):
-        """通过配置训练模型"""
-        self.config = config
-        
-        # 获取配置参数
-        data_dir = self.config.get('data_dir', '')
-        model_name = self.config.get('model_name', 'ResNet50')
-        num_epochs = self.config.get('num_epochs', 20)
-        batch_size = self.config.get('batch_size', 32)
-        learning_rate = self.config.get('learning_rate', 0.001)
-        model_save_dir = self.config.get('model_save_dir', os.path.join('models', 'saved_models'))
-        task_type = self.config.get('task_type', 'classification')
-        optimizer = self.config.get('optimizer', 'Adam')
-        use_pretrained = self.config.get('use_pretrained', True)
-        use_tensorboard = self.config.get('use_tensorboard', True)
-        
-        # 获取TensorBoard日志路径 - 优先使用传入的log_dir，如果没有则使用默认配置
-        tensorboard_log_dir = self.config.get('log_dir', None)
-        
-        # 如果没有指定日志目录，尝试从配置文件获取默认值
-        if not tensorboard_log_dir:
-            try:
-                config_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'config.json')
-                if os.path.exists(config_path):
-                    with open(config_path, 'r', encoding='utf-8') as f:
-                        app_config = json.load(f)
-                        tensorboard_log_dir = app_config.get('default_tensorboard_log_dir', '')
-                        if tensorboard_log_dir:
-                            self.status_updated.emit(f"使用配置文件中的默认TensorBoard日志目录: {tensorboard_log_dir}")
-            except Exception as e:
-                self.status_updated.emit(f"读取配置文件中的TensorBoard日志目录失败: {str(e)}")
-                
-        # 如果仍未设置日志目录，则使用默认的runs目录
-        if not tensorboard_log_dir:
-            tensorboard_log_dir = os.path.join('runs', task_type)
-            
-        # 确保日志目录存在
-        os.makedirs(tensorboard_log_dir, exist_ok=True)
-        
-        # 将日志目录添加到配置中
-        self.config['log_dir'] = tensorboard_log_dir
-        
+        """使用配置字典进行训练"""
         try:
-            # 如果有正在运行的训练线程，先停止它
-            if self.training_thread and self.training_thread.isRunning():
-                self.stop()
+            # 保存原始配置
+            self.config = config.copy()
             
-            if task_type == 'detection':
-                # 使用DetectionTrainer进行目标检测训练
-                self.detection_trainer = DetectionTrainer()
-                # 连接信号
-                self.detection_trainer.progress_updated.connect(self.progress_updated)
-                self.detection_trainer.status_updated.connect(self.status_updated)
-                self.detection_trainer.training_finished.connect(self.training_finished)
-                self.detection_trainer.training_error.connect(self.training_error)
-                self.detection_trainer.epoch_finished.connect(self.epoch_finished)
-                self.detection_trainer.model_download_failed.connect(self.model_download_failed)
-                self.detection_trainer.training_stopped.connect(self.training_stopped)
-                
-                # 连接新增的指标更新信号
-                self.detection_trainer.metrics_updated.connect(self.metrics_updated)
-                self.detection_trainer.tensorboard_updated.connect(self.tensorboard_updated)
-                
-                # 启动训练
-                self.detection_trainer.train_model(config)
-            else:
-                # 创建新的训练线程用于分类任务
+            # 提取核心训练参数
+            task_type = config.get('task_type', 'classification')
+            
+            # 获取当前时间戳，用于保存模型和配置文件名
+            import time
+            timestamp = time.strftime("%Y%m%d-%H%M%S")
+            model_name = config.get('model_name', 'Unknown')
+            model_note = config.get('model_note', '')
+            
+            # 构建模型文件名和配置文件名
+            model_filename = f"{model_name}_{timestamp}"
+            if model_note:
+                model_filename += f"_{model_note}"
+            
+            # 保存训练参数到配置文件
+            model_save_dir = config.get('model_save_dir', 'models/saved_models')
+            os.makedirs(model_save_dir, exist_ok=True)
+            
+            # 在配置中添加保存的文件名信息，供后续使用
+            config['model_filename'] = model_filename
+            config['timestamp'] = timestamp
+            
+            # 保存配置文件
+            config_file_path = os.path.join(model_save_dir, f"{model_filename}_config.json")
+            try:
+                with open(config_file_path, 'w', encoding='utf-8') as f:
+                    json.dump(config, f, ensure_ascii=False, indent=4)
+                self.status_updated.emit(f"训练配置已保存到: {config_file_path}")
+            except Exception as e:
+                self.training_error.emit(f"保存训练配置文件时发生错误: {str(e)}")
+            
+            # 根据任务类型选择不同的训练方法
+            if task_type == 'classification':
+                # 调用分类模型训练线程
+                self.status_updated.emit("启动分类模型训练...")
                 self.training_thread = TrainingThread(config)
                 
-                # 连接信号
+                # 连接训练线程信号
                 self.training_thread.progress_updated.connect(self.progress_updated)
                 self.training_thread.status_updated.connect(self.status_updated)
                 self.training_thread.training_finished.connect(self.training_finished)
                 self.training_thread.training_error.connect(self.training_error)
                 self.training_thread.epoch_finished.connect(self.epoch_finished)
                 self.training_thread.model_download_failed.connect(self.model_download_failed)
+                self.training_thread.training_stopped.connect(self.training_stopped)
                 
                 # 启动训练线程
                 self.training_thread.start()
-            
-            # 打印训练配置
-            self.status_updated.emit(f"开始训练 {config.get('model_name', 'unknown')} 模型，任务类型: {task_type}")
-            self.status_updated.emit(f"批次大小: {config.get('batch_size', 32)}, 学习率: {config.get('learning_rate', 0.001)}, 训练轮数: {config.get('num_epochs', 20)}")
-            
+                
+            elif task_type == 'detection':
+                # 使用YOLOv5等目标检测模型的训练逻辑
+                self.status_updated.emit("启动目标检测模型训练...")
+                
+                # 创建DetectionTrainer实例
+                from detection_trainer import DetectionTrainer
+                
+                try:
+                    # 初始化检测训练器
+                    self.detection_trainer = DetectionTrainer(config)
+                    
+                    # 连接信号
+                    self.detection_trainer.progress_updated.connect(self.progress_updated)
+                    self.detection_trainer.status_updated.connect(self.status_updated)
+                    self.detection_trainer.training_finished.connect(self.training_finished)
+                    self.detection_trainer.training_error.connect(self.training_error)
+                    self.detection_trainer.metrics_updated.connect(self.metrics_updated)
+                    self.detection_trainer.tensorboard_updated.connect(self.tensorboard_updated)
+                    self.detection_trainer.model_download_failed.connect(self.model_download_failed)
+                    
+                    # 启动训练 - 确保使用包含模型文件名的配置
+                    self.detection_trainer.start_training(config)
+                    
+                except Exception as e:
+                    self.training_error.emit(f"创建目标检测训练器时出错: {str(e)}")
+                    import traceback
+                    traceback.print_exc()
+                
+            else:
+                self.training_error.emit(f"不支持的任务类型: {task_type}")
+        
         except Exception as e:
-            self.training_error.emit(f"启动训练失败: {str(e)}")
+            self.training_error.emit(f"启动训练时发生错误: {str(e)}")
             import traceback
             traceback.print_exc()
 
