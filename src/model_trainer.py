@@ -814,19 +814,52 @@ class ModelTrainer(QObject):
         self.training_thread = None
         self.detection_trainer = None
 
-    def train_model_with_config(self, config: Dict[str, Any]) -> None:
-        """
-        使用配置字典启动训练线程
+    def train_model_with_config(self, config):
+        """通过配置训练模型"""
+        self.config = config
         
-        参数:
-            config: 训练配置字典，包含所有训练参数
-        """
+        # 获取配置参数
+        data_dir = self.config.get('data_dir', '')
+        model_name = self.config.get('model_name', 'ResNet50')
+        num_epochs = self.config.get('num_epochs', 20)
+        batch_size = self.config.get('batch_size', 32)
+        learning_rate = self.config.get('learning_rate', 0.001)
+        model_save_dir = self.config.get('model_save_dir', os.path.join('models', 'saved_models'))
+        task_type = self.config.get('task_type', 'classification')
+        optimizer = self.config.get('optimizer', 'Adam')
+        use_pretrained = self.config.get('use_pretrained', True)
+        use_tensorboard = self.config.get('use_tensorboard', True)
+        
+        # 获取TensorBoard日志路径 - 优先使用传入的log_dir，如果没有则使用默认配置
+        tensorboard_log_dir = self.config.get('log_dir', None)
+        
+        # 如果没有指定日志目录，尝试从配置文件获取默认值
+        if not tensorboard_log_dir:
+            try:
+                config_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'config.json')
+                if os.path.exists(config_path):
+                    with open(config_path, 'r', encoding='utf-8') as f:
+                        app_config = json.load(f)
+                        tensorboard_log_dir = app_config.get('default_tensorboard_log_dir', '')
+                        if tensorboard_log_dir:
+                            self.status_updated.emit(f"使用配置文件中的默认TensorBoard日志目录: {tensorboard_log_dir}")
+            except Exception as e:
+                self.status_updated.emit(f"读取配置文件中的TensorBoard日志目录失败: {str(e)}")
+                
+        # 如果仍未设置日志目录，则使用默认的runs目录
+        if not tensorboard_log_dir:
+            tensorboard_log_dir = os.path.join('runs', task_type)
+            
+        # 确保日志目录存在
+        os.makedirs(tensorboard_log_dir, exist_ok=True)
+        
+        # 将日志目录添加到配置中
+        self.config['log_dir'] = tensorboard_log_dir
+        
         try:
             # 如果有正在运行的训练线程，先停止它
             if self.training_thread and self.training_thread.isRunning():
                 self.stop()
-            
-            task_type = config.get('task_type', 'classification')
             
             if task_type == 'detection':
                 # 使用DetectionTrainer进行目标检测训练

@@ -168,6 +168,18 @@ class SettingsTab(BaseTab):
         model_layout.addWidget(self.default_model_save_dir_edit, 3, 1)
         model_layout.addWidget(model_save_dir_btn, 3, 2)
         
+        # TensorBoard日志文件夹
+        self.default_tensorboard_log_dir_edit = QLineEdit()
+        self.default_tensorboard_log_dir_edit.setReadOnly(True)
+        self.default_tensorboard_log_dir_edit.setPlaceholderText("默认TensorBoard日志文件夹")
+        
+        tensorboard_log_dir_btn = QPushButton("浏览...")
+        tensorboard_log_dir_btn.clicked.connect(self.select_default_tensorboard_log_dir)
+        
+        model_layout.addWidget(QLabel("默认TensorBoard日志文件夹:"), 4, 0)
+        model_layout.addWidget(self.default_tensorboard_log_dir_edit, 4, 1)
+        model_layout.addWidget(tensorboard_log_dir_btn, 4, 2)
+        
         model_group.setLayout(model_layout)
         advanced_layout.addWidget(model_group)
         
@@ -258,6 +270,12 @@ class SettingsTab(BaseTab):
         if folder:
             self.default_model_save_dir_edit.setText(folder)
     
+    def select_default_tensorboard_log_dir(self):
+        """选择默认TensorBoard日志文件夹"""
+        folder = QFileDialog.getExistingDirectory(self, "选择默认TensorBoard日志文件夹")
+        if folder:
+            self.default_tensorboard_log_dir_edit.setText(folder)
+    
     def load_current_settings(self):
         """加载当前设置"""
         try:
@@ -289,6 +307,7 @@ class SettingsTab(BaseTab):
         self.default_class_info_edit.setText(self.config.get('default_class_info_file', ''))
         self.default_model_eval_dir_edit.setText(self.config.get('default_model_eval_dir', ''))
         self.default_model_save_dir_edit.setText(self.config.get('default_model_save_dir', ''))
+        self.default_tensorboard_log_dir_edit.setText(self.config.get('default_tensorboard_log_dir', ''))
         
         # 设置默认类别
         self.default_classes = self.config.get('default_classes', [])
@@ -307,6 +326,7 @@ class SettingsTab(BaseTab):
                 'default_class_info_file': self.default_class_info_edit.text(),
                 'default_model_eval_dir': self.default_model_eval_dir_edit.text(),
                 'default_model_save_dir': self.default_model_save_dir_edit.text(),
+                'default_tensorboard_log_dir': self.default_tensorboard_log_dir_edit.text(),
                 'default_classes': self.default_classes
             }
             

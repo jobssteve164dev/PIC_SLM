@@ -1,5 +1,5 @@
 {
-    "model_name": "ResNet50",
+    "model_name": "VGG19",
     "num_epochs": 20,
     "batch_size": 32,
     "learning_rate": 0.001,
@@ -12,5 +12,6 @@
         "Spur",
         "Spurious_copper"
     ],
-    "model_path": "f:/Qsync/00.AI_PROJECT/\u56fe\u7247\u5206\u7c7b\u6a21\u578b\u8bad\u7ec3/C1/models/saved_models\\ResNet50_final.pth"
+    "model_path": "f:/Qsync/00.AI_PROJECT/\u56fe\u7247\u5206\u7c7b\u6a21\u578b\u8bad\u7ec3/C1/models/saved_models\\VGG19_20250323_072205_final.pth",
+    "timestamp": "20250323_072205"
 }

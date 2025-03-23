@@ -59,12 +59,16 @@ def main():
             'default_classes': ['划痕', '污点', '缺失', '变形', '异物'],
             'default_model_file': '',
             'default_class_info_file': '',
-            'default_model_eval_dir': os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'models', 'saved_models')
+            'default_model_eval_dir': os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'models', 'saved_models'),
+            'default_model_save_dir': os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'models', 'saved_models'),
+            'default_tensorboard_log_dir': os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'runs', 'tensorboard')
         }
         
         # 确保目录存在
         os.makedirs(os.path.dirname(config_path), exist_ok=True)
         os.makedirs(default_config['default_model_eval_dir'], exist_ok=True)
+        os.makedirs(default_config['default_model_save_dir'], exist_ok=True)
+        os.makedirs(default_config['default_tensorboard_log_dir'], exist_ok=True)
         
         # 保存默认配置
         with open(config_path, 'w', encoding='utf-8') as f:
@@ -101,6 +105,18 @@ def main():
                     
                     print(f"已更新配置文件，添加默认模型保存文件夹: {config_content['default_model_save_dir']}")
                 
+                # 检查是否有默认TensorBoard日志文件夹，如果没有则添加
+                if 'default_tensorboard_log_dir' not in config_content or not config_content['default_tensorboard_log_dir']:
+                    print("配置文件中缺少default_tensorboard_log_dir，添加默认值")
+                    config_content['default_tensorboard_log_dir'] = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'runs', 'tensorboard')
+                    os.makedirs(config_content['default_tensorboard_log_dir'], exist_ok=True)
+                    
+                    # 保存更新后的配置
+                    with open(config_path, 'w', encoding='utf-8') as f:
+                        json.dump(config_content, f, ensure_ascii=False, indent=4)
+                    
+                    print(f"已更新配置文件，添加默认TensorBoard日志文件夹: {config_content['default_tensorboard_log_dir']}")
+                
                 # 检查是否有默认类别，如果没有则添加
                 if 'default_classes' not in config_content or not config_content['default_classes']:
                     print("配置文件中缺少default_classes，添加默认值")
@@ -114,6 +130,7 @@ def main():
                 
                 print(f"默认模型评估文件夹: {config_content.get('default_model_eval_dir', '未设置')}")
                 print(f"默认模型保存文件夹: {config_content.get('default_model_save_dir', '未设置')}")
+                print(f"默认TensorBoard日志文件夹: {config_content.get('default_tensorboard_log_dir', '未设置')}")
                 print(f"默认类别: {config_content.get('default_classes', [])}")
         except Exception as e:
             print(f"读取配置文件出错: {str(e)}")

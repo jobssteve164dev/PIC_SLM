@@ -12,5 +12,6 @@
         "Short",
         "Spur",
         "Spurious_copper"
-    ]
+    ],
+    "default_tensorboard_log_dir": "f:\\Qsync\\00.AI_PROJECT\\图片分类模型训练\\C1\\src\\..\\runs\\tensorboard"
 }

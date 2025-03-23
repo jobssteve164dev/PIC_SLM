@@ -865,7 +865,7 @@ class EvaluationTab(BaseTab):
             print(f"EvaluationTab: 默认模型评估文件夹无效或不存在: {default_model_eval_dir}")
             
         # 加载TensorBoard日志目录
-        log_dir = config.get('tensorboard_log_dir', '')
+        log_dir = config.get('default_tensorboard_log_dir', '')
         if log_dir and os.path.exists(log_dir):
             self.log_dir = log_dir
             self.log_path_edit.setText(log_dir)
@@ -873,8 +873,17 @@ class EvaluationTab(BaseTab):
             self.tensorboard_widget.set_tensorboard_dir(log_dir)
             print(f"EvaluationTab: 已应用TensorBoard日志目录: {log_dir}")
         else:
-            print(f"EvaluationTab: TensorBoard日志目录无效或不存在: {log_dir}") 
-
+            # 尝试使用旧的配置项
+            old_log_dir = config.get('tensorboard_log_dir', '')
+            if old_log_dir and os.path.exists(old_log_dir):
+                self.log_dir = old_log_dir
+                self.log_path_edit.setText(old_log_dir)
+                self.start_btn.setEnabled(True)
+                self.tensorboard_widget.set_tensorboard_dir(old_log_dir)
+                print(f"EvaluationTab: 已应用旧的TensorBoard日志目录: {old_log_dir}")
+            else:
+                print(f"EvaluationTab: TensorBoard日志目录无效或不存在: {log_dir}")
+    
     def setup_trainer(self, trainer):
         """设置训练器并连接信号"""
         try:
