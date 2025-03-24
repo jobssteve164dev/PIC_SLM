@@ -417,8 +417,26 @@ class MainWindow(QMainWindow):
     def closeEvent(self, event):
         """窗口关闭事件"""
         # 确保在关闭窗口时停止TensorBoard进程
-        if hasattr(self.evaluation_tab, 'stop_tensorboard'):
-            self.evaluation_tab.stop_tensorboard()
+        if hasattr(self, 'evaluation_tab') and hasattr(self.evaluation_tab, 'stop_tensorboard'):
+            try:
+                print("MainWindow: 正在停止TensorBoard进程...")
+                self.evaluation_tab.stop_tensorboard()
+            except Exception as e:
+                print(f"MainWindow: 停止TensorBoard失败: {str(e)}")
+                
+        # 额外确保通过操作系统命令终止所有TensorBoard进程
+        try:
+            print("MainWindow: 正在确保所有TensorBoard进程终止...")
+            import subprocess, os
+            if os.name == 'nt':  # Windows
+                subprocess.call(['taskkill', '/F', '/IM', 'tensorboard.exe'], 
+                               stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            else:  # Linux/Mac
+                subprocess.call("pkill -f tensorboard", shell=True, 
+                               stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        except Exception as e:
+            print(f"MainWindow: 终止所有TensorBoard进程时发生错误: {str(e)}")
+        
         super().closeEvent(event)
         
     def update_prediction_result(self, result):

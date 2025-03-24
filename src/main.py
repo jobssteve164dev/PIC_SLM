@@ -44,6 +44,27 @@ class Worker(QObject):
         self.annotation_tool = AnnotationTool()
 
 def main():
+    # 注册一个退出时的清理函数，确保TensorBoard进程被终止
+    import atexit
+    
+    def cleanup_tensorboard():
+        """退出时清理TensorBoard进程"""
+        print("程序退出，正在清理TensorBoard进程...")
+        try:
+            import subprocess
+            if os.name == 'nt':  # Windows
+                subprocess.call(['taskkill', '/F', '/IM', 'tensorboard.exe'], 
+                              stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            else:  # Linux/Mac
+                subprocess.call("pkill -f tensorboard", shell=True, 
+                              stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            print("TensorBoard进程清理完成")
+        except Exception as e:
+            print(f"清理TensorBoard进程时出错: {str(e)}")
+    
+    # 注册清理函数
+    atexit.register(cleanup_tensorboard)
+    
     # 检查配置文件
     config_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'config.json')
     print(f"配置文件路径: {os.path.abspath(config_path)}")
@@ -232,6 +253,27 @@ def main():
             # 停止图像预处理
             if hasattr(self.worker, 'image_preprocessor'):
                 self.worker.image_preprocessor.stop()
+        
+        # 确保TensorBoard进程被终止
+        if hasattr(self, 'evaluation_tab') and hasattr(self.evaluation_tab, 'stop_tensorboard'):
+            try:
+                print("正在停止TensorBoard进程...")
+                self.evaluation_tab.stop_tensorboard()
+            except Exception as e:
+                print(f"停止TensorBoard失败: {str(e)}")
+                
+        # 额外确保通过操作系统命令终止所有TensorBoard进程
+        try:
+            print("正在确保所有TensorBoard进程终止...")
+            import subprocess
+            if os.name == 'nt':  # Windows
+                subprocess.call(['taskkill', '/F', '/IM', 'tensorboard.exe'], 
+                               stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            else:  # Linux/Mac
+                subprocess.call("pkill -f tensorboard", shell=True, 
+                               stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        except Exception as e:
+            print(f"终止所有TensorBoard进程时发生错误: {str(e)}")
         
         # 等待线程结束并退出
         if hasattr(self, 'worker_thread') and self.worker_thread.isRunning():

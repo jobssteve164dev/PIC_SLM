@@ -708,25 +708,58 @@ class EvaluationTab(BaseTab):
     
     def stop_tensorboard(self):
         """停止TensorBoard"""
-        if self.tensorboard_process:
-            try:
+        try:
+            if self.tensorboard_process:
                 # 终止TensorBoard进程
                 if os.name == 'nt':  # Windows
-                    subprocess.call(['taskkill', '/F', '/T', '/PID', str(self.tensorboard_process.pid)])
+                    # 先尝试使用进程ID终止
+                    try:
+                        subprocess.call(['taskkill', '/F', '/T', '/PID', str(self.tensorboard_process.pid)])
+                    except Exception as e:
+                        self.update_status(f"通过PID终止TensorBoard失败: {str(e)}")
+                    
+                    # 再查找并终止所有TensorBoard进程
+                    try:
+                        subprocess.call(['taskkill', '/F', '/IM', 'tensorboard.exe'], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                    except Exception as e:
+                        self.update_status(f"终止所有TensorBoard进程失败: {str(e)}")
                 else:  # Linux/Mac
-                    self.tensorboard_process.terminate()
-                    self.tensorboard_process.wait()
+                    try:
+                        self.tensorboard_process.terminate()
+                        self.tensorboard_process.wait(timeout=5)  # 等待最多5秒
+                        if self.tensorboard_process.poll() is None:  # 如果进程仍在运行
+                            self.tensorboard_process.kill()  # 强制终止
+                    except Exception as e:
+                        self.update_status(f"终止TensorBoard进程失败: {str(e)}")
+                    
+                    # 查找并终止所有TensorBoard进程
+                    try:
+                        subprocess.call("pkill -f tensorboard", shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                    except Exception as e:
+                        self.update_status(f"终止所有TensorBoard进程失败: {str(e)}")
                 
                 self.tensorboard_process = None
-                
-                # 更新UI状态
-                self.start_btn.setEnabled(True)
-                self.stop_btn.setEnabled(False)
-                
-                self.tb_status_label.setText("TensorBoard已停止")
-                self.update_status("TensorBoard已停止")
-            except Exception as e:
-                QMessageBox.critical(self, "错误", f"停止TensorBoard失败: {str(e)}")
+            else:
+                # 即使没有记录的tensorboard_process，也尝试查找和终止TensorBoard进程
+                if os.name == 'nt':  # Windows
+                    try:
+                        subprocess.call(['taskkill', '/F', '/IM', 'tensorboard.exe'], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                    except Exception:
+                        pass  # 忽略错误，因为这只是一个额外的安全措施
+                else:  # Linux/Mac
+                    try:
+                        subprocess.call("pkill -f tensorboard", shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                    except Exception:
+                        pass  # 忽略错误
+            
+            # 更新UI状态
+            self.start_btn.setEnabled(True)
+            self.stop_btn.setEnabled(False)
+            
+            self.tb_status_label.setText("TensorBoard已停止")
+            self.update_status("TensorBoard已停止")
+        except Exception as e:
+            QMessageBox.critical(self, "错误", f"停止TensorBoard失败: {str(e)}")
     
     def update_training_visualization(self, data):
         """更新训练可视化"""
@@ -938,6 +971,14 @@ class EvaluationTab(BaseTab):
         self.stop_tensorboard()
         super().closeEvent(event) 
         
+    def __del__(self):
+        """析构方法，确保在对象被销毁时停止TensorBoard进程"""
+        try:
+            self.stop_tensorboard()
+        except:
+            # 在析构时忽略异常
+            pass
+
     def showEvent(self, event):
         """当标签页显示时刷新参数列表"""
         super().showEvent(event)

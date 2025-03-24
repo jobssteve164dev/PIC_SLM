@@ -1174,4 +1174,23 @@ class TensorBoardWidget(QWidget):
             self.tensorboard_dir = directory
             self.status_label.setText(f"TensorBoard日志目录: {directory}")
         else:
-            self.status_label.setText(f"TensorBoard日志目录不存在: {directory}") 
+            self.status_label.setText(f"TensorBoard日志目录不存在: {directory}")
+            
+    def ensure_no_tensorboard_process(self):
+        """确保没有TensorBoard进程在运行"""
+        try:
+            self.logger.info("正在确保TensorBoard进程已终止")
+            import subprocess, os
+            if os.name == 'nt':  # Windows
+                subprocess.call(['taskkill', '/F', '/IM', 'tensorboard.exe'], 
+                               stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            else:  # Linux/Mac
+                subprocess.call("pkill -f tensorboard", shell=True, 
+                               stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        except Exception as e:
+            self.logger.error(f"终止TensorBoard进程失败: {str(e)}")
+    
+    def closeEvent(self, event):
+        """组件关闭事件"""
+        self.ensure_no_tensorboard_process()
+        super().closeEvent(event) 
