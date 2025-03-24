@@ -650,8 +650,8 @@ class AnnotationTab(BaseTab):
         # 先初始化UI
         self.init_ui()
         
-        # 然后尝试从配置文件加载默认设置
-        config_file = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'config.json')
+        # 然后尝试从配置文件加载默认设置（修改为项目根目录）
+        config_file = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), 'config.json')
         print(f"尝试加载配置文件: {config_file}")
         if os.path.exists(config_file):
             try:

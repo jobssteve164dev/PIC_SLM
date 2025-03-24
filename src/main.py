@@ -45,7 +45,7 @@ class Worker(QObject):
 
 def main():
     # 检查配置文件
-    config_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'config.json')
+    config_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'config.json')
     print(f"配置文件路径: {os.path.abspath(config_path)}")
     print(f"配置文件是否存在: {os.path.exists(config_path)}")
     

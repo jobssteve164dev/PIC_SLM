@@ -381,6 +381,9 @@ class PredictionTab(BaseTab):
             # 模型加载成功
             self.update_status("模型加载成功")
             
+            # 显示成功提示弹窗
+            QMessageBox.information(self, "成功", f"模型 {model_arch} 加载成功！\n现在可以进行图像预测了。")
+            
             # 禁用加载模型按钮，表示模型已加载
             self.load_model_btn.setEnabled(False)
             

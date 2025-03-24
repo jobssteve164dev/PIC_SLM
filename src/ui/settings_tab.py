@@ -313,7 +313,7 @@ class SettingsTab(BaseTab):
     def load_current_settings(self):
         """加载当前设置"""
         try:
-            config_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'config.json')
+            config_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), 'config.json')
             print(f"SettingsTab: 尝试从以下路径加载配置: {config_path}")
             if os.path.exists(config_path):
                 with open(config_path, 'r', encoding='utf-8') as f:
@@ -367,7 +367,7 @@ class SettingsTab(BaseTab):
             }
             
             # 保存配置到文件
-            config_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'config.json')
+            config_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), 'config.json')
             print(f"SettingsTab: 尝试保存配置到: {config_path}")
             os.makedirs(os.path.dirname(config_path), exist_ok=True)
             

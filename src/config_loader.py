@@ -14,8 +14,8 @@ class ConfigLoader:
             config_path: 配置文件路径，如果为None则使用默认路径
         """
         if config_path is None:
-            # 默认使用src目录下的config.json
-            base_dir = os.path.dirname(os.path.abspath(__file__))
+            # 修改为使用项目根目录下的config.json
+            base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
             config_path = os.path.join(base_dir, 'config.json')
             print(f"ConfigLoader使用默认配置路径: {config_path}")
             

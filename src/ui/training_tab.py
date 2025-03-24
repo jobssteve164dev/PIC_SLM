@@ -163,7 +163,7 @@ class TrainingTab(BaseTab):
         
         # 尝试直接从配置文件加载默认输出文件夹
         try:
-            config_file = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'config.json')
+            config_file = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), 'config.json')
             print(f"训练标签页直接加载配置文件: {config_file}")
             if os.path.exists(config_file):
                 with open(config_file, 'r', encoding='utf-8') as f:
@@ -926,7 +926,7 @@ class TrainingTab(BaseTab):
         """选择分类标注文件夹"""
         try:
             # 尝试从配置文件直接加载
-            config_file = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'config.json')
+            config_file = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), 'config.json')
             if os.path.exists(config_file):
                 with open(config_file, 'r', encoding='utf-8') as f:
                     config = json.load(f)
@@ -964,7 +964,7 @@ class TrainingTab(BaseTab):
         """选择检测标注文件夹"""
         try:
             # 尝试从配置文件直接加载
-            config_file = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'config.json')
+            config_file = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), 'config.json')
             if os.path.exists(config_file):
                 with open(config_file, 'r', encoding='utf-8') as f:
                     config = json.load(f)
@@ -1002,7 +1002,7 @@ class TrainingTab(BaseTab):
         """检查是否可以开始训练"""
         try:
             # 尝试从配置文件直接加载
-            config_file = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'config.json')
+            config_file = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), 'config.json')
             if os.path.exists(config_file):
                 with open(config_file, 'r', encoding='utf-8') as f:
                     config = json.load(f)
@@ -1094,7 +1094,7 @@ class TrainingTab(BaseTab):
         # 先根据当前任务类型自动刷新数据集目录，确保使用最新的数据集状态
         try:
             # 获取配置文件中的默认输出文件夹
-            config_file = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'config.json')
+            config_file = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), 'config.json')
             default_output_folder = ""
             
             if os.path.exists(config_file):
@@ -1485,7 +1485,7 @@ class TrainingTab(BaseTab):
         try:
             # 获取上次使用的目录或默认目录
             last_dir = ""
-            config_file = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'config.json')
+            config_file = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), 'config.json')
             if os.path.exists(config_file):
                 with open(config_file, 'r', encoding='utf-8') as f:
                     config = json.load(f)
@@ -1537,7 +1537,7 @@ class TrainingTab(BaseTab):
         try:
             # 获取上次使用的目录或默认目录
             last_dir = ""
-            config_file = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'config.json')
+            config_file = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), 'config.json')
             if os.path.exists(config_file):
                 with open(config_file, 'r', encoding='utf-8') as f:
                     config = json.load(f)

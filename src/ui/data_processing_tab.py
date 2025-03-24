@@ -26,7 +26,7 @@ class DataProcessingTab(BaseTab):
         self.init_ui()
         
         # 尝试从配置文件中加载类别信息
-        config_file = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'config.json')
+        config_file = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), 'config.json')
         if os.path.exists(config_file):
             try:
                 with open(config_file, 'r', encoding='utf-8') as f:
@@ -371,7 +371,7 @@ class DataProcessingTab(BaseTab):
     def load_default_classes(self):
         """从配置加载默认缺陷类别"""
         try:
-            config_file = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'config.json')
+            config_file = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), 'config.json')
             print(f"DataProcessingTab.load_default_classes: 尝试从以下路径加载配置: {config_file}")
             
             if os.path.exists(config_file):

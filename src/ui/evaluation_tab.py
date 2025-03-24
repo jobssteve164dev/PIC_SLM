@@ -286,8 +286,9 @@ class EvaluationTab(BaseTab):
         model_group = QGroupBox("参数列表")
         model_layout = QVBoxLayout()
         
-        self.model_list = QListWidget()
-        self.model_list.setSelectionMode(QListWidget.MultiSelection)
+        # 修改变量名，避免与模型评估界面的model_list冲突
+        self.params_model_list = QListWidget()
+        self.params_model_list.setSelectionMode(QListWidget.MultiSelection)
         
         model_buttons = QHBoxLayout()
         self.select_all_button = QPushButton("全选")
@@ -301,7 +302,7 @@ class EvaluationTab(BaseTab):
         model_buttons.addWidget(self.deselect_all_button)
         model_buttons.addWidget(self.compare_button)
         
-        model_layout.addWidget(self.model_list)
+        model_layout.addWidget(self.params_model_list)
         model_layout.addLayout(model_buttons)
         
         model_group.setLayout(model_layout)
@@ -363,6 +364,7 @@ class EvaluationTab(BaseTab):
             return
             
         try:
+            # 确保只清除模型评估界面的列表，不影响参数对比界面
             self.model_list.clear()
             self.models_list = []
             
@@ -379,6 +381,11 @@ class EvaluationTab(BaseTab):
                 QMessageBox.information(self, "提示", "未找到模型文件，请确保目录中包含.h5、.pb、.tflite或.pth文件")
         except Exception as e:
             QMessageBox.critical(self, "错误", f"刷新模型列表失败: {str(e)}")
+            
+            # 打印更详细的错误信息以便调试
+            import traceback
+            print(f"刷新模型列表失败: {str(e)}")
+            print(traceback.format_exc())
     
     def compare_models(self):
         """比较选中的模型"""
@@ -410,7 +417,7 @@ class EvaluationTab(BaseTab):
             from predictor import Predictor
             
             # 从配置文件获取默认设置
-            config_file = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'config.json')
+            config_file = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), 'config.json')
             
             # 读取配置
             data_dir = ""
@@ -1014,7 +1021,7 @@ class EvaluationTab(BaseTab):
             
     def load_model_configs(self):
         """加载模型配置文件"""
-        self.model_list.clear()
+        self.params_model_list.clear()
         self.model_configs = []
         
         if not self.model_dir or not os.path.exists(self.model_dir):
@@ -1037,30 +1044,42 @@ class EvaluationTab(BaseTab):
         # 加载配置文件
         for config_file in config_files:
             try:
-                with open(os.path.join(self.model_dir, config_file), 'r', encoding='utf-8') as f:
-                    config = json.load(f)
-                    self.model_configs.append({
-                        'filename': config_file,
-                        'config': config
-                    })
-                    
-                    # 创建显示项目
-                    model_name = config.get('model_name', 'Unknown')
-                    model_note = config.get('model_note', '')
-                    task_type = config.get('task_type', 'Unknown')
-                    timestamp = config.get('timestamp', '')
-                    
-                    # 显示名称格式：模型名称 - 任务类型 - 时间戳 (备注)
-                    display_name = f"{model_name} - {task_type}"
-                    if timestamp:
-                        display_name += f" - {timestamp}"
-                    if model_note:
-                        display_name += f" ({model_note})"
+                # 检查文件是否是有效的参数配置，而不是其他模型文件
+                file_path = os.path.join(self.model_dir, config_file)
+                try:
+                    with open(file_path, 'r', encoding='utf-8') as f:
+                        config = json.load(f)
                         
-                    item = QListWidgetItem(display_name)
-                    item.setFlags(item.flags() | Qt.ItemIsUserCheckable)
-                    item.setCheckState(Qt.Unchecked)
-                    self.model_list.addItem(item)
+                        # 验证这是一个训练参数配置文件，而不是其他类型的JSON文件
+                        if 'model_name' not in config or 'task_type' not in config:
+                            self.status_updated.emit(f"跳过非参数配置文件: {config_file}")
+                            continue
+                            
+                        self.model_configs.append({
+                            'filename': config_file,
+                            'config': config
+                        })
+                        
+                        # 创建显示项目
+                        model_name = config.get('model_name', 'Unknown')
+                        model_note = config.get('model_note', '')
+                        task_type = config.get('task_type', 'Unknown')
+                        timestamp = config.get('timestamp', '')
+                        
+                        # 显示名称格式：模型名称 - 任务类型 - 时间戳 (备注)
+                        display_name = f"{model_name} - {task_type}"
+                        if timestamp:
+                            display_name += f" - {timestamp}"
+                        if model_note:
+                            display_name += f" ({model_note})"
+                            
+                        item = QListWidgetItem(display_name)
+                        item.setFlags(item.flags() | Qt.ItemIsUserCheckable)
+                        item.setCheckState(Qt.Unchecked)
+                        self.params_model_list.addItem(item)
+                except json.JSONDecodeError:
+                    self.status_updated.emit(f"跳过无效的JSON文件: {config_file}")
+                    continue
             except Exception as e:
                 self.status_updated.emit(f"加载配置文件 {config_file} 时出错: {str(e)}")
                 
@@ -1068,14 +1087,14 @@ class EvaluationTab(BaseTab):
         
     def select_all_models(self):
         """选择所有模型"""
-        for i in range(self.model_list.count()):
-            item = self.model_list.item(i)
+        for i in range(self.params_model_list.count()):
+            item = self.params_model_list.item(i)
             item.setCheckState(Qt.Checked)
             
     def deselect_all_models(self):
         """取消选择所有模型"""
-        for i in range(self.model_list.count()):
-            item = self.model_list.item(i)
+        for i in range(self.params_model_list.count()):
+            item = self.params_model_list.item(i)
             item.setCheckState(Qt.Unchecked)
             
     def compare_params(self):
@@ -1083,8 +1102,8 @@ class EvaluationTab(BaseTab):
         selected_indices = []
         
         # 获取所有选中的模型索引
-        for i in range(self.model_list.count()):
-            item = self.model_list.item(i)
+        for i in range(self.params_model_list.count()):
+            item = self.params_model_list.item(i)
             if item.checkState() == Qt.Checked:
                 selected_indices.append(i)
                 

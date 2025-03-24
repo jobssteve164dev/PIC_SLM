@@ -292,8 +292,8 @@ class MainWindow(QMainWindow):
     def load_config(self):
         """加载配置"""
         try:
-            # 获取配置文件路径
-            config_file = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'config.json')
+            # 获取配置文件路径（修改为项目根目录）
+            config_file = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), 'config.json')
             
             # 如果配置文件存在，则加载配置
             if os.path.exists(config_file):
@@ -402,7 +402,12 @@ class MainWindow(QMainWindow):
                                     self.prediction_tab.class_info = class_info
                         except Exception as e:
                             print(f"加载类别信息文件失败: {str(e)}")
-                            
+            
+            # 在设置了模型文件和类别信息文件后，检查是否可以加载模型
+            if hasattr(self.prediction_tab, 'check_model_ready'):
+                self.prediction_tab.check_model_ready()
+                print("MainWindow: 已调用prediction_tab.check_model_ready()方法")
+                    
         print("MainWindow.apply_config应用完成")
 
     def goto_annotation_tab(self):
