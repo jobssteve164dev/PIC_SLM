@@ -211,13 +211,42 @@ class GradCAMVisualizationWidget(QWidget):
                 # 加载类别名称
                 try:
                     with open(self.class_info_file, 'r', encoding='utf-8') as f:
-                        self.class_names = json.load(f)
+                        class_data = json.load(f)
+                    
+                    # 保存原始类别数据
+                    self.class_names = class_data
+                    
+                    # 根据类别数据类型准备下拉框内容
+                    class_display_names = []
+                    if isinstance(class_data, list):
+                        # 如果是列表，直接使用
+                        class_display_names = class_data
+                    elif isinstance(class_data, dict):
+                        # 如果是字典，使用值或键
+                        if all(isinstance(v, str) for v in class_data.values()):
+                            # 值是字符串，使用值
+                            class_display_names = list(class_data.values())
+                        else:
+                            # 否则使用键
+                            class_display_names = [str(k) for k in class_data.keys()]
+                    
+                    # 确保至少有一个类别
+                    if not class_display_names:
+                        class_display_names = ["类别0"]
+                        self.logger.warning("类别信息为空，使用默认类别")
                     
                     # 更新类别下拉框
                     self.class_combo.clear()
-                    self.class_combo.addItems(self.class_names)
+                    self.class_combo.addItems(class_display_names)
+                    
+                    # 记录类别加载信息
+                    self.logger.info(f"已加载 {len(class_display_names)} 个类别")
+                    self.logger.info(f"类别信息格式: {type(class_data).__name__}")
+                    
                 except Exception as e:
                     self.logger.error(f"读取类别信息文件失败: {str(e)}")
+                    import traceback
+                    self.logger.error(traceback.format_exc())
                     QMessageBox.critical(self, "错误", f"读取类别信息文件失败: {str(e)}")
                 
                 # 模型加载成功
@@ -234,6 +263,8 @@ class GradCAMVisualizationWidget(QWidget):
                 
         except Exception as e:
             self.logger.error(f"模型加载失败: {str(e)}")
+            import traceback
+            self.logger.error(traceback.format_exc())
             QMessageBox.critical(self, "错误", f"模型加载失败: {str(e)}")
             return
         
@@ -389,38 +420,130 @@ class GradCAMVisualizationWidget(QWidget):
         """更新Grad-CAM显示"""
         try:
             if self.class_combo.currentIndex() < 0:
+                self.logger.warning("未选择类别，无法生成Grad-CAM")
+                return
+                
+            if self.model is None:
+                self.logger.warning("模型未加载，无法生成Grad-CAM")
+                return
+                
+            if self.image_tensor is None:
+                self.logger.warning("图像未加载，无法生成Grad-CAM")
                 return
                 
             target_class = self.class_combo.currentIndex()
+            self.logger.info(f"生成类别索引 {target_class} 的Grad-CAM热力图")
+            
+            # 获取类别名称
+            class_name = self.get_class_name(target_class)
+            self.logger.info(f"使用类别名称: {class_name}")
+            
+            # 生成Grad-CAM热力图
             heatmap = self.generate_gradcam(target_class)
             
-            if heatmap is not None:
-                # 创建matplotlib图形
-                plt.figure(figsize=(10, 10))
-                plt.imshow(heatmap, cmap='jet')
-                plt.axis('off')
-                
-                # 将matplotlib图形转换为QPixmap
-                buffer = io.BytesIO()
-                plt.savefig(buffer, format='png', bbox_inches='tight', pad_inches=0)
-                plt.close()
-                
-                # 显示热力图
-                qimage = QImage.fromData(buffer.getvalue())
-                pixmap = QPixmap.fromImage(qimage)
-                
-                # 调整大小以适应标签
-                scaled_pixmap = pixmap.scaled(
-                    self.gradcam_label.size(),
-                    Qt.KeepAspectRatio,
-                    Qt.SmoothTransformation
-                )
-                
-                self.gradcam_label.setPixmap(scaled_pixmap)
-                
+            if heatmap is None:
+                self.logger.warning("无法生成热力图")
+                return
+            
+            # 调整热力图大小以匹配原始图像
+            original_img = np.array(self.image)
+            heatmap = cv2.resize(heatmap, (original_img.shape[1], original_img.shape[0]))
+            
+            # 转换热力图为彩色图
+            heatmap = np.uint8(255 * heatmap)
+            heatmap = cv2.applyColorMap(heatmap, cv2.COLORMAP_JET)
+            
+            # 将热力图叠加到原始图像上
+            superimposed_img = cv2.addWeighted(original_img, 0.6, heatmap, 0.4, 0)
+            
+            # 转换为PIL图像
+            superimposed_img = Image.fromarray(cv2.cvtColor(superimposed_img, cv2.COLOR_BGR2RGB))
+            
+            # 创建figure和子图
+            plt.figure(figsize=(10, 5))
+            
+            plt.subplot(1, 2, 1)
+            plt.imshow(self.image)
+            plt.title('原始图像')
+            plt.axis('off')
+            
+            plt.subplot(1, 2, 2)
+            plt.imshow(superimposed_img)
+            plt.title(f'类别 {class_name} 的Grad-CAM热力图')
+            plt.axis('off')
+            
+            # 保存到缓冲区
+            buffer = io.BytesIO()
+            plt.savefig(buffer, format='png', bbox_inches='tight', pad_inches=0)
+            plt.close()
+            
+            # 显示结果
+            qimage = QImage.fromData(buffer.getvalue())
+            pixmap = QPixmap.fromImage(qimage)
+            
+            # 调整大小以适应标签
+            scaled_pixmap = pixmap.scaled(
+                self.gradcam_label.size(),
+                Qt.KeepAspectRatio,
+                Qt.SmoothTransformation
+            )
+            
+            self.gradcam_label.setPixmap(scaled_pixmap)
+            self.logger.info("Grad-CAM热力图已显示")
+            
         except Exception as e:
             self.logger.error(f"更新Grad-CAM显示时出错: {str(e)}")
+            import traceback
+            self.logger.error(traceback.format_exc())
             QMessageBox.critical(self, "错误", f"更新Grad-CAM显示时出错: {str(e)}")
+    
+    def get_class_name(self, class_index):
+        """安全地获取类别名称，支持多种类别名称格式"""
+        try:
+            # 输出调试信息
+            self.debug_class_names()
+            
+            # 如果是列表
+            if isinstance(self.class_names, list) and 0 <= class_index < len(self.class_names):
+                return self.class_names[class_index]
+            # 如果是字典，尝试使用整数键
+            elif isinstance(self.class_names, dict) and class_index in self.class_names:
+                return self.class_names[class_index]
+            # 如果是字典，尝试使用字符串键
+            elif isinstance(self.class_names, dict) and str(class_index) in self.class_names:
+                return self.class_names[str(class_index)]
+            # 如果都失败，使用下拉框中的文本
+            elif 0 <= class_index < self.class_combo.count():
+                return self.class_combo.itemText(class_index)
+            # 如果都不行，使用默认文本
+            else:
+                return f"类别{class_index}"
+        except Exception as e:
+            self.logger.error(f"获取类别名称出错: {str(e)}")
+            import traceback
+            self.logger.error(traceback.format_exc())
+            return f"类别{class_index}"  # 提供一个默认值
+    
+    def debug_class_names(self):
+        """调试类别名称"""
+        try:
+            self.logger.info("类别名称调试信息:")
+            self.logger.info(f"类别名称类型: {type(self.class_names).__name__}")
+            if isinstance(self.class_names, list):
+                self.logger.info(f"类别名称列表: {self.class_names[:10]}...")
+            elif isinstance(self.class_names, dict):
+                keys = list(self.class_names.keys())[:10]
+                self.logger.info(f"类别名称字典键: {keys}...")
+                values = [self.class_names[k] for k in keys]
+                self.logger.info(f"类别名称字典值: {values}...")
+            else:
+                self.logger.info(f"类别名称内容: {str(self.class_names)[:100]}...")
+                
+            self.logger.info(f"下拉框项目数: {self.class_combo.count()}")
+            items = [self.class_combo.itemText(i) for i in range(min(10, self.class_combo.count()))]
+            self.logger.info(f"下拉框前10项: {items}")
+        except Exception as e:
+            self.logger.error(f"调试类别名称时出错: {str(e)}")
             
     def set_model(self, model, class_names=None):
         """设置模型和类别名称"""
