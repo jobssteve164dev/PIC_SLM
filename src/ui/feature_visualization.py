@@ -17,6 +17,7 @@ class FeatureVisualizationWidget(QWidget):
         super().__init__(parent)
         self.model = None
         self.image = None
+        self.image_tensor = None
         self.features = None
         self.logger = logging.getLogger(__name__)
         self.logger.setLevel(logging.INFO)
