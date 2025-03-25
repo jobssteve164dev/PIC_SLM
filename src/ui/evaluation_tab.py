@@ -10,6 +10,10 @@ import subprocess
 import sys
 from .base_tab import BaseTab
 from .training_visualization import TensorBoardWidget, TrainingVisualizationWidget
+from .feature_visualization import FeatureVisualizationWidget
+from .gradcam_visualization import GradCAMVisualizationWidget
+from .sensitivity_analysis import SensitivityAnalysisWidget
+from .lime_explanation import LIMEExplanationWidget
 import torch
 import torchvision
 from PIL import Image
@@ -28,6 +32,12 @@ class EvaluationTab(BaseTab):
         # 初始化训练参数对比相关属性
         self.model_dir = ""
         self.model_configs = []
+        
+        # 初始化可视化组件
+        self.feature_viz_widget = None
+        self.gradcam_widget = None
+        self.sensitivity_widget = None
+        self.lime_widget = None
         
         self.init_ui()
         
@@ -59,15 +69,39 @@ class EvaluationTab(BaseTab):
         self.tb_btn.clicked.connect(lambda: self.switch_view(1))
         switch_layout.addWidget(self.tb_btn)
         
+        # 添加特征可视化按钮
+        self.feature_viz_btn = QPushButton("特征可视化")
+        self.feature_viz_btn.setCheckable(True)
+        self.feature_viz_btn.clicked.connect(lambda: self.switch_view(2))
+        switch_layout.addWidget(self.feature_viz_btn)
+        
+        # 添加Grad-CAM按钮
+        self.gradcam_btn = QPushButton("Grad-CAM可视化")
+        self.gradcam_btn.setCheckable(True)
+        self.gradcam_btn.clicked.connect(lambda: self.switch_view(3))
+        switch_layout.addWidget(self.gradcam_btn)
+        
+        # 添加敏感性分析按钮
+        self.sensitivity_btn = QPushButton("敏感性分析")
+        self.sensitivity_btn.setCheckable(True)
+        self.sensitivity_btn.clicked.connect(lambda: self.switch_view(4))
+        switch_layout.addWidget(self.sensitivity_btn)
+        
+        # 添加LIME解释按钮
+        self.lime_btn = QPushButton("LIME解释")
+        self.lime_btn.setCheckable(True)
+        self.lime_btn.clicked.connect(lambda: self.switch_view(5))
+        switch_layout.addWidget(self.lime_btn)
+        
         # 添加训练参数对比按钮
         self.params_compare_btn = QPushButton("训练参数对比")
         self.params_compare_btn.setCheckable(True)
-        self.params_compare_btn.clicked.connect(lambda: self.switch_view(3))
+        self.params_compare_btn.clicked.connect(lambda: self.switch_view(6))
         switch_layout.addWidget(self.params_compare_btn)
         
         self.eval_btn = QPushButton("模型评估")
         self.eval_btn.setCheckable(True)
-        self.eval_btn.clicked.connect(lambda: self.switch_view(2))
+        self.eval_btn.clicked.connect(lambda: self.switch_view(7))
         switch_layout.addWidget(self.eval_btn)
         
         main_layout.addLayout(switch_layout)
@@ -86,15 +120,31 @@ class EvaluationTab(BaseTab):
         self.setup_tb_ui()
         self.stacked_widget.addWidget(self.tb_widget)
         
-        # 创建评估视图
-        self.eval_widget = QWidget()
-        self.setup_eval_ui()
-        self.stacked_widget.addWidget(self.eval_widget)
+        # 创建特征可视化视图
+        self.feature_viz_widget = FeatureVisualizationWidget()
+        self.stacked_widget.addWidget(self.feature_viz_widget)
+        
+        # 创建Grad-CAM可视化视图
+        self.gradcam_widget = GradCAMVisualizationWidget()
+        self.stacked_widget.addWidget(self.gradcam_widget)
+        
+        # 创建敏感性分析视图
+        self.sensitivity_widget = SensitivityAnalysisWidget()
+        self.stacked_widget.addWidget(self.sensitivity_widget)
+        
+        # 创建LIME解释视图
+        self.lime_widget = LIMEExplanationWidget()
+        self.stacked_widget.addWidget(self.lime_widget)
         
         # 创建训练参数对比视图
         self.params_compare_widget = QWidget()
         self.setup_params_compare_ui()
         self.stacked_widget.addWidget(self.params_compare_widget)
+        
+        # 创建评估视图
+        self.eval_widget = QWidget()
+        self.setup_eval_ui()
+        self.stacked_widget.addWidget(self.eval_widget)
         
         # 添加弹性空间
         main_layout.addStretch()
@@ -329,13 +379,36 @@ class EvaluationTab(BaseTab):
     
     def switch_view(self, index):
         """切换视图"""
-        self.stacked_widget.setCurrentIndex(index)
+        # 取消选中所有按钮
+        self.training_curve_btn.setChecked(False)
+        self.tb_btn.setChecked(False)
+        self.feature_viz_btn.setChecked(False)
+        self.gradcam_btn.setChecked(False)
+        self.sensitivity_btn.setChecked(False)
+        self.lime_btn.setChecked(False)
+        self.params_compare_btn.setChecked(False)
+        self.eval_btn.setChecked(False)
         
-        # 更新按钮状态
-        self.training_curve_btn.setChecked(index == 0)
-        self.tb_btn.setChecked(index == 1)
-        self.eval_btn.setChecked(index == 2)
-        self.params_compare_btn.setChecked(index == 3)
+        # 选中当前按钮
+        if index == 0:
+            self.training_curve_btn.setChecked(True)
+        elif index == 1:
+            self.tb_btn.setChecked(True)
+        elif index == 2:
+            self.feature_viz_btn.setChecked(True)
+        elif index == 3:
+            self.gradcam_btn.setChecked(True)
+        elif index == 4:
+            self.sensitivity_btn.setChecked(True)
+        elif index == 5:
+            self.lime_btn.setChecked(True)
+        elif index == 6:
+            self.params_compare_btn.setChecked(True)
+        elif index == 7:
+            self.eval_btn.setChecked(True)
+            
+        # 切换视图
+        self.stacked_widget.setCurrentIndex(index)
     
     def select_models_dir(self):
         """选择模型目录"""
@@ -985,7 +1058,7 @@ class EvaluationTab(BaseTab):
         # 获取当前标签页索引
         current_index = self.stacked_widget.currentIndex()
         # 如果当前是参数对比页面且目录已设置，刷新参数列表
-        if current_index == 3 and self.model_dir:
+        if current_index == 6 and self.model_dir:
             self.load_model_configs()
 
     def apply_config(self, config):
@@ -1018,6 +1091,11 @@ class EvaluationTab(BaseTab):
                 self.start_btn.setEnabled(True)
                 self.tensorboard_widget.set_tensorboard_dir(log_dir)
                 
+        # 设置类别名称
+        if 'default_classes' in config:
+            class_names = config['default_classes']
+            self.set_model(None, class_names)  # 只更新类别名称
+
     def setup_trainer(self, trainer):
         """设置训练器并连接信号"""
         try:
@@ -1036,7 +1114,7 @@ class EvaluationTab(BaseTab):
 
     def go_to_params_compare_tab(self):
         """切换到训练参数对比视图"""
-        self.switch_view(3)
+        self.switch_view(6)
         
     def browse_model_dir(self):
         """浏览模型目录"""
@@ -1228,4 +1306,22 @@ class EvaluationTab(BaseTab):
         # 调整表格列宽
         self.params_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeToContents)
         for i in range(1, self.params_table.columnCount()):
-            self.params_table.horizontalHeader().setSectionResizeMode(i, QHeaderView.Stretch) 
+            self.params_table.horizontalHeader().setSectionResizeMode(i, QHeaderView.Stretch)
+
+    def set_model(self, model, class_names=None):
+        """设置模型和类别名称"""
+        # 设置特征可视化组件
+        if self.feature_viz_widget:
+            self.feature_viz_widget.set_model(model)
+            
+        # 设置Grad-CAM组件
+        if self.gradcam_widget:
+            self.gradcam_widget.set_model(model, class_names)
+            
+        # 设置敏感性分析组件
+        if self.sensitivity_widget:
+            self.sensitivity_widget.set_model(model, class_names)
+            
+        # 设置LIME解释组件
+        if self.lime_widget:
+            self.lime_widget.set_model(model, class_names) 
