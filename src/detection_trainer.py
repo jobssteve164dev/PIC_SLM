@@ -227,16 +227,19 @@ class DetectionTrainer(QObject):
             
             # 创建TensorBoard写入器
             if use_tensorboard:
-                # 创建带有时间戳的唯一TensorBoard日志目录
+                # 获取TensorBoard日志目录
+                tensorboard_dir = config.get('tensorboard_log_dir', os.path.join(model_save_dir, 'tensorboard_logs'))
+                
+                # 创建带有时间戳的唯一运行目录
                 timestamp = time.strftime("%Y%m%d-%H%M%S")
                 model_run_name = f"{model_name}_{timestamp}"
-                tensorboard_dir = os.path.join(model_save_dir, 'tensorboard_logs', model_run_name)
-                os.makedirs(tensorboard_dir, exist_ok=True)
-                self.writer = SummaryWriter(tensorboard_dir)
-                self.logger.info(f"已创建TensorBoard写入器，日志目录: {tensorboard_dir}")
+                tensorboard_run_dir = os.path.join(tensorboard_dir, model_run_name)
+                os.makedirs(tensorboard_run_dir, exist_ok=True)
+                self.writer = SummaryWriter(tensorboard_run_dir)
+                self.logger.info(f"已创建TensorBoard写入器，日志目录: {tensorboard_run_dir}")
                 
                 # 保存TensorBoard日志目录路径，便于后续访问
-                self.tensorboard_log_dir = tensorboard_dir
+                self.tensorboard_log_dir = tensorboard_run_dir
             
             # 根据模型名称选择训练方法
             if model_name.startswith('YOLOv8'):

@@ -1333,18 +1333,20 @@ class AnnotationTab(BaseTab):
         try:
             self.image_files = []
             
-            # 支持的图像格式
-            for ext in ['*.jpg', '*.jpeg', '*.png', '*.bmp']:
-                pattern = os.path.join(folder, ext)
-                found_files = glob.glob(pattern)
-                print(f"使用模式 {pattern} 找到 {len(found_files)} 个文件")
-                self.image_files.extend(found_files)
-                
-                # 同时查找大写扩展名
-                upper_pattern = os.path.join(folder, ext.upper())
-                found_upper = glob.glob(upper_pattern)
-                print(f"使用模式 {upper_pattern} 找到 {len(found_upper)} 个文件")
-                self.image_files.extend(found_upper)
+            # 支持的图像格式（不区分大小写）
+            extensions = ['.jpg', '.jpeg', '.png', '.bmp']
+            
+            # 获取文件夹中的所有文件
+            all_files = os.listdir(folder)
+            
+            # 过滤出图像文件
+            for file in all_files:
+                ext = os.path.splitext(file)[1].lower()
+                if ext in extensions:
+                    full_path = os.path.join(folder, file)
+                    self.image_files.append(full_path)
+            
+            print(f"找到 {len(self.image_files)} 个图像文件")
             
             # 更新图像列表
             if hasattr(self, 'image_list_widget'):
@@ -1422,9 +1424,10 @@ class AnnotationTab(BaseTab):
                 for i in range(self.detection_class_list.count()):
                     self.label_combo.addItem(self.detection_class_list.item(i).text())
                     
-                # 如果有类别，设置当前标签
-                if self.label_combo.count() > 0 and hasattr(self, 'annotation_canvas'):
+                # 如果有类别，设置当前标签（仅在初始化时设置）
+                if self.label_combo.count() > 0 and hasattr(self, 'annotation_canvas') and not hasattr(self, '_label_combo_initialized'):
                     self.annotation_canvas.set_current_label(self.label_combo.itemText(0))
+                    self._label_combo_initialized = True  # 标记已初始化
         except Exception as e:
             print(f"更新标签下拉框时出错: {str(e)}")
             import traceback

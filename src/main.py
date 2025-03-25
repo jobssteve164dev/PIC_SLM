@@ -403,6 +403,9 @@ def main():
         # 获取参数保存目录
         param_save_dir = config.get('default_param_save_dir', '')
         
+        # 获取TensorBoard日志目录
+        tensorboard_log_dir = config.get('default_tensorboard_log_dir', '')
+        
         # 如果设置中没有指定模型保存目录，则使用默认路径
         if not model_save_dir:
             model_save_dir = os.path.join('models', 'saved_models')
@@ -411,8 +414,13 @@ def main():
         if not param_save_dir:
             param_save_dir = model_save_dir
             
+        # 如果设置中没有指定TensorBoard日志目录，则使用默认路径
+        if not tensorboard_log_dir:
+            tensorboard_log_dir = os.path.join('runs', 'tensorboard')
+            
         os.makedirs(model_save_dir, exist_ok=True)
         os.makedirs(param_save_dir, exist_ok=True)
+        os.makedirs(tensorboard_log_dir, exist_ok=True)
         
         # 获取数据目录（根据任务类型选择）
         if task_type == 'classification':
@@ -489,6 +497,7 @@ def main():
             'learning_rate': learning_rate,
             'model_save_dir': model_save_dir,
             'default_param_save_dir': param_save_dir,  # 添加参数保存目录
+            'tensorboard_log_dir': tensorboard_log_dir,  # 添加TensorBoard日志目录
             'task_type': task_type,
             'optimizer': optimizer,
             'use_pretrained': use_pretrained,

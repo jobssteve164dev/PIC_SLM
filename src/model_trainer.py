@@ -171,15 +171,18 @@ class TrainingThread(QThread):
             # 初始化TensorBoard
             writer = None
             if use_tensorboard:
-                # 创建带有时间戳的唯一TensorBoard日志目录
+                # 获取TensorBoard日志目录
+                tensorboard_dir = self.config.get('tensorboard_log_dir', os.path.join(model_save_dir, 'tensorboard_logs'))
+                
+                # 创建带有时间戳的唯一运行目录
                 timestamp = time.strftime("%Y%m%d-%H%M%S")
                 model_run_name = f"{model_name}_{timestamp}"
-                tensorboard_dir = os.path.join(model_save_dir, 'tensorboard_logs', model_run_name)
-                os.makedirs(tensorboard_dir, exist_ok=True)
-                writer = SummaryWriter(tensorboard_dir)
+                tensorboard_run_dir = os.path.join(tensorboard_dir, model_run_name)
+                os.makedirs(tensorboard_run_dir, exist_ok=True)
+                writer = SummaryWriter(tensorboard_run_dir)
                 
                 # 在训练信息中记录TensorBoard日志目录路径
-                self.training_info['tensorboard_log_dir'] = tensorboard_dir
+                self.training_info['tensorboard_log_dir'] = tensorboard_run_dir
                 
                 # 记录模型图
                 try:
