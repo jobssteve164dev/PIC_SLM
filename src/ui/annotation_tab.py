@@ -102,6 +102,15 @@ class AnnotationCanvas(QWidget):
         self.boxes = []
         self.selected_box = -1
         self.scale_factor = 1.0
+        self.offset_x = 0
+        self.offset_y = 0
+        
+        # 计算初始居中位置
+        if self.width() > 0 and self.height() > 0:
+            scaled_width = int(self.pixmap.width() * self.scale_factor)
+            scaled_height = int(self.pixmap.height() * self.scale_factor)
+            self.offset_x = int((self.width() - scaled_width) / 2)
+            self.offset_y = int((self.height() - scaled_height) / 2)
         
         # 更新界面
         self.update()
