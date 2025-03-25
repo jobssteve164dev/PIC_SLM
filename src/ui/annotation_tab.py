@@ -102,15 +102,21 @@ class AnnotationCanvas(QWidget):
         self.boxes = []
         self.selected_box = -1
         self.scale_factor = 1.0
-        self.offset_x = 0
-        self.offset_y = 0
         
-        # 计算初始居中位置
+        # 计算初始缩放因子以适应窗口
         if self.width() > 0 and self.height() > 0:
-            scaled_width = int(self.pixmap.width() * self.scale_factor)
-            scaled_height = int(self.pixmap.height() * self.scale_factor)
-            self.offset_x = int((self.width() - scaled_width) / 2)
-            self.offset_y = int((self.height() - scaled_height) / 2)
+            # 计算宽度和高度的缩放比例
+            width_ratio = self.width() / self.pixmap.width()
+            height_ratio = self.height() / self.pixmap.height()
+            
+            # 使用较小的缩放比例，确保图像完全显示在窗口中
+            self.scale_factor = min(width_ratio, height_ratio) * 0.9  # 留出10%的边距
+        
+        # 计算居中位置
+        scaled_width = int(self.pixmap.width() * self.scale_factor)
+        scaled_height = int(self.pixmap.height() * self.scale_factor)
+        self.offset_x = int((self.width() - scaled_width) / 2)
+        self.offset_y = int((self.height() - scaled_height) / 2)
         
         # 更新界面
         self.update()
