@@ -451,6 +451,7 @@ def main():
             gradient_clipping = params.get('gradient_clipping', False)
             gradient_clipping_value = params.get('gradient_clipping_value', 1.0)
             mixed_precision = params.get('mixed_precision', True)
+            dropout_rate = params.get('dropout_rate', 0.0)  # 获取dropout率参数
             
         else:  # detection
             # 直接使用annotation_folder而不是从控件获取
@@ -484,6 +485,7 @@ def main():
             gradient_clipping = params.get('gradient_clipping', False)
             gradient_clipping_value = params.get('gradient_clipping_value', 1.0)
             mixed_precision = params.get('mixed_precision', True)
+            dropout_rate = params.get('dropout_rate', 0.0)  # 获取dropout率参数
             use_mosaic = params.get('use_mosaic', True)
             use_multiscale = params.get('use_multiscale', True)
             use_ema = params.get('use_ema', True)
@@ -515,6 +517,7 @@ def main():
             'gradient_clipping': gradient_clipping,
             'gradient_clipping_value': gradient_clipping_value,
             'mixed_precision': mixed_precision,
+            'dropout_rate': dropout_rate,  # 添加dropout率参数
             'activation_function': params.get('activation_function', 'ReLU')  # 添加激活函数参数
         }
         

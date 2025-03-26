@@ -1280,6 +1280,7 @@ class EvaluationTab(BaseTab):
         important_params = [
             'task_type', 'model_name', 'model_note', 'data_dir', 
             'num_epochs', 'batch_size', 'learning_rate', 'optimizer',
+            'dropout_rate', 'weight_decay', 'activation_function',
             'use_pretrained', 'pretrained_path', 'metrics',
             'use_tensorboard', 'iou_threshold', 'conf_threshold', 
             'resolution', 'nms_threshold', 'use_fpn'
