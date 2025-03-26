@@ -75,9 +75,9 @@ class PredictionTab(BaseTab):
         model_layout.addWidget(QLabel("模型架构:"), 0, 2)
         self.model_arch_combo = QComboBox()
         self.model_arch_combo.addItems([
-            "ResNet18", "ResNet34", "ResNet50", "ResNet101", "ResNet152",
-            "MobileNetV2", "MobileNetV3", "EfficientNetB0", "EfficientNetB1",
-            "VGG16", "VGG19", "DenseNet121", "InceptionV3", "Xception"
+            "MobileNetV2", "MobileNetV3", "ResNet18", "ResNet34", "ResNet50", "ResNet101", "ResNet152",
+            "EfficientNetB0", "EfficientNetB1", "EfficientNetB2", "EfficientNetB3", "EfficientNetB4",
+            "VGG16", "VGG19", "DenseNet121", "DenseNet169", "DenseNet201", "InceptionV3", "Xception"
         ])
         model_layout.addWidget(self.model_arch_combo, 0, 3, 1, 1)
         
@@ -341,9 +341,9 @@ class PredictionTab(BaseTab):
         if index == 0:  # 分类模型
             self.model_arch_combo.clear()
             self.model_arch_combo.addItems([
-                "ResNet18", "ResNet34", "ResNet50", "ResNet101", "ResNet152",
-                "MobileNetV2", "MobileNetV3", "EfficientNetB0", "EfficientNetB1",
-                "VGG16", "VGG19", "DenseNet121", "InceptionV3", "Xception"
+                "MobileNetV2", "MobileNetV3", "ResNet18", "ResNet34", "ResNet50", "ResNet101", "ResNet152",
+                "EfficientNetB0", "EfficientNetB1", "EfficientNetB2", "EfficientNetB3", "EfficientNetB4",
+                "VGG16", "VGG19", "DenseNet121", "DenseNet169", "DenseNet201", "InceptionV3", "Xception"
             ])
         else:  # 检测模型
             self.model_arch_combo.clear()

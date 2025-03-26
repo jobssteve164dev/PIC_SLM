@@ -436,16 +436,21 @@ class Predictor(QObject):
                 # 修改分类头
                 self.model.fc = nn.Linear(in_features, num_classes)
             
-            elif model_arch in ["MobileNetV2", "MobileNetV3"]:
+            elif model_arch in ["MobileNetV2", "MobileNetV3", "MobileNetV3Small", "MobileNetV3Large"]:
                 # MobileNet系列
                 if model_arch == "MobileNetV2":
                     from torchvision.models import mobilenet_v2
                     self.model = mobilenet_v2(pretrained=False)
                     in_features = self.model.classifier[1].in_features
                     self.model.classifier[1] = nn.Linear(in_features, num_classes)
-                elif model_arch == "MobileNetV3":
+                elif model_arch == "MobileNetV3" or model_arch == "MobileNetV3Large":
                     from torchvision.models import mobilenet_v3_large
                     self.model = mobilenet_v3_large(pretrained=False)
+                    in_features = self.model.classifier[3].in_features
+                    self.model.classifier[3] = nn.Linear(in_features, num_classes)
+                elif model_arch == "MobileNetV3Small":
+                    from torchvision.models import mobilenet_v3_small
+                    self.model = mobilenet_v3_small(pretrained=False)
                     in_features = self.model.classifier[3].in_features
                     self.model.classifier[3] = nn.Linear(in_features, num_classes)
             
@@ -457,6 +462,15 @@ class Predictor(QObject):
                 elif model_arch == "EfficientNetB1":
                     from torchvision.models import efficientnet_b1
                     self.model = efficientnet_b1(pretrained=False)
+                elif model_arch == "EfficientNetB2":
+                    from torchvision.models import efficientnet_b2
+                    self.model = efficientnet_b2(pretrained=False)
+                elif model_arch == "EfficientNetB3":
+                    from torchvision.models import efficientnet_b3
+                    self.model = efficientnet_b3(pretrained=False)
+                elif model_arch == "EfficientNetB4":
+                    from torchvision.models import efficientnet_b4
+                    self.model = efficientnet_b4(pretrained=False)
                 
                 # 修改分类头
                 in_features = self.model.classifier[1].in_features
@@ -480,6 +494,12 @@ class Predictor(QObject):
                 if model_arch == "DenseNet121":
                     from torchvision.models import densenet121
                     self.model = densenet121(pretrained=False)
+                elif model_arch == "DenseNet169":
+                    from torchvision.models import densenet169
+                    self.model = densenet169(pretrained=False)
+                elif model_arch == "DenseNet201":
+                    from torchvision.models import densenet201
+                    self.model = densenet201(pretrained=False)
                     
                 # 修改分类头
                 in_features = self.model.classifier.in_features
@@ -493,9 +513,14 @@ class Predictor(QObject):
                     self.model = inception_v3(pretrained=False)
                     in_features = self.model.fc.in_features
                     self.model.fc = nn.Linear(in_features, num_classes)
-                else:
-                    # Xception等其他模型可能需要额外的库
-                    raise NotImplementedError(f"{model_arch}模型当前不支持，可能需要额外的库")
+                elif model_arch == "Xception":
+                    # Xception需要外部库支持
+                    try:
+                        from pretrainedmodels import xception
+                        self.model = xception(num_classes=1000, pretrained=None)
+                        self.model.last_linear = nn.Linear(self.model.last_linear.in_features, num_classes)
+                    except ImportError:
+                        raise ImportError("加载Xception模型需要安装pretrainedmodels库: pip install pretrainedmodels")
             
             else:
                 raise ValueError(f"不支持的分类模型架构: {model_arch}")
@@ -547,112 +572,158 @@ class Predictor(QObject):
                         print(f"使用ultralytics库加载模型: {model_path}")
                     except ImportError:
                         raise ImportError("需要安装Ultralytics库: pip install ultralytics")
-                else:
-                    # 其他YOLO版本可能需要不同的库
-                    raise NotImplementedError(f"{model_arch}模型目前不支持，请联系开发者添加支持")
+                elif model_arch in ["YOLOv7", "YOLOv6", "YOLOv4", "YOLOv3"]:
+                    # 这些YOLO版本需要特殊处理，可能需要导入专门的代码库
+                    try:
+                        if model_arch == "YOLOv7":
+                            # YOLOv7通常需要特定的代码库和权重格式
+                            from models.experimental import attempt_load
+                            self.model = attempt_load(model_path, map_location=self.device)
+                            print(f"使用YOLOv7专用加载器加载模型: {model_path}")
+                        elif model_arch == "YOLOv6":
+                            # YOLOv6可能需要安装特定版本
+                            from yolov6.core.inferer import Inferer
+                            self.model = Inferer(model_path, device=self.device)
+                            print(f"使用YOLOv6库加载模型: {model_path}")
+                        elif model_arch in ["YOLOv4", "YOLOv3"]:
+                            # YOLOv3/v4可能使用Darknet格式
+                            import cv2
+                            self.model = cv2.dnn.readNetFromDarknet(model_path, model_path.replace(".weights", ".cfg"))
+                            self.model.setPreferableBackend(cv2.dnn.DNN_BACKEND_OPENCV)
+                            self.model.setPreferableTarget(cv2.dnn.DNN_TARGET_CPU)
+                            print(f"使用OpenCV DNN加载{model_arch}模型: {model_path}")
+                    except ImportError as e:
+                        raise ImportError(f"加载{model_arch}需要安装特定库: {str(e)}")
+                    except Exception as e:
+                        raise Exception(f"加载{model_arch}模型失败: {str(e)}")
             
             # SSD系列模型
             elif model_arch.startswith("SSD"):
-                # 创建SSD模型
                 try:
-                    from torchvision.models.detection import ssd300_vgg16
-                    
-                    if model_arch == "SSD" or model_arch == "SSD300":
-                        # 加载SSD300模型
-                        self.model = ssd300_vgg16(pretrained=False)
-                        # 修改分类头以匹配类别数量
-                        num_classes = len(self.class_names) + 1  # +1是因为背景类
-                        in_channels = self.model.head.classification_head.in_channels
-                        num_anchors = self.model.head.classification_head.num_anchors
-                        self.model.head.classification_head.cls_logits = nn.Conv2d(
-                            in_channels, num_anchors * num_classes, kernel_size=3, padding=1
-                        )
+                    import torch
+                    # 不同SSD变体的处理
+                    if model_arch == "SSD":
+                        from torchvision.models.detection import ssd300_vgg16
+                        self.model = ssd300_vgg16(pretrained=False, num_classes=len(self.class_names) + 1)
+                    elif model_arch == "SSD300":
+                        from torchvision.models.detection import ssd300_vgg16
+                        self.model = ssd300_vgg16(pretrained=False, num_classes=len(self.class_names) + 1)
                     elif model_arch == "SSD512":
-                        # SSD512可能需要自定义实现
-                        raise NotImplementedError("SSD512模型目前不支持，请联系开发者添加支持")
+                        # 需要自定义实现或第三方库
+                        raise NotImplementedError("SSD512需要特定的实现，目前尚未支持")
                     
-                    # 加载权重
+                    # 加载模型权重
                     state_dict = torch.load(model_path, map_location=self.device)
-                    if isinstance(state_dict, dict) and 'model_state_dict' in state_dict:
-                        state_dict = state_dict['model_state_dict']
+                    
+                    # 处理不同格式的模型文件
+                    if isinstance(state_dict, dict):
+                        if 'model_state_dict' in state_dict:
+                            state_dict = state_dict['model_state_dict']
+                        elif 'state_dict' in state_dict:
+                            state_dict = state_dict['state_dict']
+                    
                     self.model.load_state_dict(state_dict, strict=False)
+                    self.model.to(self.device)
+                    self.model.eval()
+                    print(f"成功加载SSD模型: {model_path}")
                     
                 except ImportError:
-                    raise ImportError("无法导入SSD模型，可能需要安装最新版本的torchvision")
-            
-            # Faster R-CNN和Mask R-CNN
+                    raise ImportError("加载SSD模型需要安装PyTorch和torchvision")
+                
+            # Faster R-CNN和Mask R-CNN系列
             elif model_arch in ["Faster R-CNN", "Mask R-CNN"]:
                 try:
+                    import torch
                     if model_arch == "Faster R-CNN":
                         from torchvision.models.detection import fasterrcnn_resnet50_fpn
-                        self.model = fasterrcnn_resnet50_fpn(pretrained=False)
-                        # 修改分类头以匹配类别数量
-                        num_classes = len(self.class_names) + 1  # +1是因为背景类
-                        in_features = self.model.roi_heads.box_predictor.cls_score.in_features
-                        self.model.roi_heads.box_predictor = FastRCNNPredictor(in_features, num_classes)
-                    
+                        self.model = fasterrcnn_resnet50_fpn(pretrained=False, num_classes=len(self.class_names) + 1)
                     elif model_arch == "Mask R-CNN":
                         from torchvision.models.detection import maskrcnn_resnet50_fpn
-                        from torchvision.models.detection.mask_rcnn import MaskRCNNPredictor
+                        self.model = maskrcnn_resnet50_fpn(pretrained=False, num_classes=len(self.class_names) + 1)
                         
-                        self.model = maskrcnn_resnet50_fpn(pretrained=False)
-                        # 修改检测头以匹配类别数量
-                        num_classes = len(self.class_names) + 1  # +1是因为背景类
-                        in_features_box = self.model.roi_heads.box_predictor.cls_score.in_features
-                        self.model.roi_heads.box_predictor = FastRCNNPredictor(in_features_box, num_classes)
-                        
-                        # 修改掩码头
-                        in_features_mask = self.model.roi_heads.mask_predictor.conv5_mask.in_channels
-                        hidden_layer = 256
-                        self.model.roi_heads.mask_predictor = MaskRCNNPredictor(
-                            in_features_mask, hidden_layer, num_classes
-                        )
-                    
-                    # 加载权重
+                    # 加载模型权重
                     state_dict = torch.load(model_path, map_location=self.device)
-                    if isinstance(state_dict, dict) and 'model_state_dict' in state_dict:
-                        state_dict = state_dict['model_state_dict']
+                    
+                    # 处理不同格式的模型文件
+                    if isinstance(state_dict, dict):
+                        if 'model_state_dict' in state_dict:
+                            state_dict = state_dict['model_state_dict']
+                        elif 'state_dict' in state_dict:
+                            state_dict = state_dict['state_dict']
+                    
                     self.model.load_state_dict(state_dict, strict=False)
+                    self.model.to(self.device)
+                    self.model.eval()
+                    print(f"成功加载{model_arch}模型: {model_path}")
                     
                 except ImportError:
-                    raise ImportError("无法导入Faster R-CNN/Mask R-CNN模型，请确保安装了最新版本的torchvision")
-                except NameError:
-                    # 如果FastRCNNPredictor未定义
-                    from torchvision.models.detection.faster_rcnn import FastRCNNPredictor
-                    raise ImportError("请先导入FastRCNNPredictor")
-                        
-            # 其他检测模型
-            elif model_arch in ["RetinaNet", "DETR"]:
+                    raise ImportError(f"加载{model_arch}模型需要安装PyTorch和torchvision")
+            
+            # RetinaNet模型
+            elif model_arch == "RetinaNet":
                 try:
-                    if model_arch == "RetinaNet":
-                        from torchvision.models.detection import retinanet_resnet50_fpn
-                        self.model = retinanet_resnet50_fpn(pretrained=False)
-                        # 修改分类头以匹配类别数量
-                        num_classes = len(self.class_names)  # RetinaNet不包括背景类
-                        # 这里需要替换分类头...
+                    import torch
+                    from torchvision.models.detection import retinanet_resnet50_fpn
+                    self.model = retinanet_resnet50_fpn(pretrained=False, num_classes=len(self.class_names) + 1)
                     
-                    elif model_arch == "DETR":
-                        # DETR可能需要单独的库
-                        raise NotImplementedError("DETR模型目前不支持，请联系开发者添加支持")
-                    
-                    # 加载权重
+                    # 加载模型权重
                     state_dict = torch.load(model_path, map_location=self.device)
-                    if isinstance(state_dict, dict) and 'model_state_dict' in state_dict:
-                        state_dict = state_dict['model_state_dict']
+                    
+                    # 处理不同格式的模型文件
+                    if isinstance(state_dict, dict):
+                        if 'model_state_dict' in state_dict:
+                            state_dict = state_dict['model_state_dict']
+                        elif 'state_dict' in state_dict:
+                            state_dict = state_dict['state_dict']
+                    
                     self.model.load_state_dict(state_dict, strict=False)
+                    self.model.to(self.device)
+                    self.model.eval()
+                    print(f"成功加载RetinaNet模型: {model_path}")
                     
                 except ImportError:
-                    raise ImportError(f"无法导入{model_arch}模型，可能需要安装额外的库")
-                
+                    raise ImportError("加载RetinaNet模型需要安装PyTorch和torchvision")
+            
+            # DETR模型
+            elif model_arch == "DETR":
+                try:
+                    import torch
+                    # 尝试使用DETR
+                    try:
+                        from transformers import DetrForObjectDetection
+                        self.model = DetrForObjectDetection.from_pretrained("facebook/detr-resnet-50")
+                        # 修改分类头以适应自定义类别数量
+                        self.model.config.num_labels = len(self.class_names)
+                        self.model.class_labels_classifier = nn.Linear(
+                            in_features=self.model.class_labels_classifier.in_features,
+                            out_features=len(self.class_names)
+                        )
+                    except ImportError:
+                        # 备选：使用torchvision的DETR实现
+                        from torchvision.models.detection import detr_resnet50
+                        self.model = detr_resnet50(pretrained=False, num_classes=len(self.class_names) + 1)
+                    
+                    # 加载模型权重
+                    state_dict = torch.load(model_path, map_location=self.device)
+                    
+                    # 处理不同格式的模型文件
+                    if isinstance(state_dict, dict):
+                        if 'model_state_dict' in state_dict:
+                            state_dict = state_dict['model_state_dict']
+                        elif 'state_dict' in state_dict:
+                            state_dict = state_dict['state_dict']
+                    
+                    self.model.load_state_dict(state_dict, strict=False)
+                    self.model.to(self.device)
+                    self.model.eval()
+                    print(f"成功加载DETR模型: {model_path}")
+                    
+                except ImportError:
+                    raise ImportError("加载DETR模型需要安装transformers库或最新版本的torchvision")
+            
             else:
                 raise ValueError(f"不支持的检测模型架构: {model_arch}")
-            
-            # 所有模型加载完成后，移动到设备并设置为评估模式
-            self.model.to(self.device)
-            self.model.eval()
-            
-            print(f"成功加载检测模型: {model_arch}")
-            
+                
         except Exception as e:
             import traceback
             traceback_str = traceback.format_exc()
