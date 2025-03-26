@@ -1409,8 +1409,13 @@ class AnnotationTab(BaseTab):
             # 加载图像到画布
             if hasattr(self, 'annotation_canvas') and self.annotation_canvas.set_image(image_path):
                 self.update_detection_status(f"已加载图像: {os.path.basename(image_path)}")
-                if hasattr(self, 'check_detection_ready'):
-                    self.check_detection_ready()
+                # 只更新按钮状态，不更新标签
+                if hasattr(self, 'save_btn'):
+                    self.save_btn.setEnabled(True)
+                if hasattr(self, 'prev_btn'):
+                    self.prev_btn.setEnabled(self.current_index > 0)
+                if hasattr(self, 'next_btn'):
+                    self.next_btn.setEnabled(self.current_index < len(self.image_files) - 1)
             else:
                 self.update_detection_status(f"加载图像失败: {os.path.basename(image_path)}")
         except Exception as e:
@@ -1433,16 +1438,25 @@ class AnnotationTab(BaseTab):
         """更新标签下拉框"""
         try:
             if hasattr(self, 'label_combo') and hasattr(self, 'detection_class_list'):
-                self.label_combo.clear()
+                # 检查是否需要更新
+                current_items = [self.label_combo.itemText(i) for i in range(self.label_combo.count())]
+                detection_items = [self.detection_class_list.item(i).text() for i in range(self.detection_class_list.count())]
                 
-                # 添加所有类别
-                for i in range(self.detection_class_list.count()):
-                    self.label_combo.addItem(self.detection_class_list.item(i).text())
+                # 只有当类别列表发生变化时才更新
+                if current_items != detection_items:
+                    print("类别列表已变化，更新标签下拉框")
+                    self.label_combo.clear()
                     
-                # 如果有类别，设置当前标签（仅在初始化时设置）
-                if self.label_combo.count() > 0 and hasattr(self, 'annotation_canvas') and not hasattr(self, '_label_combo_initialized'):
-                    self.annotation_canvas.set_current_label(self.label_combo.itemText(0))
-                    self._label_combo_initialized = True  # 标记已初始化
+                    # 添加所有类别
+                    for i in range(self.detection_class_list.count()):
+                        self.label_combo.addItem(self.detection_class_list.item(i).text())
+                    
+                    # 如果有类别，设置当前标签（仅在初始化时设置）
+                    if self.label_combo.count() > 0 and hasattr(self, 'annotation_canvas') and not hasattr(self, '_label_combo_initialized'):
+                        self.annotation_canvas.set_current_label(self.label_combo.itemText(0))
+                        self._label_combo_initialized = True  # 标记已初始化
+                else:
+                    print("类别列表未变化，无需更新标签下拉框")
         except Exception as e:
             print(f"更新标签下拉框时出错: {str(e)}")
             import traceback
