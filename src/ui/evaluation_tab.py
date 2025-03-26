@@ -14,6 +14,7 @@ from .feature_visualization import FeatureVisualizationWidget
 from .gradcam_visualization import GradCAMVisualizationWidget
 from .sensitivity_analysis import SensitivityAnalysisWidget
 from .lime_explanation import LIMEExplanationWidget
+from .model_structure_viewer import ModelStructureViewer
 import torch
 import torchvision
 from PIL import Image
@@ -104,6 +105,12 @@ class EvaluationTab(BaseTab):
         self.eval_btn.clicked.connect(lambda: self.switch_view(7))
         switch_layout.addWidget(self.eval_btn)
         
+        # 添加模型结构可视化按钮
+        self.model_structure_btn = QPushButton("模型结构")
+        self.model_structure_btn.setCheckable(True)
+        self.model_structure_btn.clicked.connect(lambda: self.switch_view(8))
+        switch_layout.addWidget(self.model_structure_btn)
+        
         main_layout.addLayout(switch_layout)
         
         # 创建堆叠小部件用于切换视图
@@ -145,6 +152,10 @@ class EvaluationTab(BaseTab):
         self.eval_widget = QWidget()
         self.setup_eval_ui()
         self.stacked_widget.addWidget(self.eval_widget)
+        
+        # 创建模型结构可视化视图
+        self.model_structure_widget = ModelStructureViewer()
+        self.stacked_widget.addWidget(self.model_structure_widget)
         
         # 添加弹性空间
         main_layout.addStretch()
@@ -379,7 +390,7 @@ class EvaluationTab(BaseTab):
     
     def switch_view(self, index):
         """切换视图"""
-        # 取消选中所有按钮
+        # 取消所有按钮的选中状态
         self.training_curve_btn.setChecked(False)
         self.tb_btn.setChecked(False)
         self.feature_viz_btn.setChecked(False)
@@ -388,8 +399,9 @@ class EvaluationTab(BaseTab):
         self.lime_btn.setChecked(False)
         self.params_compare_btn.setChecked(False)
         self.eval_btn.setChecked(False)
+        self.model_structure_btn.setChecked(False)
         
-        # 选中当前按钮
+        # 根据索引选中相应按钮
         if index == 0:
             self.training_curve_btn.setChecked(True)
         elif index == 1:
@@ -406,7 +418,9 @@ class EvaluationTab(BaseTab):
             self.params_compare_btn.setChecked(True)
         elif index == 7:
             self.eval_btn.setChecked(True)
-            
+        elif index == 8:
+            self.model_structure_btn.setChecked(True)
+        
         # 切换视图
         self.stacked_widget.setCurrentIndex(index)
     
@@ -1309,19 +1323,19 @@ class EvaluationTab(BaseTab):
             self.params_table.horizontalHeader().setSectionResizeMode(i, QHeaderView.Stretch)
 
     def set_model(self, model, class_names=None):
-        """设置模型和类别名称"""
-        # 设置特征可视化组件
-        if self.feature_viz_widget:
-            self.feature_viz_widget.set_model(model)
+        """设置模型，用于各种可视化组件"""
+        if model is not None:
+            if hasattr(self, 'feature_viz_widget') and self.feature_viz_widget:
+                self.feature_viz_widget.set_model(model, class_names)
             
-        # 设置Grad-CAM组件
-        if self.gradcam_widget:
-            self.gradcam_widget.set_model(model, class_names)
-            
-        # 设置敏感性分析组件
-        if self.sensitivity_widget:
-            self.sensitivity_widget.set_model(model, class_names)
-            
-        # 设置LIME解释组件
-        if self.lime_widget:
-            self.lime_widget.set_model(model, class_names) 
+            if hasattr(self, 'gradcam_widget') and self.gradcam_widget:
+                self.gradcam_widget.set_model(model, class_names)
+                
+            if hasattr(self, 'sensitivity_widget') and self.sensitivity_widget:
+                self.sensitivity_widget.set_model(model, class_names)
+                
+            if hasattr(self, 'lime_widget') and self.lime_widget:
+                self.lime_widget.set_model(model, class_names)
+                
+            if hasattr(self, 'model_structure_widget') and self.model_structure_widget:
+                self.model_structure_widget.set_model(model, class_names) 

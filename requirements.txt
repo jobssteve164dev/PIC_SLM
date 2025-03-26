@@ -36,6 +36,7 @@ labelme>=4.5.0   # 语义分割标注
 efficientnet-pytorch>=0.7.0  # EfficientNet实现
 ultralytics>=8.0.0  # YOLOv5/v8实现
 torchmetrics>=0.7.0  # 模型评估指标
+torchsummary>=1.5.1  # 模型结构可视化
 
 # 可选依赖（建议安装）
 # CUDA支持（如果有NVIDIA显卡）
