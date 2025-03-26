@@ -351,17 +351,27 @@ class TrainingThread(QThread):
                         'epoch': epoch + 1,
                         'phase': phase,
                         'loss': float(epoch_loss),
-                        'accuracy': float(epoch_acc.item()),
+                        'accuracy': float(epoch_acc.item()) if isinstance(epoch_acc, torch.Tensor) else float(epoch_acc),
                         'batch': len(dataloaders[phase]),
                         'total_batches': len(dataloaders[phase])
                     }
                     print(f"发送epoch结果: {epoch_data}")  # 添加调试信息
                     self.epoch_finished.emit(epoch_data)
                     
+                    # 通知外部训练一个epoch已完成，并携带相关信息
+                    epoch_info = {
+                        'epoch': epoch + 1,
+                        'train_loss': epoch_loss / dataset_sizes['train'],
+                        'train_acc': epoch_acc.item() if isinstance(epoch_acc, torch.Tensor) else epoch_acc,
+                        'val_loss': epoch_loss / dataset_sizes['val'] if phase == 'val' else None,
+                        'val_acc': epoch_acc.item() if phase == 'val' and isinstance(epoch_acc, torch.Tensor) else (epoch_acc if phase == 'val' else None)
+                    }
+                    self.epoch_finished.emit(epoch_info)
+                    
                     # 记录到TensorBoard
                     if writer:
                         writer.add_scalar(f'Loss/{phase}', epoch_loss, epoch)
-                        writer.add_scalar(f'Accuracy/{phase}', epoch_acc.item(), epoch)
+                        writer.add_scalar(f'Accuracy/{phase}', epoch_acc.item() if isinstance(epoch_acc, torch.Tensor) else epoch_acc, epoch)
                         
                         # 每个epoch结束时记录一些样本图像
                         if phase == 'val' and epoch % 5 == 0:  # 每5个epoch记录一次
@@ -424,6 +434,13 @@ class TrainingThread(QThread):
                                 plt.close()
                             except Exception as e:
                                 print(f"记录混淆矩阵时出错: {str(e)}")
+                        
+                        # 确保记录到此轮次的数据
+                        writer.flush()
+
+                    # 每个epoch结束时刷新TensorBoard数据，确保及时写入
+                    if writer:
+                        writer.flush()
 
                 if self.stop_training:
                     break
@@ -482,6 +499,8 @@ class TrainingThread(QThread):
             
             # 关闭TensorBoard写入器
             if writer:
+                # 添加显式刷新操作，确保最后一轮数据被记录
+                writer.flush()
                 writer.close()
                 
         except Exception as e:

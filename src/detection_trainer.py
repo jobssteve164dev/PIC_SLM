@@ -327,6 +327,8 @@ class DetectionTrainer(QObject):
             
             # 关闭TensorBoard写入器
             if self.writer:
+                # 添加显式刷新操作，确保最后一轮数据被记录
+                self.writer.flush()
                 self.writer.close()
                 self.logger.info("已关闭TensorBoard写入器")
                 
@@ -481,6 +483,9 @@ class DetectionTrainer(QObject):
                             self.trainer.writer.add_scalar('Loss/train', train_loss, epoch)
                             self.trainer.writer.add_scalar('Loss/val', val_loss, epoch)
                             self.trainer.writer.add_scalar('mAP/val', val_map, epoch)
+                            
+                            # 确保每轮数据都被写入
+                            self.trainer.writer.flush()
                                 
                         # 记录最佳模型
                         if val_map > self.best_map:
@@ -492,6 +497,13 @@ class DetectionTrainer(QObject):
                 def on_train_end(self, results):
                     # 训练结束，重命名最佳模型
                     try:
+                        # 确保最后一轮的数据被写入TensorBoard
+                        if self.trainer.writer:
+                            # 记录最终轮次信息
+                            self.trainer.writer.add_scalar('Final/Epoch', num_epochs, 0)
+                            self.trainer.writer.add_scalar('Final/mAP', self.best_map, 0)
+                            self.trainer.writer.flush()
+                            
                         # 获取YOLO保存的最佳模型路径
                         yolo_best_path = getattr(results, 'best', None)
                         
