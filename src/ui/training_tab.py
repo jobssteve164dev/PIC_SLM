@@ -502,10 +502,21 @@ class TrainingTab(BaseTab):
         self.classification_weight_decay_spin.setToolTip("权重衰减可防止过拟合：\n- 较大值：模型更简单，泛化能力可能更强\n- 较小值：允许模型更复杂，拟合能力更强\n- 典型值：0.0001-0.001\n- 数据较少时可适当增大")
         basic_layout.addWidget(self.classification_weight_decay_spin, 6, 1)
         
+        # 激活函数
+        activation_label = QLabel("激活函数:")
+        activation_label.setToolTip("模型中使用的非线性激活函数")
+        basic_layout.addWidget(activation_label, 7, 0)
+        self.classification_activation_combo = QComboBox()
+        self.classification_activation_combo.addItems([
+            "ReLU", "LeakyReLU", "PReLU", "ELU", "SELU", "GELU", "Mish", "Swish"
+        ])
+        self.classification_activation_combo.setToolTip("不同的激活函数对过拟合有不同影响：\n- ReLU：最常用，但可能出现神经元死亡\n- LeakyReLU：解决ReLU神经元死亡问题\n- PReLU：带可学习参数的LeakyReLU\n- ELU：指数线性单元，有更好的梯度\n- SELU：自归一化激活函数\n- GELU：高斯误差线性单元\n- Mish：平滑激活函数\n- Swish：SiLU，自门控激活函数")
+        basic_layout.addWidget(self.classification_activation_combo, 7, 1)
+        
         # 评估指标
         metrics_label = QLabel("评估指标:")
         metrics_label.setToolTip("用于评估模型性能的指标")
-        basic_layout.addWidget(metrics_label, 7, 0)
+        basic_layout.addWidget(metrics_label, 8, 0)
         self.classification_metrics_list = QListWidget()
         self.classification_metrics_list.setSelectionMode(QListWidget.MultiSelection)
         self.classification_metrics_list.addItems([
@@ -515,19 +526,21 @@ class TrainingTab(BaseTab):
         self.classification_metrics_list.setToolTip("选择用于评估模型的指标：\n- accuracy：准确率，适用于平衡数据集\n- precision：精确率，关注减少假阳性\n- recall：召回率，关注减少假阴性\n- f1_score：精确率和召回率的调和平均\n- confusion_matrix：混淆矩阵\n- roc_auc：ROC曲线下面积\n- balanced_accuracy：平衡准确率，适用于不平衡数据集")
         # 默认选中accuracy
         self.classification_metrics_list.setCurrentRow(0)
-        basic_layout.addWidget(self.classification_metrics_list, 7, 1)
+        # 设置固定高度，避免与其他控件重叠
+        self.classification_metrics_list.setFixedHeight(150)
+        basic_layout.addWidget(self.classification_metrics_list, 8, 1)
         
         # 使用预训练权重
         self.classification_pretrained_checkbox = QCheckBox("使用预训练权重")
         self.classification_pretrained_checkbox.setChecked(True)
         self.classification_pretrained_checkbox.setToolTip("使用在大型数据集(如ImageNet)上预训练的模型权重：\n- 加快训练速度\n- 提高模型性能\n- 尤其在训练数据较少时效果显著\n- 需要网络连接下载权重文件")
-        basic_layout.addWidget(self.classification_pretrained_checkbox, 8, 0, 1, 2)
+        basic_layout.addWidget(self.classification_pretrained_checkbox, 9, 0, 1, 2)
         
         # 数据增强
         self.classification_augmentation_checkbox = QCheckBox("使用数据增强")
         self.classification_augmentation_checkbox.setChecked(True)
         self.classification_augmentation_checkbox.setToolTip("通过随机变换（旋转、裁剪、翻转等）增加训练数据多样性：\n- 减少过拟合\n- 提高模型泛化能力\n- 尤其在训练数据较少时非常有效")
-        basic_layout.addWidget(self.classification_augmentation_checkbox, 9, 0, 1, 2)
+        basic_layout.addWidget(self.classification_augmentation_checkbox, 10, 0, 1, 2)
         
         basic_group.setLayout(basic_layout)
         main_layout.addWidget(basic_group)
@@ -748,10 +761,22 @@ class TrainingTab(BaseTab):
         self.detection_weight_decay_spin.setToolTip("检测模型权重衰减：\n- YOLO系列通常使用0.0005\n- Faster R-CNN使用0.0001\n- 数据量小时可适当增大\n- 过大可能导致欠拟合")
         basic_layout.addWidget(self.detection_weight_decay_spin, 6, 1)
         
+        # 激活函数
+        activation_label = QLabel("激活函数:")
+        activation_label.setToolTip("模型中使用的非线性激活函数")
+        basic_layout.addWidget(activation_label, 7, 0)
+        self.detection_activation_combo = QComboBox()
+        self.detection_activation_combo.addItems([
+            "ReLU", "LeakyReLU", "PReLU", "ELU", "SELU", "GELU", "Mish", "Swish", "SiLU"
+        ])
+        self.detection_activation_combo.setCurrentText("SiLU")  # YOLO默认使用SiLU/Swish
+        self.detection_activation_combo.setToolTip("检测模型激活函数：\n- LeakyReLU：YOLO早期版本默认激活函数\n- SiLU/Swish：YOLOv5/v8默认，性能更好\n- Mish：YOLOv4默认激活函数\n- 合适的激活函数可减轻过拟合\n- 不同架构有不同推荐激活函数")
+        basic_layout.addWidget(self.detection_activation_combo, 7, 1)
+        
         # 评估指标
         metrics_label = QLabel("评估指标:")
         metrics_label.setToolTip("用于评估检测模型性能的指标")
-        basic_layout.addWidget(metrics_label, 7, 0)
+        basic_layout.addWidget(metrics_label, 8, 0)
         self.detection_metrics_list = QListWidget()
         self.detection_metrics_list.setSelectionMode(QListWidget.MultiSelection)
         self.detection_metrics_list.addItems([
@@ -761,73 +786,75 @@ class TrainingTab(BaseTab):
         self.detection_metrics_list.setToolTip("检测模型评估指标：\n- mAP：不同IOU阈值下的平均精度，主要指标\n- mAP50：IOU阈值为0.5的平均精度\n- mAP75：IOU阈值为0.75的平均精度，更严格\n- precision/recall：精确率/召回率\n- f1_score：精确率和召回率的调和平均值\n- 各种loss：用于诊断训练问题")
         # 默认选中mAP
         self.detection_metrics_list.setCurrentRow(0)
-        basic_layout.addWidget(self.detection_metrics_list, 7, 1)
+        # 设置固定高度，避免与其他控件重叠
+        self.detection_metrics_list.setFixedHeight(150)
+        basic_layout.addWidget(self.detection_metrics_list, 8, 1)
         
         # 输入分辨率
         resolution_label = QLabel("输入分辨率:")
         resolution_label.setToolTip("模型训练和推理的图像尺寸")
-        basic_layout.addWidget(resolution_label, 8, 0)
+        basic_layout.addWidget(resolution_label, 9, 0)
         self.detection_resolution_combo = QComboBox()
         self.detection_resolution_combo.addItems([
             "416x416", "512x512", "640x640", "768x768", "1024x1024", "1280x1280"
         ])
         self.detection_resolution_combo.setToolTip("输入分辨率影响速度和精度：\n- 更大分辨率：更高精度，尤其对小物体\n- 更小分辨率：更快速度，适合实时应用\n- 640x640是YOLO常用分辨率\n- 根据目标大小和GPU内存选择")
         self.detection_resolution_combo.setCurrentText("640x640")
-        basic_layout.addWidget(self.detection_resolution_combo, 8, 1)
+        basic_layout.addWidget(self.detection_resolution_combo, 9, 1)
         
         # IOU阈值
         iou_label = QLabel("IOU阈值:")
         iou_label.setToolTip("交并比阈值，用于训练和非极大值抑制")
-        basic_layout.addWidget(iou_label, 9, 0)
+        basic_layout.addWidget(iou_label, 10, 0)
         self.detection_iou_spin = QDoubleSpinBox()
         self.detection_iou_spin.setRange(0.1, 0.9)
         self.detection_iou_spin.setSingleStep(0.05)
         self.detection_iou_spin.setDecimals(2)
         self.detection_iou_spin.setValue(0.5)
         self.detection_iou_spin.setToolTip("IOU(交并比)阈值：\n- 训练中用于正负样本分配\n- 推理中用于NMS筛选\n- 较高值：更严格的重叠判定\n- 较低值：更宽松的重叠判定\n- 典型值：0.5或0.45")
-        basic_layout.addWidget(self.detection_iou_spin, 9, 1)
+        basic_layout.addWidget(self.detection_iou_spin, 10, 1)
         
         # 置信度阈值
         conf_label = QLabel("置信度阈值:")
         conf_label.setToolTip("检测结果的最小置信度分数")
-        basic_layout.addWidget(conf_label, 10, 0)
+        basic_layout.addWidget(conf_label, 11, 0)
         self.detection_conf_spin = QDoubleSpinBox()
         self.detection_conf_spin.setRange(0.01, 0.99)
         self.detection_conf_spin.setSingleStep(0.05)
         self.detection_conf_spin.setDecimals(2)
         self.detection_conf_spin.setValue(0.25)
         self.detection_conf_spin.setToolTip("置信度阈值：\n- 推理时保留的最小目标置信度\n- 较高值：减少假阳性，但可能漏检\n- 较低值：提高召回率，但增加假阳性\n- 典型值：0.25-0.45\n- 可根据应用场景调整")
-        basic_layout.addWidget(self.detection_conf_spin, 10, 1)
+        basic_layout.addWidget(self.detection_conf_spin, 11, 1)
         
         # Multi-scale 训练
         ms_label = QLabel("多尺度训练:")
         ms_label.setToolTip("在训练中随机调整输入图像尺寸")
-        basic_layout.addWidget(ms_label, 11, 0)
+        basic_layout.addWidget(ms_label, 12, 0)
         self.detection_multiscale_checkbox = QCheckBox("启用多尺度训练")
         self.detection_multiscale_checkbox.setChecked(True)
         self.detection_multiscale_checkbox.setToolTip("多尺度训练增强模型泛化能力：\n- 在训练中随机调整输入图像大小\n- 提高模型对不同尺寸目标的适应性\n- 可能增加训练时间\n- YOLO模型常用技术")
-        basic_layout.addWidget(self.detection_multiscale_checkbox, 11, 1)
+        basic_layout.addWidget(self.detection_multiscale_checkbox, 12, 1)
         
         # Mosaic 数据增强
         mosaic_label = QLabel("马赛克增强:")
         mosaic_label.setToolTip("YOLO系列特有的数据增强方法")
-        basic_layout.addWidget(mosaic_label, 12, 0)
+        basic_layout.addWidget(mosaic_label, 13, 0)
         self.detection_mosaic_checkbox = QCheckBox("启用马赛克增强")
         self.detection_mosaic_checkbox.setChecked(True)
         self.detection_mosaic_checkbox.setToolTip("马赛克数据增强：\n- 将4张图像拼接成1张\n- 大幅增加目标数量和上下文变化\n- 显著提高小目标检测性能\n- YOLOv5之后广泛使用的增强方法")
-        basic_layout.addWidget(self.detection_mosaic_checkbox, 12, 1)
+        basic_layout.addWidget(self.detection_mosaic_checkbox, 13, 1)
         
         # 使用预训练权重
         self.detection_pretrained_checkbox = QCheckBox("使用预训练权重")
         self.detection_pretrained_checkbox.setChecked(True)
         self.detection_pretrained_checkbox.setToolTip("使用在COCO等大型数据集上预训练的模型：\n- 加快检测模型收敛速度\n- 显著提高最终精度\n- 尤其在训练数据较少时更有效\n- YOLO和大多数检测模型都支持")
-        basic_layout.addWidget(self.detection_pretrained_checkbox, 11, 2)
+        basic_layout.addWidget(self.detection_pretrained_checkbox, 12, 2)
         
         # 常规数据增强
         self.detection_augmentation_checkbox = QCheckBox("使用数据增强")
         self.detection_augmentation_checkbox.setChecked(True)
         self.detection_augmentation_checkbox.setToolTip("常规数据增强：\n- 翻转、旋转、色彩变换等\n- 减少过拟合，提高泛化能力\n- 检测任务中一般都需要启用\n- 需要bbox坐标同步转换")
-        basic_layout.addWidget(self.detection_augmentation_checkbox, 12, 2)
+        basic_layout.addWidget(self.detection_augmentation_checkbox, 13, 2)
         
         basic_group.setLayout(basic_layout)
         main_layout.addWidget(basic_group)
@@ -1298,7 +1325,8 @@ class TrainingTab(BaseTab):
                 "early_stopping_patience": self.classification_early_stopping_patience_spin.value(),
                 "gradient_clipping": self.classification_gradient_clipping_checkbox.isChecked(),
                 "gradient_clipping_value": self.classification_gradient_clipping_value_spin.value(),
-                "mixed_precision": self.classification_mixed_precision_checkbox.isChecked()
+                "mixed_precision": self.classification_mixed_precision_checkbox.isChecked(),
+                "activation_function": self.classification_activation_combo.currentText()  # 添加激活函数参数
             })
         else:
             # 获取所有选中的评估指标
@@ -1341,7 +1369,8 @@ class TrainingTab(BaseTab):
                 "mixed_precision": self.detection_mixed_precision_checkbox.isChecked(),
                 "use_mosaic": self.detection_mosaic_checkbox.isChecked(),
                 "use_multiscale": self.detection_multiscale_checkbox.isChecked(),
-                "use_ema": self.detection_ema_checkbox.isChecked()
+                "use_ema": self.detection_ema_checkbox.isChecked(),
+                "activation_function": self.detection_activation_combo.currentText()  # 添加激活函数参数
             })
             
         return params

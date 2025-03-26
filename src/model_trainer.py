@@ -86,6 +86,68 @@ class TrainingThread(QThread):
         self.status_updated.emit("训练线程正在停止...")
         # 不发送训练停止信号，由ModelTrainer类统一管理
     
+    def _apply_activation_function(self, model, activation_name):
+        """将指定的激活函数应用到模型的所有合适层中
+        
+        Args:
+            model: PyTorch模型
+            activation_name: 激活函数名称
+            
+        Returns:
+            修改后的模型
+        """
+        self.status_updated.emit(f"正在应用激活函数: {activation_name}")
+        
+        # 创建激活函数实例
+        if activation_name == "ReLU":
+            activation = nn.ReLU(inplace=True)
+        elif activation_name == "LeakyReLU":
+            activation = nn.LeakyReLU(negative_slope=0.1, inplace=True)
+        elif activation_name == "PReLU":
+            activation = nn.PReLU()
+        elif activation_name == "ELU":
+            activation = nn.ELU(alpha=1.0, inplace=True)
+        elif activation_name == "SELU":
+            activation = nn.SELU(inplace=True)
+        elif activation_name == "GELU":
+            activation = nn.GELU()
+        elif activation_name == "Mish":
+            try:
+                activation = nn.Mish(inplace=True)
+            except AttributeError:
+                # 如果PyTorch版本不支持Mish，则手动实现
+                class Mish(nn.Module):
+                    def forward(self, x):
+                        return x * torch.tanh(nn.functional.softplus(x))
+                activation = Mish()
+        elif activation_name == "Swish" or activation_name == "SiLU":
+            try:
+                activation = nn.SiLU(inplace=True)
+            except AttributeError:
+                # 如果PyTorch版本不支持SiLU，则手动实现
+                class Swish(nn.Module):
+                    def forward(self, x):
+                        return x * torch.sigmoid(x)
+                activation = Swish()
+        else:
+            self.status_updated.emit(f"未知的激活函数 {activation_name}，使用默认的ReLU")
+            activation = nn.ReLU(inplace=True)
+        
+        # 递归替换模型中的激活函数
+        def replace_activations(module):
+            for name, child in module.named_children():
+                if isinstance(child, (nn.ReLU, nn.LeakyReLU, nn.PReLU, nn.ELU, nn.SELU, nn.GELU)):
+                    # 替换为新的激活函数
+                    setattr(module, name, activation)
+                else:
+                    # 递归处理子模块
+                    replace_activations(child)
+        
+        # 应用激活函数替换
+        replace_activations(model)
+        
+        return model
+        
     def train_model(self, data_dir, model_name, num_epochs, batch_size, learning_rate, 
                    model_save_dir, task_type='classification', use_tensorboard=True):
         """与ModelTrainer.train_model相同的实现，但发送信号到主线程"""
@@ -162,6 +224,13 @@ class TrainingThread(QThread):
 
             # 创建模型
             self.model = self._create_model(model_name, num_classes, task_type)
+            
+            # 应用用户选择的激活函数
+            activation_function = self.config.get('activation_function', 'ReLU')
+            if activation_function:
+                self.status_updated.emit(f"应用自定义激活函数: {activation_function}")
+                self.model = self._apply_activation_function(self.model, activation_function)
+            
             self.model = self.model.to(self.device)
 
             # 定义损失函数和优化器
@@ -933,6 +1002,68 @@ class ModelTrainer(QObject):
         
         # 无论线程是否正常结束，都发射一次训练停止信号
         self.training_stopped.emit()
+
+    def _apply_activation_function(self, model, activation_name):
+        """将指定的激活函数应用到模型的所有合适层中
+        
+        Args:
+            model: PyTorch模型
+            activation_name: 激活函数名称
+            
+        Returns:
+            修改后的模型
+        """
+        self.status_updated.emit(f"正在应用激活函数: {activation_name}")
+        
+        # 创建激活函数实例
+        if activation_name == "ReLU":
+            activation = nn.ReLU(inplace=True)
+        elif activation_name == "LeakyReLU":
+            activation = nn.LeakyReLU(negative_slope=0.1, inplace=True)
+        elif activation_name == "PReLU":
+            activation = nn.PReLU()
+        elif activation_name == "ELU":
+            activation = nn.ELU(alpha=1.0, inplace=True)
+        elif activation_name == "SELU":
+            activation = nn.SELU(inplace=True)
+        elif activation_name == "GELU":
+            activation = nn.GELU()
+        elif activation_name == "Mish":
+            try:
+                activation = nn.Mish(inplace=True)
+            except AttributeError:
+                # 如果PyTorch版本不支持Mish，则手动实现
+                class Mish(nn.Module):
+                    def forward(self, x):
+                        return x * torch.tanh(nn.functional.softplus(x))
+                activation = Mish()
+        elif activation_name == "Swish" or activation_name == "SiLU":
+            try:
+                activation = nn.SiLU(inplace=True)
+            except AttributeError:
+                # 如果PyTorch版本不支持SiLU，则手动实现
+                class Swish(nn.Module):
+                    def forward(self, x):
+                        return x * torch.sigmoid(x)
+                activation = Swish()
+        else:
+            self.status_updated.emit(f"未知的激活函数 {activation_name}，使用默认的ReLU")
+            activation = nn.ReLU(inplace=True)
+        
+        # 递归替换模型中的激活函数
+        def replace_activations(module):
+            for name, child in module.named_children():
+                if isinstance(child, (nn.ReLU, nn.LeakyReLU, nn.PReLU, nn.ELU, nn.SELU, nn.GELU)):
+                    # 替换为新的激活函数
+                    setattr(module, name, activation)
+                else:
+                    # 递归处理子模块
+                    replace_activations(child)
+        
+        # 应用激活函数替换
+        replace_activations(model)
+        
+        return model
 
     def _create_model(self, model_name, num_classes, task_type='classification'):
         """与ModelTrainer._create_model相同的实现"""

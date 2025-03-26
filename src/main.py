@@ -514,7 +514,8 @@ def main():
             'early_stopping_patience': early_stopping_patience,
             'gradient_clipping': gradient_clipping,
             'gradient_clipping_value': gradient_clipping_value,
-            'mixed_precision': mixed_precision
+            'mixed_precision': mixed_precision,
+            'activation_function': params.get('activation_function', 'ReLU')  # 添加激活函数参数
         }
         
         # 添加任务特有参数

@@ -44,6 +44,68 @@ class DetectionTrainer(QObject):
         self.logger.setLevel(logging.INFO)
         self.tensorboard_log_dir = None
         
+    def _apply_activation_function(self, model, activation_name):
+        """将指定的激活函数应用到模型的所有合适层中
+        
+        Args:
+            model: PyTorch模型
+            activation_name: 激活函数名称
+            
+        Returns:
+            修改后的模型
+        """
+        self.status_updated.emit(f"正在应用激活函数: {activation_name}")
+        
+        # 创建激活函数实例
+        if activation_name == "ReLU":
+            activation = nn.ReLU(inplace=True)
+        elif activation_name == "LeakyReLU":
+            activation = nn.LeakyReLU(negative_slope=0.1, inplace=True)
+        elif activation_name == "PReLU":
+            activation = nn.PReLU()
+        elif activation_name == "ELU":
+            activation = nn.ELU(alpha=1.0, inplace=True)
+        elif activation_name == "SELU":
+            activation = nn.SELU(inplace=True)
+        elif activation_name == "GELU":
+            activation = nn.GELU()
+        elif activation_name == "Mish":
+            try:
+                activation = nn.Mish(inplace=True)
+            except AttributeError:
+                # 如果PyTorch版本不支持Mish，则手动实现
+                class Mish(nn.Module):
+                    def forward(self, x):
+                        return x * torch.tanh(nn.functional.softplus(x))
+                activation = Mish()
+        elif activation_name == "Swish" or activation_name == "SiLU":
+            try:
+                activation = nn.SiLU(inplace=True)
+            except AttributeError:
+                # 如果PyTorch版本不支持SiLU，则手动实现
+                class Swish(nn.Module):
+                    def forward(self, x):
+                        return x * torch.sigmoid(x)
+                activation = Swish()
+        else:
+            self.status_updated.emit(f"未知的激活函数 {activation_name}，使用默认的ReLU")
+            activation = nn.ReLU(inplace=True)
+        
+        # 递归替换模型中的激活函数
+        def replace_activations(module):
+            for name, child in module.named_children():
+                if isinstance(child, (nn.ReLU, nn.LeakyReLU, nn.PReLU, nn.ELU, nn.SELU, nn.GELU)):
+                    # 替换为新的激活函数
+                    setattr(module, name, activation)
+                else:
+                    # 递归处理子模块
+                    replace_activations(child)
+        
+        # 应用激活函数替换
+        replace_activations(model)
+        
+        return model
+
     def start_training(self, config=None):
         """启动训练过程，使用传入的配置或初始化时的配置"""
         try:
@@ -358,6 +420,29 @@ class DetectionTrainer(QObject):
                 'seed': 42
             }
             
+            # 添加激活函数配置（如果提供）
+            if config and 'activation_function' in config:
+                activation = config.get('activation_function')
+                self.status_updated.emit(f"为YOLOv8配置激活函数: {activation}")
+                
+                # YOLOv8中常用的激活函数映射
+                yolo_activation_map = {
+                    'ReLU': 'ReLU',
+                    'LeakyReLU': 'LeakyReLU',
+                    'PReLU': 'PReLU', 
+                    'SiLU': 'SiLU',
+                    'Swish': 'SiLU',  # Swish和SiLU是相同的
+                    'Mish': 'Mish',
+                    'Hardswish': 'Hardswish',
+                    'GELU': 'GELU'
+                }
+                
+                # 将我们的激活函数名映射到YOLOv8支持的名称
+                if activation in yolo_activation_map:
+                    train_args['act'] = yolo_activation_map[activation]
+                else:
+                    self.status_updated.emit(f"YOLOv8不支持激活函数 {activation}，使用默认的SiLU")
+            
             # 开始训练
             self.status_updated.emit(f"启动YOLOv8{yolo_size}训练，epochs={num_epochs}, batch={batch_size}, lr={learning_rate}")
             
@@ -480,6 +565,12 @@ class DetectionTrainer(QObject):
             in_features = model.roi_heads.box_predictor.cls_score.in_features
             model.roi_heads.box_predictor = FastRCNNPredictor(in_features, num_classes)
             
+            # 应用激活函数
+            if config and 'activation_function' in config:
+                activation_function = config.get('activation_function', 'ReLU')
+                self.status_updated.emit(f"应用自定义激活函数: {activation_function}")
+                model = self._apply_activation_function(model, activation_function)
+            
             # 将模型移到设备
             model.to(self.device)
             
@@ -544,6 +635,12 @@ class DetectionTrainer(QObject):
             in_channels = model.backbone.out_channels
             num_anchors = model.anchor_generator.num_anchors_per_location()
             model.head = SSDHead(in_channels, num_anchors, num_classes)
+            
+            # 应用激活函数
+            if config and 'activation_function' in config:
+                activation_function = config.get('activation_function', 'ReLU')
+                self.status_updated.emit(f"应用自定义激活函数: {activation_function}")
+                model = self._apply_activation_function(model, activation_function)
             
             # 将模型移到设备
             model.to(self.device)
@@ -610,6 +707,12 @@ class DetectionTrainer(QObject):
             num_anchors = model.anchor_generator.num_anchors_per_location()[0]
             model.head = RetinaNetHead(in_channels, num_anchors, num_classes)
             
+            # 应用激活函数
+            if config and 'activation_function' in config:
+                activation_function = config.get('activation_function', 'ReLU')
+                self.status_updated.emit(f"应用自定义激活函数: {activation_function}")
+                model = self._apply_activation_function(model, activation_function)
+            
             # 将模型移到设备
             model.to(self.device)
             
@@ -674,6 +777,12 @@ class DetectionTrainer(QObject):
             # 修改分类头以适应我们的类别数
             hidden_dim = model.transformer.d_model
             model.class_embed = nn.Linear(hidden_dim, num_classes)
+            
+            # 应用激活函数
+            if config and 'activation_function' in config:
+                activation_function = config.get('activation_function', 'ReLU')
+                self.status_updated.emit(f"应用自定义激活函数: {activation_function}")
+                model = self._apply_activation_function(model, activation_function)
             
             # 将模型移到设备
             model.to(self.device)
