@@ -263,16 +263,16 @@ class TrainingVisualizationWidget(QWidget):
             # 处理新的epoch或更新现有epoch的数据
             if epoch not in self.epochs:
                 self.epochs.append(epoch)
-                self.train_losses.append(metrics['train_loss'])
-                self.val_losses.append(metrics['val_loss'])
-                self.learning_rates.append(metrics['learning_rate'])
+                self.train_losses.append(metrics.get('train_loss', 0.0))
+                self.val_losses.append(metrics.get('val_loss', 0.0))
+                self.learning_rates.append(metrics.get('learning_rate', 0.0))
                 
                 # 根据任务类型获取准确率/mAP (兼容分类和检测任务)
                 if 'val_map' in metrics:  # 检测任务
-                    self.maps.append(metrics['val_map'])
+                    self.maps.append(metrics.get('val_map', 0.0))
                     self.train_maps.append(metrics.get('train_map', 0.0))  # 添加训练mAP
                 elif 'val_accuracy' in metrics:  # 分类任务
-                    self.maps.append(metrics['val_accuracy'])
+                    self.maps.append(metrics.get('val_accuracy', 0.0))
                     self.train_maps.append(metrics.get('train_accuracy', 0.0))  # 添加训练准确率
                 else:
                     self.maps.append(0.0)
@@ -455,23 +455,49 @@ class TrainingVisualizationWidget(QWidget):
                 if val_losses:
                     self.loss_ax.plot(epochs, val_losses, 'r-', label='验证损失', marker='o', markersize=4)
                     
-                    # 设置y轴范围
-                    filtered_val_losses = list(filter(None, val_losses))
-                    if train_losses and filtered_val_losses:
-                        y_min = min(min(train_losses), min(filtered_val_losses))
-                        y_max = max(max(train_losses), max(filtered_val_losses))
-                        y_margin = (y_max - y_min) * 0.1
-                        self.loss_ax.set_ylim([max(0, y_min - y_margin), y_max + y_margin])
-                    elif train_losses:
-                        y_min = min(train_losses)
-                        y_max = max(train_losses)
-                        y_margin = (y_max - y_min) * 0.1
-                        self.loss_ax.set_ylim([max(0, y_min - y_margin), y_max + y_margin])
-                    elif filtered_val_losses:
-                        y_min = min(filtered_val_losses)
-                        y_max = max(filtered_val_losses)
-                        y_margin = (y_max - y_min) * 0.1
-                        self.loss_ax.set_ylim([max(0, y_min - y_margin), y_max + y_margin])
+                    # 设置y轴范围 - 使用更健壮的方法
+                    # 收集所有有效的损失值
+                    all_losses = []
+                    if train_losses:
+                        all_losses.extend([l for l in train_losses if l is not None and l > 0])
+                    if val_losses:
+                        all_losses.extend([l for l in val_losses if l is not None and l > 0])
+                    
+                    if all_losses:
+                        # 计算y轴范围时要考虑异常值
+                        all_max = max(all_losses)  # 记录最大值以便显示
+                        
+                        # 过滤异常值但保留合理范围
+                        if len(all_losses) > 3:  # 如果有足够的数据点可以筛选
+                            # 排序并去除最大的1-2个点，防止极端异常值影响整体显示
+                            sorted_losses = sorted(all_losses)
+                            # 只考虑前95%的值来计算视图范围
+                            filtered_losses = sorted_losses[:int(len(sorted_losses) * 0.95)]
+                            if filtered_losses:  # 确保筛选后还有值
+                                y_min = min(filtered_losses)
+                                y_max = max(filtered_losses)
+                                
+                                # 使用更大的边距
+                                y_margin = max(y_max * 0.2, 0.1)
+                                y_min = max(0, y_min - y_margin)
+                                
+                                # 判断最大值是否是异常值
+                                if all_max > y_max * 1.5:  # 如果最大值远大于筛选后的最大值
+                                    y_max = all_max * 1.1  # 确保能显示所有点
+                                else:
+                                    y_max = y_max + y_margin
+                                
+                                self.loss_ax.set_ylim([y_min, y_max])
+                        else:  # 数据点太少，不筛选
+                            y_min = min(all_losses)
+                            y_max = all_max
+                            
+                            # 使用更大的边距
+                            y_margin = max(y_max * 0.2, 0.1)
+                            y_min = max(0, y_min - y_margin)
+                            y_max = y_max + y_margin
+                            
+                            self.loss_ax.set_ylim([y_min, y_max])
                 
                 self.loss_ax.legend(loc='upper right')
                 self.loss_ax.set_xticks(x_ticks)
@@ -504,22 +530,53 @@ class TrainingVisualizationWidget(QWidget):
                     if train_maps and any(m > 0 for m in train_maps):
                         self.acc_ax.plot(epochs, train_maps, 'c-', label=train_metric_label, marker='o', markersize=4)
                         
-                    # 设置y轴范围 - 考虑训练和验证指标
-                    all_accuracies = maps.copy()
+                    # 收集所有有效的准确率/mAP值
+                    all_metrics = []
+                    if maps:
+                        all_metrics.extend([m for m in maps if m is not None and m > 0])
                     if train_maps:
-                        all_accuracies.extend(train_maps)
+                        all_metrics.extend([m for m in train_maps if m is not None and m > 0])
                     
-                    if all_accuracies:
-                        # 增加安全检查，确保过滤后的列表不为空
-                        filtered_accuracies = list(filter(lambda x: x > 0, all_accuracies))
-                        if filtered_accuracies:
-                            y_min = min(filtered_accuracies)
-                            y_max = max(all_accuracies)
-                            y_margin = (y_max - y_min) * 0.1
-                            self.acc_ax.set_ylim([max(0, y_min - y_margin), min(1.0, y_max + y_margin)])
-                        else:
-                            # 如果没有大于0的准确率，使用默认范围
-                            self.acc_ax.set_ylim([0, 1.0])
+                    # 确保有有效值
+                    if all_metrics:
+                        # 计算y轴范围
+                        all_max = max(all_metrics)  # 记录最大值
+                        
+                        # 过滤可能的异常值但确保所有点都可见
+                        # 如果数据点有明显的间断或异常，要特别处理
+                        if len(all_metrics) > 3:  # 如果有足够的数据点可以分析
+                            y_min = min(all_metrics)
+                            y_max = all_max
+                            
+                            # 计算更大的边距确保点均可见
+                            y_margin = max(y_max * 0.15, 0.02)
+                            y_min = max(0, y_min - y_margin)
+                            
+                            # 如果接近或超过1，直接调整上限
+                            if y_max >= 0.95:
+                                y_max = 1.05
+                            else:
+                                # 确保有足够的上边距
+                                y_max = min(1.05, y_max + y_margin)
+                            
+                            # 如果最小值很小，增加下边距
+                            if y_min < 0.05 and y_max > 0.1:
+                                y_min = 0
+                            
+                            # 如果范围太小，扩大显示
+                            if y_max - y_min < 0.1:
+                                y_max = min(1.0, y_min + 0.2)
+                            
+                            self.acc_ax.set_ylim([y_min, y_max])
+                        else:  # 数据点太少
+                            # 用更保守的方式设置范围
+                            y_min = max(0, min(all_metrics) - 0.05)
+                            y_max = min(1.05, all_max + 0.05)
+                            
+                            self.acc_ax.set_ylim([y_min, y_max])
+                    else:
+                        # 无有效数据时使用默认范围
+                        self.acc_ax.set_ylim([0, 1.0])
                     
                     self.acc_ax.legend(loc='lower right')
                     self.acc_ax.set_xticks(x_ticks)
@@ -543,23 +600,49 @@ class TrainingVisualizationWidget(QWidget):
                 if val_losses:
                     self.loss_ax.plot(epochs, val_losses, 'r-', label='验证损失', marker='o', markersize=4)
                     
-                    # 设置y轴范围
-                    filtered_val_losses = list(filter(None, val_losses))
-                    if train_losses and filtered_val_losses:
-                        y_min = min(min(train_losses), min(filtered_val_losses))
-                        y_max = max(max(train_losses), max(filtered_val_losses))
-                        y_margin = (y_max - y_min) * 0.1
-                        self.loss_ax.set_ylim([max(0, y_min - y_margin), y_max + y_margin])
-                    elif train_losses:
-                        y_min = min(train_losses)
-                        y_max = max(train_losses)
-                        y_margin = (y_max - y_min) * 0.1
-                        self.loss_ax.set_ylim([max(0, y_min - y_margin), y_max + y_margin])
-                    elif filtered_val_losses:
-                        y_min = min(filtered_val_losses)
-                        y_max = max(filtered_val_losses)
-                        y_margin = (y_max - y_min) * 0.1
-                        self.loss_ax.set_ylim([max(0, y_min - y_margin), y_max + y_margin])
+                    # 设置y轴范围 - 使用更健壮的方法
+                    # 收集所有有效的损失值
+                    all_losses = []
+                    if train_losses:
+                        all_losses.extend([l for l in train_losses if l is not None and l > 0])
+                    if val_losses:
+                        all_losses.extend([l for l in val_losses if l is not None and l > 0])
+                    
+                    if all_losses:
+                        # 计算y轴范围时要考虑异常值
+                        all_max = max(all_losses)  # 记录最大值以便显示
+                        
+                        # 过滤异常值但保留合理范围
+                        if len(all_losses) > 3:  # 如果有足够的数据点可以筛选
+                            # 排序并去除最大的1-2个点，防止极端异常值影响整体显示
+                            sorted_losses = sorted(all_losses)
+                            # 只考虑前95%的值来计算视图范围
+                            filtered_losses = sorted_losses[:int(len(sorted_losses) * 0.95)]
+                            if filtered_losses:  # 确保筛选后还有值
+                                y_min = min(filtered_losses)
+                                y_max = max(filtered_losses)
+                                
+                                # 使用更大的边距
+                                y_margin = max(y_max * 0.2, 0.1)
+                                y_min = max(0, y_min - y_margin)
+                                
+                                # 判断最大值是否是异常值
+                                if all_max > y_max * 1.5:  # 如果最大值远大于筛选后的最大值
+                                    y_max = all_max * 1.1  # 确保能显示所有点
+                                else:
+                                    y_max = y_max + y_margin
+                                
+                                self.loss_ax.set_ylim([y_min, y_max])
+                        else:  # 数据点太少，不筛选
+                            y_min = min(all_losses)
+                            y_max = all_max
+                            
+                            # 使用更大的边距
+                            y_margin = max(y_max * 0.2, 0.1)
+                            y_min = max(0, y_min - y_margin)
+                            y_max = y_max + y_margin
+                            
+                            self.loss_ax.set_ylim([y_min, y_max])
                 
                 self.loss_ax.legend(loc='upper right')
                 self.loss_ax.set_xticks(x_ticks)
@@ -598,8 +681,27 @@ class TrainingVisualizationWidget(QWidget):
                         if filtered_accuracies:
                             y_min = min(filtered_accuracies)
                             y_max = max(all_accuracies)
-                            y_margin = (y_max - y_min) * 0.1
-                            self.acc_ax.set_ylim([max(0, y_min - y_margin), min(1.0, y_max + y_margin)])
+                            
+                            # 确保y_min和y_max有足够的差距，防止曲线太平
+                            if abs(y_max - y_min) < 0.05:
+                                # 如果范围太小，则设置一个合理的默认范围
+                                y_margin = 0.05
+                            else:
+                                # 使用百分比计算边距，确保大值和小值都能正确显示
+                                y_margin = max(y_max * 0.1, 0.02)
+                            
+                            # 确保上下界不会太接近
+                            y_min = max(0, y_min - y_margin)
+                            y_max = min(1.0, y_max + y_margin)
+                            
+                            # 如果y_max已经接近1或超过1，设置上限为1.05
+                            if y_max >= 0.95:
+                                y_max = 1.05
+                            # 如果y_max太小，设置一个合理的上限，确保曲线可见
+                            elif y_max < 0.2:
+                                y_max = min(1.0, y_max * 1.5)
+                            
+                            self.acc_ax.set_ylim([y_min, y_max])
                         else:
                             # 如果没有大于0的准确率，使用默认范围
                             self.acc_ax.set_ylim([0, 1.0])
@@ -633,20 +735,51 @@ class TrainingVisualizationWidget(QWidget):
                     # 绘制训练mAP数据
                     if train_maps and any(m > 0 for m in train_maps):
                         self.acc_ax.plot(epochs, train_maps, 'c-', label='训练mAP', marker='o', markersize=4)
-                        
-                        # 设置y轴范围
-                    all_maps = maps.copy()
+                    
+                    # 设置y轴范围，适应小数值
+                    all_maps = []
+                    if maps:
+                        all_maps.extend(maps)
                     if train_maps:
                         all_maps.extend(train_maps)
                     
                     if all_maps:
-                        # 增加安全检查，确保过滤后的列表不为空
-                        filtered_maps = list(filter(lambda x: x > 0, all_maps))
+                        # 过滤掉负值或极小值，但保留最大值以确保显示全部数据
+                        all_max = max(all_maps)
+                        # 如果最大值太大，可能是异常点，记录下来以便显示
+                        filtered_maps = [v for v in all_maps if v > 0.0001]
                         if filtered_maps:
                             y_min = min(filtered_maps)
-                            y_max = max(all_maps)
-                            y_margin = (y_max - y_min) * 0.1
-                            self.acc_ax.set_ylim([max(0, y_min - y_margin), min(1.0, y_max + y_margin)])
+                            y_max = max(filtered_maps)
+                            
+                            # 确保y_min和y_max有足够的差距，防止曲线太平
+                            if abs(y_max - y_min) < 0.05:
+                                # 如果范围太小，则设置一个合理的默认范围
+                                y_margin = 0.05
+                            else:
+                                # 使用百分比计算边距，确保大值和小值都能正确显示
+                                y_margin = max(y_max * 0.15, 0.02)  # 使用更大的边距百分比
+                            
+                            # 确保上下界不会太接近
+                            y_min = max(0, y_min - y_margin)
+                            
+                            # 特别处理边界情况，确保所有点都能显示
+                            # 如果所有值都接近1，则扩大上限
+                            if y_max >= 0.95:
+                                y_max = 1.05
+                            else:
+                                # 确保有足够的上边距
+                                y_max = min(1.0, y_max + y_margin)
+                            
+                            # 如果y_max太小，扩大范围使曲线可见
+                            if y_max < 0.2:
+                                y_max = min(1.0, y_max * 1.5)
+                            
+                            # 确保显示所有数据点，即使有异常值
+                            if all_max > y_max:
+                                y_max = min(1.0, all_max * 1.1)
+                                
+                            self.acc_ax.set_ylim([y_min, y_max])
                         else:
                             # 如果没有大于0的mAP，使用默认范围
                             self.acc_ax.set_ylim([0, 1.0])
@@ -679,9 +812,44 @@ class TrainingVisualizationWidget(QWidget):
                 if recalls:
                     self.acc_ax.plot(epochs, recalls, 'm-', label='召回率', marker='o', markersize=4)
                 
+                # 设置y轴范围，适应小数值
+                all_values = []
+                if precisions:
+                    all_values.extend(precisions)
+                if recalls:
+                    all_values.extend(recalls)
+                
+                if all_values:
+                    # 过滤掉负值或极小值
+                    filtered_values = [v for v in all_values if v > 0.0001]
+                    if filtered_values:
+                        y_min = min(filtered_values)
+                        y_max = max(all_values)
+                        
+                        # 确保y_min和y_max有足够的差距，防止曲线太平
+                        if abs(y_max - y_min) < 0.05:
+                            y_margin = 0.05
+                        else:
+                            # 使用百分比计算边距
+                            y_margin = max(y_max * 0.1, 0.02)
+                        
+                        # 确保上下界不会太接近
+                        y_min = max(0, y_min - y_margin)
+                        
+                        # 如果y_max已经接近1或超过1，设置上限为1.05
+                        if y_max >= 0.95:
+                            y_max = 1.05
+                        else:
+                            y_max = min(1.0, y_max + y_margin)
+                        
+                        # 如果y_max太小，扩大范围使曲线可见
+                        if y_max < 0.2:
+                            y_max = min(1.0, y_max * 1.5)
+                            
+                        self.acc_ax.set_ylim([y_min, y_max])
+                
                 self.acc_ax.legend(loc='lower right')
                 self.acc_ax.set_xticks(x_ticks)
-                self.acc_ax.set_ylim([0, 1.0])
                 self.acc_ax.set_visible(True)
             
             elif metric_option == 5:  # F1-Score
@@ -698,9 +866,38 @@ class TrainingVisualizationWidget(QWidget):
                 if f1_scores:
                     self.acc_ax.plot(epochs, f1_scores, 'c-', label='F1-Score', marker='o', markersize=4)
                 
+                # 设置y轴范围，适应小数值
+                if f1_scores:
+                    # 过滤掉负值或极小值
+                    filtered_values = [v for v in f1_scores if v > 0.0001]
+                    if filtered_values:
+                        y_min = min(filtered_values)
+                        y_max = max(f1_scores)
+                        
+                        # 确保y_min和y_max有足够的差距，防止曲线太平
+                        if abs(y_max - y_min) < 0.05:
+                            y_margin = 0.05
+                        else:
+                            # 使用百分比计算边距
+                            y_margin = max(y_max * 0.1, 0.02)
+                        
+                        # 确保上下界不会太接近
+                        y_min = max(0, y_min - y_margin)
+                        
+                        # 如果y_max已经接近1或超过1，设置上限为1.05
+                        if y_max >= 0.95:
+                            y_max = 1.05
+                        else:
+                            y_max = min(1.0, y_max + y_margin)
+                        
+                        # 如果y_max太小，扩大范围使曲线可见
+                        if y_max < 0.2:
+                            y_max = min(1.0, y_max * 1.5)
+                            
+                        self.acc_ax.set_ylim([y_min, y_max])
+                
                 self.acc_ax.legend(loc='lower right')
                 self.acc_ax.set_xticks(x_ticks)
-                self.acc_ax.set_ylim([0, 1.0])
                 self.acc_ax.set_visible(True)
             
             elif metric_option == 6:  # mAP50/mAP75
@@ -721,9 +918,44 @@ class TrainingVisualizationWidget(QWidget):
                 if map75s:
                     self.acc_ax.plot(epochs, map75s, 'b-', label='mAP75', marker='o', markersize=4)
                 
+                # 设置y轴范围，适应小数值
+                all_values = []
+                if map50s:
+                    all_values.extend(map50s)
+                if map75s:
+                    all_values.extend(map75s)
+                
+                if all_values:
+                    # 过滤掉负值或极小值
+                    filtered_values = [v for v in all_values if v > 0.0001]
+                    if filtered_values:
+                        y_min = min(filtered_values)
+                        y_max = max(all_values)
+                        
+                        # 确保y_min和y_max有足够的差距，防止曲线太平
+                        if abs(y_max - y_min) < 0.05:
+                            y_margin = 0.05
+                        else:
+                            # 使用百分比计算边距
+                            y_margin = max(y_max * 0.1, 0.02)
+                        
+                        # 确保上下界不会太接近
+                        y_min = max(0, y_min - y_margin)
+                        
+                        # 如果y_max已经接近1或超过1，设置上限为1.05
+                        if y_max >= 0.95:
+                            y_max = 1.05
+                        else:
+                            y_max = min(1.0, y_max + y_margin)
+                        
+                        # 如果y_max太小，扩大范围使曲线可见
+                        if y_max < 0.2:
+                            y_max = min(1.0, y_max * 1.5)
+                            
+                        self.acc_ax.set_ylim([y_min, y_max])
+                
                 self.acc_ax.legend(loc='lower right')
                 self.acc_ax.set_xticks(x_ticks)
-                self.acc_ax.set_ylim([0, 1.0])
                 self.acc_ax.set_visible(True)
             
             elif metric_option == 7:  # 类别损失/目标损失
@@ -742,12 +974,41 @@ class TrainingVisualizationWidget(QWidget):
                 if obj_losses:
                     self.loss_ax.plot(epochs, obj_losses, 'c-', label='目标损失', marker='o', markersize=4)
                 
+                # 设置y轴范围，使曲线更加清晰
+                all_values = []
+                if class_losses:
+                    all_values.extend(class_losses)
+                if obj_losses:
+                    all_values.extend(obj_losses)
+                
+                if all_values:
+                    # 过滤异常值，但保留最大边界
+                    all_max = max(all_values)
+                    # 过滤掉负值和极大值，但保留一定的上界
+                    filtered_values = [v for v in all_values if v > 0 and v < min(10, all_max * 1.5)]
+                    if filtered_values:
+                        y_min = min(filtered_values)
+                        y_max = max(filtered_values)
+                        
+                        # 确保y轴范围合理
+                        y_margin = max(y_max * 0.15, 0.1)  # 使用更大的百分比，确保高损失值显示完整
+                        y_min = max(0, y_min - y_margin)
+                        
+                        # 如果最大值过大，但确保能完整显示
+                        # 对于损失值，可能会有较大差异，不要过度限制上限
+                        if all_max > y_max * 1.5:
+                            y_max = all_max * 1.1  # 确保显示所有点，即使是极端值
+                        else:
+                            y_max += y_margin
+                        
+                        self.loss_ax.set_ylim([y_min, y_max])
+                
                 self.loss_ax.legend(loc='upper right')
                 self.loss_ax.set_xticks(x_ticks)
                 self.loss_ax.set_visible(True)
             
             elif metric_option == 8:  # 框损失/置信度损失
-                self.loss_ax.set_title('框损失和置信度损失')
+                self.loss_ax.set_title('框损失')
                 self.loss_ax.set_xlabel('训练轮次')
                 self.loss_ax.set_ylabel('损失值')
                 
@@ -758,7 +1019,28 @@ class TrainingVisualizationWidget(QWidget):
                 if box_losses:
                     self.loss_ax.plot(epochs, box_losses, 'y-', label='框损失', marker='o', markersize=4)
                 
-                # 可以添加置信度损失如果有的话
+                # 设置y轴范围，使曲线更加清晰
+                if box_losses:
+                    # 过滤异常值，但保留最大边界
+                    all_max = max(box_losses)
+                    # 过滤掉负值和极大值，但保留一定的上界
+                    filtered_values = [v for v in box_losses if v > 0 and v < min(10, all_max * 1.5)]
+                    if filtered_values:
+                        y_min = min(filtered_values)
+                        y_max = max(filtered_values)
+                        
+                        # 确保y轴范围合理
+                        y_margin = max(y_max * 0.15, 0.1)  # 使用更大的百分比，确保高损失值显示完整
+                        y_min = max(0, y_min - y_margin)
+                        
+                        # 如果最大值过大，但确保能完整显示
+                        # 对于损失值，可能会有较大差异，不要过度限制上限
+                        if all_max > y_max * 1.5:
+                            y_max = all_max * 1.1  # 确保显示所有点，即使是极端值
+                        else:
+                            y_max += y_margin
+                        
+                        self.loss_ax.set_ylim([y_min, y_max])
                 
                 self.loss_ax.legend(loc='upper right')
                 self.loss_ax.set_xticks(x_ticks)
@@ -778,9 +1060,38 @@ class TrainingVisualizationWidget(QWidget):
                 if roc_aucs:
                     self.acc_ax.plot(epochs, roc_aucs, 'c-', label='ROC-AUC', marker='o', markersize=4)
                 
+                # 设置y轴范围，适应小数值
+                if roc_aucs:
+                    # 过滤掉负值或极小值
+                    filtered_values = [v for v in roc_aucs if v > 0.0001]
+                    if filtered_values:
+                        y_min = min(filtered_values)
+                        y_max = max(roc_aucs)
+                        
+                        # 确保y_min和y_max有足够的差距，防止曲线太平
+                        if abs(y_max - y_min) < 0.05:
+                            y_margin = 0.05
+                        else:
+                            # 使用百分比计算边距
+                            y_margin = max(y_max * 0.1, 0.02)
+                        
+                        # 确保上下界不会太接近
+                        y_min = max(0, y_min - y_margin)
+                        
+                        # 如果y_max已经接近1或超过1，设置上限为1.05
+                        if y_max >= 0.95:
+                            y_max = 1.05
+                        else:
+                            y_max = min(1.0, y_max + y_margin)
+                        
+                        # 如果y_max太小，扩大范围使曲线可见
+                        if y_max < 0.2:
+                            y_max = min(1.0, y_max * 1.5)
+                            
+                        self.acc_ax.set_ylim([y_min, y_max])
+                
                 self.acc_ax.legend(loc='lower right')
                 self.acc_ax.set_xticks(x_ticks)
-                self.acc_ax.set_ylim([0, 1.0])
                 self.acc_ax.set_visible(True)
             
             elif metric_option == 10:  # Average Precision
@@ -797,9 +1108,38 @@ class TrainingVisualizationWidget(QWidget):
                 if average_precisions:
                     self.acc_ax.plot(epochs, average_precisions, 'm-', label='Average Precision', marker='o', markersize=4)
                 
+                # 设置y轴范围，适应小数值
+                if average_precisions:
+                    # 过滤掉负值或极小值
+                    filtered_values = [v for v in average_precisions if v > 0.0001]
+                    if filtered_values:
+                        y_min = min(filtered_values)
+                        y_max = max(average_precisions)
+                        
+                        # 确保y_min和y_max有足够的差距，防止曲线太平
+                        if abs(y_max - y_min) < 0.05:
+                            y_margin = 0.05
+                        else:
+                            # 使用百分比计算边距
+                            y_margin = max(y_max * 0.1, 0.02)
+                        
+                        # 确保上下界不会太接近
+                        y_min = max(0, y_min - y_margin)
+                        
+                        # 如果y_max已经接近1或超过1，设置上限为1.05
+                        if y_max >= 0.95:
+                            y_max = 1.05
+                        else:
+                            y_max = min(1.0, y_max + y_margin)
+                        
+                        # 如果y_max太小，扩大范围使曲线可见
+                        if y_max < 0.2:
+                            y_max = min(1.0, y_max * 1.5)
+                            
+                        self.acc_ax.set_ylim([y_min, y_max])
+                
                 self.acc_ax.legend(loc='lower right')
                 self.acc_ax.set_xticks(x_ticks)
-                self.acc_ax.set_ylim([0, 1.0])
                 self.acc_ax.set_visible(True)
             
             elif metric_option == 11:  # Top-K准确率
@@ -816,9 +1156,38 @@ class TrainingVisualizationWidget(QWidget):
                 if top_k_accuracies:
                     self.acc_ax.plot(epochs, top_k_accuracies, 'y-', label='Top-K准确率', marker='o', markersize=4)
                 
+                # 设置y轴范围，适应小数值
+                if top_k_accuracies:
+                    # 过滤掉负值或极小值
+                    filtered_values = [v for v in top_k_accuracies if v > 0.0001]
+                    if filtered_values:
+                        y_min = min(filtered_values)
+                        y_max = max(top_k_accuracies)
+                        
+                        # 确保y_min和y_max有足够的差距，防止曲线太平
+                        if abs(y_max - y_min) < 0.05:
+                            y_margin = 0.05
+                        else:
+                            # 使用百分比计算边距
+                            y_margin = max(y_max * 0.1, 0.02)
+                        
+                        # 确保上下界不会太接近
+                        y_min = max(0, y_min - y_margin)
+                        
+                        # 如果y_max已经接近1或超过1，设置上限为1.05
+                        if y_max >= 0.95:
+                            y_max = 1.05
+                        else:
+                            y_max = min(1.0, y_max + y_margin)
+                        
+                        # 如果y_max太小，扩大范围使曲线可见
+                        if y_max < 0.2:
+                            y_max = min(1.0, y_max * 1.5)
+                            
+                        self.acc_ax.set_ylim([y_min, y_max])
+                
                 self.acc_ax.legend(loc='lower right')
                 self.acc_ax.set_xticks(x_ticks)
-                self.acc_ax.set_ylim([0, 1.0])
                 self.acc_ax.set_visible(True)
             
             elif metric_option == 12:  # 平衡准确率
@@ -835,9 +1204,38 @@ class TrainingVisualizationWidget(QWidget):
                 if balanced_accuracies:
                     self.acc_ax.plot(epochs, balanced_accuracies, 'g-', label='平衡准确率', marker='o', markersize=4)
                 
+                # 设置y轴范围，适应小数值
+                if balanced_accuracies:
+                    # 过滤掉负值或极小值
+                    filtered_values = [v for v in balanced_accuracies if v > 0.0001]
+                    if filtered_values:
+                        y_min = min(filtered_values)
+                        y_max = max(balanced_accuracies)
+                        
+                        # 确保y_min和y_max有足够的差距，防止曲线太平
+                        if abs(y_max - y_min) < 0.05:
+                            y_margin = 0.05
+                        else:
+                            # 使用百分比计算边距
+                            y_margin = max(y_max * 0.1, 0.02)
+                        
+                        # 确保上下界不会太接近
+                        y_min = max(0, y_min - y_margin)
+                        
+                        # 如果y_max已经接近1或超过1，设置上限为1.05
+                        if y_max >= 0.95:
+                            y_max = 1.05
+                        else:
+                            y_max = min(1.0, y_max + y_margin)
+                        
+                        # 如果y_max太小，扩大范围使曲线可见
+                        if y_max < 0.2:
+                            y_max = min(1.0, y_max * 1.5)
+                            
+                        self.acc_ax.set_ylim([y_min, y_max])
+                
                 self.acc_ax.legend(loc='lower right')
                 self.acc_ax.set_xticks(x_ticks)
-                self.acc_ax.set_ylim([0, 1.0])
                 self.acc_ax.set_visible(True)
             
             # 重新调整布局和绘制
