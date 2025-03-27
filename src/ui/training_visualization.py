@@ -26,6 +26,11 @@ class TrainingVisualizationWidget(QWidget):
         self.init_ui()
         self.setup_metrics()
         self.setup_logger()
+        self.task_type = None  # 添加任务类型字段，用于持久化判断
+        
+        # 初始化完成后调用一次更新显示，确保默认视图正确
+        self.last_metrics = {}  # 确保有一个空的last_metrics字典
+        self.update_display()
         
     def setup_logger(self):
         """设置日志记录器"""
@@ -196,9 +201,9 @@ class TrainingVisualizationWidget(QWidget):
         self.loss_ax.set_xlabel('训练轮次')
         self.loss_ax.set_ylabel('损失值')
         
-        # mAP子图
+        # mAP子图 - 修改为与默认的"损失和准确率总览"选项一致的标题和标签
         self.acc_ax = self.figure.add_subplot(212)
-        self.acc_ax.set_title('验证准确率/mAP')
+        self.acc_ax.set_title('训练和验证准确率/mAP')
         self.acc_ax.set_xlabel('训练轮次')
         self.acc_ax.set_ylabel('准确率/mAP')
         
@@ -238,22 +243,24 @@ class TrainingVisualizationWidget(QWidget):
     def update_metrics(self, metrics):
         """更新训练指标"""
         try:
-            # 验证数据格式
-            required_fields = ['epoch', 'train_loss', 'val_loss', 'learning_rate']
-            if not all(field in metrics for field in required_fields):
-                self.logger.warning(f"缺少必要的训练指标字段: {metrics}")
-                return
-                
+            # 获取epoch
+            epoch = metrics.get('epoch', 0)
+            
+            # 确定任务类型并持久化(仅在第一次或明确更改任务类型时设置)
+            if self.task_type is None:
+                if 'val_accuracy' in metrics:
+                    self.task_type = 'classification'
+                elif 'val_map' in metrics:
+                    self.task_type = 'detection'
+                self.logger.info(f"任务类型设置为: {self.task_type}")
+            
             # 检查更新频率
             current_time = time.time()
             if current_time - self.last_update_time < 1.0 / self.update_frequency:
                 return
             self.last_update_time = current_time
             
-            # 更新数据
-            epoch = int(metrics['epoch'])
-            
-            # 检查这个epoch是否已存在
+            # 处理新的epoch或更新现有epoch的数据
             if epoch not in self.epochs:
                 self.epochs.append(epoch)
                 self.train_losses.append(metrics['train_loss'])
@@ -470,15 +477,15 @@ class TrainingVisualizationWidget(QWidget):
                 self.loss_ax.set_xticks(x_ticks)
                 self.loss_ax.set_visible(True)
                 
-                # 下方图显示准确率/mAP（根据任务类型判断）
+                # 下方图显示准确率/mAP（根据持久化的任务类型判断，而不是每次根据当前指标判断）
                 if any(m > 0 for m in maps):  # 有性能指标数据
-                    # 是分类任务还是检测任务
-                    if 'val_accuracy' in self.last_metrics:
+                    # 根据持久化的任务类型设置图表
+                    if self.task_type == 'classification':
                         self.acc_ax.set_title('训练和验证准确率')
                         self.acc_ax.set_ylabel('准确率')
                         val_metric_label = '验证准确率'
                         train_metric_label = '训练准确率'
-                    else:
+                    else:  # 默认为detection或未设置
                         self.acc_ax.set_title('训练和验证mAP')
                         self.acc_ax.set_ylabel('mAP')
                         val_metric_label = '验证mAP'
@@ -563,80 +570,96 @@ class TrainingVisualizationWidget(QWidget):
             elif metric_option == 2:  # 仅分类准确率
                 self.loss_ax.set_visible(False)  # 隐藏上方图表
                 
-                self.acc_ax.set_title('训练和验证准确率')
-                self.acc_ax.set_xlabel('训练轮次')
-                self.acc_ax.set_ylabel('准确率')
-                
-                # 设置网格
-                self.acc_ax.grid(True, linestyle='--', alpha=0.7)
-                
-                # 绘制验证准确率数据
-                if maps:
-                    self.acc_ax.plot(epochs, maps, 'g-', label='验证准确率', marker='o', markersize=4)
-                
-                # 绘制训练准确率数据
-                if train_maps and any(m > 0 for m in train_maps):
-                    self.acc_ax.plot(epochs, train_maps, 'c-', label='训练准确率', marker='o', markersize=4)
+                # 使用持久化任务类型判断
+                if self.task_type == 'classification':
+                    self.acc_ax.set_title('训练和验证准确率')
+                    self.acc_ax.set_xlabel('训练轮次')
+                    self.acc_ax.set_ylabel('准确率')
                     
-                # 设置y轴范围
-                all_accuracies = maps.copy()
-                if train_maps:
-                    all_accuracies.extend(train_maps)
-                
-                if all_accuracies:
-                    # 增加安全检查，确保过滤后的列表不为空
-                    filtered_accuracies = list(filter(lambda x: x > 0, all_accuracies))
-                    if filtered_accuracies:
-                        y_min = min(filtered_accuracies)
-                        y_max = max(all_accuracies)
-                        y_margin = (y_max - y_min) * 0.1
-                        self.acc_ax.set_ylim([max(0, y_min - y_margin), min(1.0, y_max + y_margin)])
-                    else:
-                        # 如果没有大于0的准确率，使用默认范围
-                        self.acc_ax.set_ylim([0, 1.0])
-                
-                self.acc_ax.legend(loc='lower right')
-                self.acc_ax.set_xticks(x_ticks)
-                self.acc_ax.set_visible(True)
-                
+                    # 设置网格
+                    self.acc_ax.grid(True, linestyle='--', alpha=0.7)
+                    
+                    # 绘制验证准确率数据
+                    if maps:
+                        self.acc_ax.plot(epochs, maps, 'g-', label='验证准确率', marker='o', markersize=4)
+                    
+                    # 绘制训练准确率数据
+                    if train_maps and any(m > 0 for m in train_maps):
+                        self.acc_ax.plot(epochs, train_maps, 'c-', label='训练准确率', marker='o', markersize=4)
+                        
+                    # 设置y轴范围
+                    all_accuracies = maps.copy()
+                    if train_maps:
+                        all_accuracies.extend(train_maps)
+                    
+                    if all_accuracies:
+                        # 增加安全检查，确保过滤后的列表不为空
+                        filtered_accuracies = list(filter(lambda x: x > 0, all_accuracies))
+                        if filtered_accuracies:
+                            y_min = min(filtered_accuracies)
+                            y_max = max(all_accuracies)
+                            y_margin = (y_max - y_min) * 0.1
+                            self.acc_ax.set_ylim([max(0, y_min - y_margin), min(1.0, y_max + y_margin)])
+                        else:
+                            # 如果没有大于0的准确率，使用默认范围
+                            self.acc_ax.set_ylim([0, 1.0])
+                    
+                    self.acc_ax.legend(loc='lower right')
+                    self.acc_ax.set_xticks(x_ticks)
+                    self.acc_ax.set_visible(True)
+                else:
+                    # 如果不是分类任务，显示提示信息
+                    self.acc_ax.text(0.5, 0.5, '当前模型不是分类模型', 
+                                    horizontalalignment='center', verticalalignment='center',
+                                    transform=self.acc_ax.transAxes, fontsize=14)
+                    self.acc_ax.set_visible(True)
+            
             elif metric_option == 3:  # 仅目标检测mAP
                 self.loss_ax.set_visible(False)  # 隐藏上方图表
                 
-                self.acc_ax.set_title('训练和验证mAP')
-                self.acc_ax.set_xlabel('训练轮次')
-                self.acc_ax.set_ylabel('mAP')
-                
-                # 设置网格
-                self.acc_ax.grid(True, linestyle='--', alpha=0.7)
-                
-                # 绘制验证mAP数据
-                if maps:
-                    self.acc_ax.plot(epochs, maps, 'g-', label='验证mAP', marker='o', markersize=4)
-                
-                # 绘制训练mAP数据
-                if train_maps and any(m > 0 for m in train_maps):
-                    self.acc_ax.plot(epochs, train_maps, 'c-', label='训练mAP', marker='o', markersize=4)
+                # 使用持久化任务类型判断
+                if self.task_type == 'detection' or self.task_type is None:  # None时默认为检测任务
+                    self.acc_ax.set_title('训练和验证mAP')
+                    self.acc_ax.set_xlabel('训练轮次')
+                    self.acc_ax.set_ylabel('mAP')
                     
-                    # 设置y轴范围
-                all_maps = maps.copy()
-                if train_maps:
-                    all_maps.extend(train_maps)
-                
-                if all_maps:
-                    # 增加安全检查，确保过滤后的列表不为空
-                    filtered_maps = list(filter(lambda x: x > 0, all_maps))
-                    if filtered_maps:
-                        y_min = min(filtered_maps)
-                        y_max = max(all_maps)
-                        y_margin = (y_max - y_min) * 0.1
-                        self.acc_ax.set_ylim([max(0, y_min - y_margin), min(1.0, y_max + y_margin)])
-                    else:
-                        # 如果没有大于0的mAP，使用默认范围
-                        self.acc_ax.set_ylim([0, 1.0])
-                
-                self.acc_ax.legend(loc='lower right')
-                self.acc_ax.set_xticks(x_ticks)
-                self.acc_ax.set_visible(True)
+                    # 设置网格
+                    self.acc_ax.grid(True, linestyle='--', alpha=0.7)
+                    
+                    # 绘制验证mAP数据
+                    if maps:
+                        self.acc_ax.plot(epochs, maps, 'g-', label='验证mAP', marker='o', markersize=4)
+                    
+                    # 绘制训练mAP数据
+                    if train_maps and any(m > 0 for m in train_maps):
+                        self.acc_ax.plot(epochs, train_maps, 'c-', label='训练mAP', marker='o', markersize=4)
+                        
+                        # 设置y轴范围
+                    all_maps = maps.copy()
+                    if train_maps:
+                        all_maps.extend(train_maps)
+                    
+                    if all_maps:
+                        # 增加安全检查，确保过滤后的列表不为空
+                        filtered_maps = list(filter(lambda x: x > 0, all_maps))
+                        if filtered_maps:
+                            y_min = min(filtered_maps)
+                            y_max = max(all_maps)
+                            y_margin = (y_max - y_min) * 0.1
+                            self.acc_ax.set_ylim([max(0, y_min - y_margin), min(1.0, y_max + y_margin)])
+                        else:
+                            # 如果没有大于0的mAP，使用默认范围
+                            self.acc_ax.set_ylim([0, 1.0])
+                    
+                    self.acc_ax.legend(loc='lower right')
+                    self.acc_ax.set_xticks(x_ticks)
+                    self.acc_ax.set_visible(True)
+                else:
+                    # 如果不是检测任务，显示提示信息
+                    self.acc_ax.text(0.5, 0.5, '当前模型不是检测模型', 
+                                    horizontalalignment='center', verticalalignment='center',
+                                    transform=self.acc_ax.transAxes, fontsize=14)
+                    self.acc_ax.set_visible(True)
             
             elif metric_option == 4:  # Precision/Recall
                 self.loss_ax.set_visible(False)  # 隐藏上方图表
@@ -932,6 +955,9 @@ class TrainingVisualizationWidget(QWidget):
         if hasattr(self, 'last_metrics'):
             self.last_metrics = {}
         
+        # 重置任务类型
+        self.task_type = None
+        
         # 重置标签显示
         self.train_loss_label.setText("训练损失: 0.0000")
         self.val_loss_label.setText("验证损失: 0.0000")
@@ -965,9 +991,9 @@ class TrainingVisualizationWidget(QWidget):
         self.loss_ax.set_xlabel('训练轮次')
         self.loss_ax.set_ylabel('损失值')
         
-        self.acc_ax.set_title('验证性能指标')  # 修改为通用标题
+        self.acc_ax.set_title('训练和验证准确率/mAP')
         self.acc_ax.set_xlabel('训练轮次')
-        self.acc_ax.set_ylabel('指标值')
+        self.acc_ax.set_ylabel('准确率/mAP')
         
         self.figure.tight_layout()
         self.canvas.draw()
@@ -1150,6 +1176,15 @@ class TensorBoardWidget(QWidget):
     def update_tensorboard(self, metric_name, value, step):
         """接收并处理来自训练器的TensorBoard更新信号"""
         try:
+            # 检查是否是训练结束信号（step为-1表示训练结束）
+            if step == -1:
+                self.logger.info(f"收到训练结束信号，正在刷新TensorBoard")
+                self.status_label.setText(
+                    f"TensorBoard日志目录: {self.tensorboard_dir or '未设置'}\n"
+                    f"训练已完成，所有指标已记录"
+                )
+                return
+                
             self.logger.info(f"接收到TensorBoard更新: {metric_name}={value:.4f} (step={step})")
             
             # 更新状态标签，显示最近的指标更新

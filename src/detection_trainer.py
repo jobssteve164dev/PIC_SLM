@@ -148,6 +148,9 @@ class DetectionTrainer(QObject):
                 for key, value in metrics.items():
                     if isinstance(value, (int, float)) and key != 'epoch' and key != 'batch':
                         self.writer.add_scalar(f'{key}', value, metrics['epoch'])
+                
+                # 立即刷新数据，确保实时写入
+                self.writer.flush()
                         
                 # 如果有tensorboard_updated信号的接收者
                 if hasattr(self, 'tensorboard_log_dir') and self.tensorboard_log_dir:
@@ -251,28 +254,27 @@ class DetectionTrainer(QObject):
             model_file_suffix = f"_{model_note}" if model_note else ""
             final_model_path = os.path.join(model_save_dir, f'{model_name.lower()}{model_file_suffix}_{timestamp}_final.pth')
             torch.save(model.state_dict(), final_model_path)
+            self.status_updated.emit(f'保存最终模型: {final_model_path}')
             
-            # 保存训练信息
-            training_info = {
-                'model_name': model_name,
-                'num_epochs': num_epochs,
-                'batch_size': train_loader.batch_size,
-                'learning_rate': optimizer.param_groups[0]['lr'],
-                'best_map': best_map,
-                'model_path': final_model_path,
-                'best_model_path': model_save_path,  # 使用最佳模型的路径
-                'timestamp': timestamp  # 添加时间戳到训练信息
-            }
-            
-            with open(os.path.join(model_save_dir, 'training_info.json'), 'w') as f:
-                json.dump(training_info, f, indent=4)
+            # 确保最后一轮的tensorboard数据写入并更新
+            if self.writer:
+                # 显式记录最终的训练完成状态
+                self.writer.add_scalar('Final/mAP', best_map, num_epochs)
+                self.writer.add_scalar('Final/Epochs', num_epochs, 0)
+                # 确保所有数据被写入
+                self.writer.flush()
                 
-            return best_map, model_save_path
+                # 发送tensorboard更新信号
+                if hasattr(self, 'tensorboard_log_dir') and self.tensorboard_log_dir:
+                    self.tensorboard_updated.emit(self.tensorboard_log_dir, best_map, num_epochs)
             
+            return best_map, model_save_path
+        
         except Exception as e:
-            self.logger.error(f"训练过程中出错: {str(e)}")
-            self.training_error.emit(f"训练失败: {str(e)}")
-            raise
+            self.training_error.emit(f"训练过程中出错: {str(e)}")
+            import traceback
+            traceback.print_exc()
+            return 0.0, None
             
     def train_model(self, config: Dict[str, Any]) -> None:
         """使用配置字典启动训练"""
@@ -333,9 +335,29 @@ class DetectionTrainer(QObject):
             # 关闭TensorBoard写入器
             if self.writer:
                 # 添加显式刷新操作，确保最后一轮数据被记录
-                self.writer.flush()
-                self.writer.close()
-                self.logger.info("已关闭TensorBoard写入器")
+                try:
+                    # 添加训练完成标记
+                    self.writer.add_text('Training', 'Training completed', 0)
+                    
+                    # 强制刷新最后的数据
+                    self.writer.flush()
+                    
+                    # 发送最终的tensorboard更新信号
+                    if hasattr(self, 'tensorboard_log_dir') and self.tensorboard_log_dir:
+                        self.tensorboard_updated.emit(
+                            self.tensorboard_log_dir, 
+                            0.0,  # 这里传0是因为我们只是想触发UI刷新
+                            -1    # 使用-1表示这是训练结束信号
+                        )
+                    
+                    # 等待200ms确保数据被写入
+                    time.sleep(0.2)
+                    
+                    # 关闭写入器
+                    self.writer.close()
+                    self.logger.info("已关闭TensorBoard写入器")
+                except Exception as e:
+                    self.logger.error(f"关闭TensorBoard写入器时出错: {str(e)}")
                 
             self.training_finished.emit()
                 
@@ -506,9 +528,26 @@ class DetectionTrainer(QObject):
                         # 确保最后一轮的数据被写入TensorBoard
                         if self.trainer.writer:
                             # 记录最终轮次信息
-                            self.trainer.writer.add_scalar('Final/Epoch', num_epochs, 0)
-                            self.trainer.writer.add_scalar('Final/mAP', self.best_map, 0)
+                            final_val_map = results.get('metrics/mAP50-95', self.best_map)
+                            final_train_loss = results.get('train/box_loss', 0.0)
+                            final_val_loss = results.get('val/box_loss', 0.0)
+                            
+                            # 记录最终训练结果
+                            self.trainer.writer.add_scalar('Final/mAP', final_val_map, num_epochs)
+                            self.trainer.writer.add_scalar('Final/train_loss', final_train_loss, num_epochs)
+                            self.trainer.writer.add_scalar('Final/val_loss', final_val_loss, num_epochs)
+                            self.trainer.writer.add_scalar('Final/Epochs', num_epochs, 0)
+                            
+                            # 强制刷新确保数据写入
                             self.trainer.writer.flush()
+                            
+                            # 发送tensorboard更新信号，确保UI能够获取最新数据
+                            if hasattr(self.trainer, 'tensorboard_log_dir') and self.trainer.tensorboard_log_dir:
+                                self.trainer.tensorboard_updated.emit(
+                                    self.trainer.tensorboard_log_dir, 
+                                    final_val_map, 
+                                    num_epochs
+                                )
                             
                         # 获取YOLO保存的最佳模型路径
                         yolo_best_path = getattr(results, 'best', None)

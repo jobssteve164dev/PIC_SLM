@@ -1,0 +1,31 @@
+{
+    "data_dir": "E:\\PIC_SLM\\TEST\\OUTPUT2\\dataset",
+    "model_name": "MobileNetV2",
+    "num_epochs": 20,
+    "batch_size": 32,
+    "learning_rate": 0.001,
+    "model_save_dir": "F:\\Qsync\\00.AI_PROJECT\\图片分类模型训练\\C1\\src\\..\\models\\saved_models",
+    "default_param_save_dir": "F:\\Qsync\\00.AI_PROJECT\\图片分类模型训练\\C1\\train_config",
+    "tensorboard_log_dir": "F:\\Qsync\\00.AI_PROJECT\\图片分类模型训练\\C1\\src\\..\\runs\\tensorboard",
+    "task_type": "classification",
+    "optimizer": "Adam",
+    "use_pretrained": true,
+    "pretrained_path": "",
+    "metrics": [
+        "accuracy"
+    ],
+    "use_tensorboard": true,
+    "model_note": "",
+    "weight_decay": 0.0001,
+    "lr_scheduler": "StepLR",
+    "use_augmentation": true,
+    "early_stopping": true,
+    "early_stopping_patience": 10,
+    "gradient_clipping": false,
+    "gradient_clipping_value": 1.0,
+    "mixed_precision": true,
+    "dropout_rate": 0.0,
+    "activation_function": "None",
+    "model_filename": "MobileNetV2_20250327-234947",
+    "timestamp": "20250327-234947"
+}

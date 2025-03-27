@@ -1041,21 +1041,18 @@ class ModelTrainer(QObject):
                     self.detection_trainer.metrics_updated.connect(self.metrics_updated)
                     self.detection_trainer.tensorboard_updated.connect(self.tensorboard_updated)
                     self.detection_trainer.model_download_failed.connect(self.model_download_failed)
+                    self.detection_trainer.training_stopped.connect(self.training_stopped)
                     
                     # 启动训练 - 确保使用包含模型文件名的配置
                     self.detection_trainer.start_training(config)
                     
                 except Exception as e:
                     self.training_error.emit(f"创建目标检测训练器时出错: {str(e)}")
-                    import traceback
-                    traceback.print_exc()
-                
             else:
                 self.training_error.emit(f"不支持的任务类型: {task_type}")
-                return
                 
         except Exception as e:
-            self.training_error.emit(f"启动训练过程时出错: {str(e)}")
+            self.training_error.emit(f"训练初始化时出错: {str(e)}")
             import traceback
             traceback.print_exc()
 
