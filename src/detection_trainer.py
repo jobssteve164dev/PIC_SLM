@@ -56,6 +56,11 @@ class DetectionTrainer(QObject):
         """
         self.status_updated.emit(f"正在应用激活函数: {activation_name}")
         
+        # 如果选择无激活函数，则保持模型原样
+        if activation_name == "None":
+            self.status_updated.emit("保持模型原有的激活函数不变")
+            return model
+            
         # 创建激活函数实例
         if activation_name == "ReLU":
             activation = nn.ReLU(inplace=True)
@@ -429,6 +434,7 @@ class DetectionTrainer(QObject):
                 
                 # YOLOv8中常用的激活函数映射
                 yolo_activation_map = {
+                    'None': None,  # 无激活函数
                     'ReLU': 'ReLU',
                     'LeakyReLU': 'LeakyReLU',
                     'PReLU': 'PReLU', 

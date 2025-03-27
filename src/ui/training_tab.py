@@ -508,9 +508,9 @@ class TrainingTab(BaseTab):
         basic_layout.addWidget(activation_label, 7, 0)
         self.classification_activation_combo = QComboBox()
         self.classification_activation_combo.addItems([
-            "ReLU", "LeakyReLU", "PReLU", "ELU", "SELU", "GELU", "Mish", "Swish"
+            "None", "ReLU", "LeakyReLU", "PReLU", "ELU", "SELU", "GELU", "Mish", "Swish"
         ])
-        self.classification_activation_combo.setToolTip("不同的激活函数对过拟合有不同影响：\n- ReLU：最常用，但可能出现神经元死亡\n- LeakyReLU：解决ReLU神经元死亡问题\n- PReLU：带可学习参数的LeakyReLU\n- ELU：指数线性单元，有更好的梯度\n- SELU：自归一化激活函数\n- GELU：高斯误差线性单元\n- Mish：平滑激活函数\n- Swish：SiLU，自门控激活函数")
+        self.classification_activation_combo.setToolTip("不同的激活函数对过拟合有不同影响：\n- None：不使用激活函数，对某些模型效果更好\n- ReLU：最常用，但可能出现神经元死亡\n- LeakyReLU：解决ReLU神经元死亡问题\n- PReLU：带可学习参数的LeakyReLU\n- ELU：指数线性单元，有更好的梯度\n- SELU：自归一化激活函数\n- GELU：高斯误差线性单元\n- Mish：平滑激活函数\n- Swish：SiLU，自门控激活函数")
         basic_layout.addWidget(self.classification_activation_combo, 7, 1)
         
         # 添加Dropout参数控制
@@ -779,10 +779,10 @@ class TrainingTab(BaseTab):
         basic_layout.addWidget(activation_label, 7, 0)
         self.detection_activation_combo = QComboBox()
         self.detection_activation_combo.addItems([
-            "ReLU", "LeakyReLU", "PReLU", "ELU", "SELU", "GELU", "Mish", "Swish", "SiLU"
+            "None", "ReLU", "LeakyReLU", "PReLU", "ELU", "SELU", "GELU", "Mish", "Swish", "SiLU"
         ])
         self.detection_activation_combo.setCurrentText("SiLU")  # YOLO默认使用SiLU/Swish
-        self.detection_activation_combo.setToolTip("检测模型激活函数：\n- LeakyReLU：YOLO早期版本默认激活函数\n- SiLU/Swish：YOLOv5/v8默认，性能更好\n- Mish：YOLOv4默认激活函数\n- 合适的激活函数可减轻过拟合\n- 不同架构有不同推荐激活函数")
+        self.detection_activation_combo.setToolTip("检测模型激活函数：\n- None：不使用激活函数，某些情况效果更好\n- LeakyReLU：YOLO早期版本默认激活函数\n- SiLU/Swish：YOLOv5/v8默认，性能更好\n- Mish：YOLOv4默认激活函数\n- 合适的激活函数可减轻过拟合\n- 不同架构有不同推荐激活函数")
         basic_layout.addWidget(self.detection_activation_combo, 7, 1)
         
         # 添加Dropout参数控制
