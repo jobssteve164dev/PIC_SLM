@@ -267,6 +267,38 @@ class TrainingVisualizationWidget(QWidget):
                 return
             self.last_update_time = current_time
             
+            # 确保连续性：如果有跳跃的epoch，填充中间缺失的数据点
+            if epoch > 0 and self.epochs and epoch > max(self.epochs) + 1:
+                # 获取上一个epoch的索引
+                last_idx = self.epochs.index(max(self.epochs))
+                
+                # 填充中间缺失的epochs
+                for missing_epoch in range(max(self.epochs) + 1, epoch):
+                    self.epochs.append(missing_epoch)
+                    
+                    # 继承上一个epoch的值来确保连续性
+                    self.train_losses.append(self.train_losses[last_idx])
+                    self.val_losses.append(self.val_losses[last_idx])
+                    self.maps.append(self.maps[last_idx])
+                    self.train_maps.append(self.train_maps[last_idx] if hasattr(self, 'train_maps') and self.train_maps else 0.0)
+                    self.learning_rates.append(self.learning_rates[last_idx])
+                    
+                    # 继承其他指标
+                    self.precisions.append(self.precisions[last_idx] if self.precisions else 0.0)
+                    self.recalls.append(self.recalls[last_idx] if self.recalls else 0.0)
+                    self.f1_scores.append(self.f1_scores[last_idx] if self.f1_scores else 0.0)
+                    self.map50s.append(self.map50s[last_idx] if self.map50s else 0.0)
+                    self.map75s.append(self.map75s[last_idx] if self.map75s else 0.0)
+                    self.class_losses.append(self.class_losses[last_idx] if self.class_losses else 0.0)
+                    self.obj_losses.append(self.obj_losses[last_idx] if self.obj_losses else 0.0)
+                    self.box_losses.append(self.box_losses[last_idx] if self.box_losses else 0.0)
+                    
+                    # 继承分类任务特有指标
+                    self.roc_aucs.append(self.roc_aucs[last_idx] if self.roc_aucs else 0.0)
+                    self.average_precisions.append(self.average_precisions[last_idx] if self.average_precisions else 0.0)
+                    self.top_k_accuracies.append(self.top_k_accuracies[last_idx] if self.top_k_accuracies else 0.0)
+                    self.balanced_accuracies.append(self.balanced_accuracies[last_idx] if self.balanced_accuracies else 0.0)
+            
             # 处理新的epoch或更新现有epoch的数据
             if epoch not in self.epochs:
                 self.epochs.append(epoch)
@@ -300,7 +332,7 @@ class TrainingVisualizationWidget(QWidget):
                 self.average_precisions.append(metrics.get('average_precision', 0.0))
                 self.top_k_accuracies.append(metrics.get('top_k_accuracy', 0.0))
                 self.balanced_accuracies.append(metrics.get('balanced_accuracy', 0.0))
-                
+            
             else:
                 idx = self.epochs.index(epoch)
                 self.train_losses[idx] = metrics['train_loss']
@@ -417,7 +449,16 @@ class TrainingVisualizationWidget(QWidget):
             metric_option = self.metric_combo.currentIndex()
             
             # 确保所有数据列表长度一致
-            min_len = min(len(self.epochs), len(self.train_losses))
+            min_len = min(len(self.epochs), len(self.train_losses), len(self.val_losses), len(self.maps))
+            
+            # 如果数据为空，直接返回，避免绘制空图表
+            if min_len == 0:
+                # 重置坐标轴并绘制
+                self.figure.tight_layout(pad=2.0)
+                self.figure.subplots_adjust(left=0.1, right=0.95)
+                self.canvas.draw()
+                return
+                
             epochs = self.epochs[:min_len]
             train_losses = self.train_losses[:min_len]
             val_losses = self.val_losses[:min_len]
@@ -425,24 +466,35 @@ class TrainingVisualizationWidget(QWidget):
             train_maps = self.train_maps[:min_len] if hasattr(self, 'train_maps') and len(self.train_maps) > 0 else []
             
             # 确保附加指标列表长度一致
-            precisions = self.precisions[:min_len] if len(self.precisions) > 0 else []
-            recalls = self.recalls[:min_len] if len(self.recalls) > 0 else []
-            f1_scores = self.f1_scores[:min_len] if len(self.f1_scores) > 0 else []
-            map50s = self.map50s[:min_len] if len(self.map50s) > 0 else []
-            map75s = self.map75s[:min_len] if len(self.map75s) > 0 else []
-            class_losses = self.class_losses[:min_len] if len(self.class_losses) > 0 else []
-            obj_losses = self.obj_losses[:min_len] if len(self.obj_losses) > 0 else []
-            box_losses = self.box_losses[:min_len] if len(self.box_losses) > 0 else []
+            precisions = self.precisions[:min_len] if len(self.precisions) >= min_len else self.precisions + [0.0] * (min_len - len(self.precisions))
+            recalls = self.recalls[:min_len] if len(self.recalls) >= min_len else self.recalls + [0.0] * (min_len - len(self.recalls))
+            f1_scores = self.f1_scores[:min_len] if len(self.f1_scores) >= min_len else self.f1_scores + [0.0] * (min_len - len(self.f1_scores))
+            map50s = self.map50s[:min_len] if len(self.map50s) >= min_len else self.map50s + [0.0] * (min_len - len(self.map50s))
+            map75s = self.map75s[:min_len] if len(self.map75s) >= min_len else self.map75s + [0.0] * (min_len - len(self.map75s))
+            class_losses = self.class_losses[:min_len] if len(self.class_losses) >= min_len else self.class_losses + [0.0] * (min_len - len(self.class_losses))
+            obj_losses = self.obj_losses[:min_len] if len(self.obj_losses) >= min_len else self.obj_losses + [0.0] * (min_len - len(self.obj_losses))
+            box_losses = self.box_losses[:min_len] if len(self.box_losses) >= min_len else self.box_losses + [0.0] * (min_len - len(self.box_losses))
             
             # 分类特有指标数据
-            roc_aucs = self.roc_aucs[:min_len] if len(self.roc_aucs) > 0 else []
-            average_precisions = self.average_precisions[:min_len] if len(self.average_precisions) > 0 else []
-            top_k_accuracies = self.top_k_accuracies[:min_len] if len(self.top_k_accuracies) > 0 else []
-            balanced_accuracies = self.balanced_accuracies[:min_len] if len(self.balanced_accuracies) > 0 else []
+            roc_aucs = self.roc_aucs[:min_len] if len(self.roc_aucs) >= min_len else self.roc_aucs + [0.0] * (min_len - len(self.roc_aucs))
+            average_precisions = self.average_precisions[:min_len] if len(self.average_precisions) >= min_len else self.average_precisions + [0.0] * (min_len - len(self.average_precisions))
+            top_k_accuracies = self.top_k_accuracies[:min_len] if len(self.top_k_accuracies) >= min_len else self.top_k_accuracies + [0.0] * (min_len - len(self.top_k_accuracies))
+            balanced_accuracies = self.balanced_accuracies[:min_len] if len(self.balanced_accuracies) >= min_len else self.balanced_accuracies + [0.0] * (min_len - len(self.balanced_accuracies))
             
-            # 设置x轴范围
-            max_epoch = max(epochs) if epochs else 1
-            x_ticks = np.arange(0, max_epoch + 1, max(1, max_epoch // 10))
+            # 设置x轴范围，确保包含所有数据点
+            if not epochs:
+                max_epoch = 1
+            else:
+                # 确保坐标轴足够宽以显示所有点
+                max_epoch = max(epochs)
+                # 添加一点额外空间在右侧
+                max_epoch = max_epoch + max(1, max_epoch * 0.1)
+                
+            # 确保x轴刻度合理
+            if max_epoch <= 10:
+                x_ticks = np.arange(0, max_epoch + 1, 1)  # 少于10个epoch时每个都显示
+            else:
+                x_ticks = np.arange(0, max_epoch + 1, max(1, int(max_epoch / 10)))  # 否则大约显示10个刻度
             
             # 根据选择的指标显示图表
             if metric_option == 0:  # 损失和准确率总览
@@ -1248,7 +1300,7 @@ class TrainingVisualizationWidget(QWidget):
             # 重新调整布局和绘制
             # 增加间距，防止标签被截断
             self.figure.tight_layout(pad=2.0)
-            self.figure.subplots_adjust(left=0.1, right=0.95)
+            self.figure.subplots_adjust(left=0.1, right=0.95, bottom=0.1, top=0.95)  # 增加上下边距
             self.canvas.draw()
             
         except Exception as e:
