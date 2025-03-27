@@ -193,7 +193,11 @@ class TrainingVisualizationWidget(QWidget):
         layout.addLayout(explanation_layout)
         
         # 创建图表
-        self.figure = Figure()
+        # 增大图表默认大小，设置更宽的图形
+        self.figure = Figure(figsize=(12, 8), dpi=100)
+        
+        # 设置更大的左右边距，防止截断
+        self.figure.subplots_adjust(left=0.1, right=0.95, bottom=0.1, top=0.95)
         
         # 损失子图
         self.loss_ax = self.figure.add_subplot(211)
@@ -210,12 +214,15 @@ class TrainingVisualizationWidget(QWidget):
         # 创建画布并设置大小策略为扩展
         self.canvas = FigureCanvas(self.figure)
         self.canvas.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        self.canvas.setMinimumWidth(600)  # 设置最小宽度
         layout.addWidget(self.canvas)
         
         # 设置整个组件的大小策略为扩展
         self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        self.setMinimumWidth(650)  # 设置组件最小宽度
         
-        self.figure.tight_layout()
+        # 使用tight_layout但保留足够的边距
+        self.figure.tight_layout(pad=2.0)
         
         # 创建状态标签，但设置为隐藏
         self.status_label = QLabel('等待训练开始...')
@@ -1239,7 +1246,9 @@ class TrainingVisualizationWidget(QWidget):
                 self.acc_ax.set_visible(True)
             
             # 重新调整布局和绘制
-            self.figure.tight_layout()
+            # 增加间距，防止标签被截断
+            self.figure.tight_layout(pad=2.0)
+            self.figure.subplots_adjust(left=0.1, right=0.95)
             self.canvas.draw()
             
         except Exception as e:
@@ -1318,7 +1327,9 @@ class TrainingVisualizationWidget(QWidget):
     def resizeEvent(self, event):
         """重写resizeEvent以在窗口大小改变时调整图表布局"""
         super().resizeEvent(event)
-        self.figure.tight_layout()
+        # 确保在大小变化时保持足够的边距
+        self.figure.tight_layout(pad=2.0)
+        self.figure.subplots_adjust(left=0.1, right=0.95)
         self.canvas.draw()
         
     def reset_plots(self):

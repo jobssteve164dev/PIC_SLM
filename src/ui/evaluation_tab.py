@@ -1,7 +1,8 @@
 from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QPushButton, QLabel, QFileDialog,
                            QHBoxLayout, QComboBox, QGroupBox, QGridLayout, QListWidget,
                            QSizePolicy, QLineEdit, QMessageBox, QTableWidget, QTableWidgetItem,
-                           QHeaderView, QStackedWidget, QListWidgetItem, QFormLayout, QCheckBox)
+                           QHeaderView, QStackedWidget, QListWidgetItem, QFormLayout, QCheckBox,
+                           QScrollArea)
 from PyQt5.QtCore import Qt, pyqtSignal
 from PyQt5.QtGui import QFont
 import os
@@ -264,46 +265,13 @@ class EvaluationTab(BaseTab):
     def setup_training_curve_ui(self):
         """设置实时训练曲线UI"""
         training_curve_layout = QVBoxLayout(self.training_curve_widget)
+        training_curve_layout.setContentsMargins(10, 10, 10, 10)  # 添加一些边距
         
         # 添加说明标签
         info_label = QLabel("实时训练曲线可视化")
         info_label.setFont(QFont('微软雅黑', 12, QFont.Bold))
         info_label.setAlignment(Qt.AlignCenter)
         training_curve_layout.addWidget(info_label)
-        
-        # 添加训练参数说明 - 移除旧的静态参数说明
-        # explanation_group = QGroupBox("曲线参数说明")
-        # explanation_layout = QVBoxLayout()
-        # params_explanation = """
-        # <b>基础评估指标</b>：
-        # <b>训练损失</b>：模型在训练集上的误差，值越小表示模型在训练数据上拟合得越好。
-        # <b>验证损失</b>：模型在验证集上的误差，是评估模型泛化能力的重要指标。
-        # <b>训练准确率</b>：模型在训练集上的准确率，表示模型对训练数据的拟合程度。
-        # <b>验证准确率</b>：模型在验证集上的准确率，反映模型在未见过数据上的表现。
-        # <b>精确率(Precision)</b>：正确预测为正例的数量占所有预测为正例的比例。
-        # <b>召回率(Recall)</b>：正确预测为正例的数量占所有实际正例的比例。
-        # <b>F1-Score</b>：精确率和召回率的调和平均值，平衡了这两个指标。
-        # 
-        # <b>分类特有指标</b>：
-        # <b>ROC-AUC</b>：ROC曲线下的面积，衡量分类器的性能，越接近1越好。
-        # <b>平均精度(Average Precision)</b>：PR曲线下的面积，在不平衡数据集上比AUC更有参考价值。
-        # <b>Top-K准确率</b>：预测的前K个类别中包含正确类别的比例。
-        # <b>平衡准确率</b>：考虑了类别不平衡问题的准确率指标。
-        # 
-        # <b>检测特有指标</b>：
-        # <b>mAP</b>：平均精度均值，目标检测的主要评价指标。
-        # <b>mAP50</b>：IOU阈值为0.5时的平均精度均值。
-        # <b>mAP75</b>：IOU阈值为0.75时的平均精度均值，要求更加严格。
-        # <b>类别损失</b>：分类分支的损失值。
-        # <b>目标损失</b>：物体存在置信度的损失值。
-        # <b>框损失</b>：边界框回归的损失值。
-        # """
-        # 
-        # params_label = QLabel(params_explanation)
-        # params_label.setWordWrap(True)
-        # explanation_layout.addWidget(params_label)
-        # explanation_group.setLayout(explanation_layout)
-        # training_curve_layout.addWidget(explanation_group)
         
         # 添加训练开始/停止按键的提示
         control_tip = QLabel("训练停止条件：当验证损失在多个轮次后不再下降，或达到设定的最大轮次。")
@@ -312,12 +280,29 @@ class EvaluationTab(BaseTab):
         
         # 添加训练可视化组件
         self.training_visualization = TrainingVisualizationWidget()
-        training_curve_layout.addWidget(self.training_visualization)
+        
+        # 确保训练可视化组件有足够的最小宽度
+        self.training_visualization.setMinimumWidth(800)
+        
+        # 创建内部滚动区域来容纳训练可视化组件，以确保UI的正确显示
+        visualization_scroll = QScrollArea()
+        visualization_scroll.setWidgetResizable(True)
+        visualization_scroll.setWidget(self.training_visualization)
+        visualization_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        visualization_scroll.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        visualization_scroll.setMinimumHeight(600)  # 设置滚动区域的最小高度
+        visualization_scroll.setMinimumWidth(820)  # 设置滚动区域的最小宽度，稍大于内部组件
+        
+        # 将滚动区域添加到布局中
+        training_curve_layout.addWidget(visualization_scroll)
         
         # 添加当前训练状态标签
         self.training_status_label = QLabel("等待训练开始...")
         self.training_status_label.setAlignment(Qt.AlignCenter)
         training_curve_layout.addWidget(self.training_status_label)
+        
+        # 设置整个训练曲线区域的最小宽度
+        self.training_curve_widget.setMinimumWidth(850)
     
     def setup_params_compare_ui(self):
         """设置训练参数对比UI"""
