@@ -13,6 +13,7 @@ from .prediction_tab import PredictionTab
 from .settings_tab import SettingsTab
 from .evaluation_tab import EvaluationTab
 from .about_tab import AboutTab
+from .dataset_evaluation_tab import DatasetEvaluationTab  # 导入新的数据集评估标签页
 
 class MainWindow(QMainWindow):
     """主窗口类，负责组织和管理所有标签页"""
@@ -83,10 +84,12 @@ class MainWindow(QMainWindow):
         self.evaluation_tab = EvaluationTab(self.tabs, self)
         self.settings_tab = SettingsTab(self.tabs, self)
         self.about_tab = AboutTab(self.tabs, self)
+        self.dataset_evaluation_tab = DatasetEvaluationTab(self.tabs, self)  # 创建数据集评估标签页
         
         # 添加标签页（调整顺序，将模型预测放在模型评估与可视化后面）
         self.tabs.addTab(self.data_processing_tab, "图像预处理")
         self.tabs.addTab(self.annotation_tab, "图像标注")
+        self.tabs.addTab(self.dataset_evaluation_tab, "数据集评估")  # 移动到图像标注后面
         self.tabs.addTab(self.training_tab, "模型训练")
         self.tabs.addTab(self.evaluation_tab, "模型评估与可视化")
         self.tabs.addTab(self.prediction_tab, "模型预测")
@@ -150,6 +153,9 @@ class MainWindow(QMainWindow):
         self.settings_tab.status_updated.connect(self.update_status)
         self.settings_tab.progress_updated.connect(self.update_progress)
         self.settings_tab.settings_saved.connect(self.apply_config)
+        
+        self.dataset_evaluation_tab.status_updated.connect(self.update_status)  # 连接数据集评估标签页的信号
+        self.dataset_evaluation_tab.progress_updated.connect(self.update_progress)
 
     def update_status(self, message):
         """更新状态栏消息"""
@@ -376,6 +382,13 @@ class MainWindow(QMainWindow):
             # 将配置应用到评估界面
             if hasattr(self.evaluation_tab, 'apply_config'):
                 self.evaluation_tab.apply_config(config)
+        
+        # 数据集评估标签页
+        if hasattr(self, 'dataset_evaluation_tab'):
+            # 将配置应用到数据集评估界面
+            if hasattr(self.dataset_evaluation_tab, 'apply_config'):
+                self.dataset_evaluation_tab.apply_config(config)
+                print("MainWindow: 已调用dataset_evaluation_tab.apply_config方法")
         
         # 预测标签页
         if hasattr(self, 'prediction_tab'):

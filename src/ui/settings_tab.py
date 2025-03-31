@@ -180,6 +180,18 @@ class SettingsTab(BaseTab):
         model_layout.addWidget(self.default_tensorboard_log_dir_edit, 4, 1)
         model_layout.addWidget(tensorboard_log_dir_btn, 4, 2)
         
+        # 数据集评估文件夹
+        self.default_dataset_dir_edit = QLineEdit()
+        self.default_dataset_dir_edit.setReadOnly(True)
+        self.default_dataset_dir_edit.setPlaceholderText("默认数据集评估文件夹")
+        
+        dataset_dir_btn = QPushButton("浏览...")
+        dataset_dir_btn.clicked.connect(self.select_default_dataset_dir)
+        
+        model_layout.addWidget(QLabel("默认数据集评估文件夹:"), 5, 0)
+        model_layout.addWidget(self.default_dataset_dir_edit, 5, 1)
+        model_layout.addWidget(dataset_dir_btn, 5, 2)
+        
         # 训练参数保存文件夹
         self.default_param_save_dir_edit = QLineEdit()
         self.default_param_save_dir_edit.setReadOnly(True)
@@ -188,9 +200,9 @@ class SettingsTab(BaseTab):
         param_save_dir_btn = QPushButton("浏览...")
         param_save_dir_btn.clicked.connect(self.select_default_param_save_dir)
         
-        model_layout.addWidget(QLabel("默认训练参数保存文件夹:"), 5, 0)
-        model_layout.addWidget(self.default_param_save_dir_edit, 5, 1)
-        model_layout.addWidget(param_save_dir_btn, 5, 2)
+        model_layout.addWidget(QLabel("默认训练参数保存文件夹:"), 6, 0)
+        model_layout.addWidget(self.default_param_save_dir_edit, 6, 1)
+        model_layout.addWidget(param_save_dir_btn, 6, 2)
         
         model_group.setLayout(model_layout)
         advanced_layout.addWidget(model_group)
@@ -302,6 +314,14 @@ class SettingsTab(BaseTab):
             folder = os.path.normpath(folder)
             self.default_tensorboard_log_dir_edit.setText(folder)
     
+    def select_default_dataset_dir(self):
+        """选择默认数据集评估文件夹"""
+        folder = QFileDialog.getExistingDirectory(self, "选择默认数据集评估文件夹")
+        if folder:
+            # 标准化路径格式
+            folder = os.path.normpath(folder)
+            self.default_dataset_dir_edit.setText(folder)
+    
     def select_default_param_save_dir(self):
         """选择默认训练参数保存文件夹"""
         folder = QFileDialog.getExistingDirectory(self, "选择默认训练参数保存文件夹")
@@ -342,6 +362,7 @@ class SettingsTab(BaseTab):
         self.default_model_eval_dir_edit.setText(self.config.get('default_model_eval_dir', ''))
         self.default_model_save_dir_edit.setText(self.config.get('default_model_save_dir', ''))
         self.default_tensorboard_log_dir_edit.setText(self.config.get('default_tensorboard_log_dir', ''))
+        self.default_dataset_dir_edit.setText(self.config.get('default_dataset_dir', ''))
         self.default_param_save_dir_edit.setText(self.config.get('default_param_save_dir', ''))
         
         # 设置默认类别
@@ -362,6 +383,7 @@ class SettingsTab(BaseTab):
                 'default_model_eval_dir': self.default_model_eval_dir_edit.text(),
                 'default_model_save_dir': self.default_model_save_dir_edit.text(),
                 'default_tensorboard_log_dir': self.default_tensorboard_log_dir_edit.text(),
+                'default_dataset_dir': self.default_dataset_dir_edit.text(),
                 'default_param_save_dir': self.default_param_save_dir_edit.text(),
                 'default_classes': self.default_classes
             }
