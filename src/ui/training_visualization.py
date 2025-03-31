@@ -23,13 +23,21 @@ matplotlib.rcParams['font.size'] = 12  # 设置字体大小
 class TrainingVisualizationWidget(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.init_ui()
+        self.logger = self.setup_logger()  # 初始化日志记录器
         self.setup_metrics()
-        self.setup_logger()
-        self.task_type = None  # 添加任务类型字段，用于持久化判断
+        self.init_ui()
+        self.update_frequency = 1.0  # 默认更新频率为1Hz
+        self.last_update_time = 0
+        self.task_type = None  # 任务类型：'classification' 或 'detection'
+        self.last_metrics = {}  # 保存最后一次更新的指标
+        
+        # 添加记录历史极值的变量，用于缩放坐标轴
+        self.loss_min_history = float('inf')
+        self.loss_max_history = 0.0
+        self.acc_min_history = float('inf')
+        self.acc_max_history = 0.0
         
         # 初始化完成后调用一次更新显示，确保默认视图正确
-        self.last_metrics = {}  # 确保有一个空的last_metrics字典
         self.update_display()
         
     def setup_logger(self):
@@ -60,9 +68,6 @@ class TrainingVisualizationWidget(QWidget):
         self.top_k_accuracies = []
         self.balanced_accuracies = []
         # 混淆矩阵数据无法用曲线直接显示
-        
-        self.update_frequency = 10  # 默认更新频率
-        self.last_update_time = time.time()
         
     def init_ui(self):
         layout = QVBoxLayout(self)
@@ -514,8 +519,7 @@ class TrainingVisualizationWidget(QWidget):
                 if val_losses:
                     self.loss_ax.plot(epochs, val_losses, 'r-', label='验证损失', marker='o', markersize=4)
                     
-                    # 设置y轴范围 - 使用更健壮的方法
-                    # 收集所有有效的损失值
+                    # 收集所有有效的损失值用于计算坐标轴范围
                     all_losses = []
                     if train_losses:
                         all_losses.extend([l for l in train_losses if l is not None and l > 0])
@@ -523,46 +527,52 @@ class TrainingVisualizationWidget(QWidget):
                         all_losses.extend([l for l in val_losses if l is not None and l > 0])
                     
                     if all_losses:
-                        # 计算y轴范围时要考虑异常值
-                        all_max = max(all_losses)  # 记录最大值以便显示
+                        # 更新历史最大最小值
+                        current_min = min(all_losses)
+                        current_max = max(all_losses)
                         
-                        # 过滤异常值但保留合理范围
-                        if len(all_losses) > 3:  # 如果有足够的数据点可以筛选
-                            # 排序并去除最大的1-2个点，防止极端异常值影响整体显示
-                            sorted_losses = sorted(all_losses)
-                            # 只考虑前95%的值来计算视图范围
-                            filtered_losses = sorted_losses[:int(len(sorted_losses) * 0.95)]
-                            if filtered_losses:  # 确保筛选后还有值
-                                y_min = min(filtered_losses)
-                                y_max = max(filtered_losses)
-                                
-                                # 使用更大的边距
-                                y_margin = max(y_max * 0.2, 0.1)
-                                y_min = max(0, y_min - y_margin)
-                                
-                                # 判断最大值是否是异常值
-                                if all_max > y_max * 1.5:  # 如果最大值远大于筛选后的最大值
-                                    y_max = all_max * 1.1  # 确保能显示所有点
-                                else:
-                                    y_max = y_max + y_margin
-                                
-                                self.loss_ax.set_ylim([y_min, y_max])
-                        else:  # 数据点太少，不筛选
-                            y_min = min(all_losses)
-                            y_max = all_max
+                        # 更新历史记录，确保包含所有历史数据
+                        self.loss_min_history = min(self.loss_min_history, current_min)
+                        self.loss_max_history = max(self.loss_max_history, current_max)
+                        
+                        # 使用历史记录设置y轴范围
+                        y_min = max(0, self.loss_min_history * 0.9)
+                        y_max = self.loss_max_history * 1.1
+                        
+                        # 处理极端值情况
+                        if len(all_losses) > 3:
+                            # 计算标准差用于检测异常值
+                            mean_loss = sum(all_losses) / len(all_losses)
+                            std_loss = (sum((x - mean_loss) ** 2 for x in all_losses) / len(all_losses)) ** 0.5
                             
-                            # 使用更大的边距
-                            y_margin = max(y_max * 0.2, 0.1)
-                            y_min = max(0, y_min - y_margin)
-                            y_max = y_max + y_margin
-                            
-                            self.loss_ax.set_ylim([y_min, y_max])
+                            # 如果标准差很大，说明数据波动剧烈，需要特殊处理
+                            if std_loss > mean_loss * 0.5:
+                                # 使用百分位数设置范围，排除极端值的影响
+                                sorted_losses = sorted(all_losses)
+                                lower_bound = sorted_losses[int(len(sorted_losses) * 0.05)]  # 5%分位数
+                                upper_bound = sorted_losses[int(len(sorted_losses) * 0.95)]  # 95%分位数
+                                
+                                # 但仍然确保能显示所有点，只是缩小主要显示区域
+                                y_min = max(0, lower_bound * 0.9)
+                                y_max = upper_bound * 1.1
+                                
+                                # 如果有更极端的值，增加上限但不影响主显示区域的清晰度
+                                if current_max > upper_bound * 1.5:
+                                    # 在右侧添加文本标注极值
+                                    self.loss_ax.text(
+                                        max(epochs), upper_bound * 1.05, 
+                                        f"最大值: {current_max:.4f}", 
+                                        ha='right', va='bottom', fontsize=8, color='red'
+                                    )
+                                
+                        # 设置y轴范围
+                        self.loss_ax.set_ylim([y_min, y_max])
                 
                 self.loss_ax.legend(loc='upper right')
                 self.loss_ax.set_xticks(x_ticks)
                 self.loss_ax.set_visible(True)
                 
-                # 下方图显示准确率/mAP（根据持久化的任务类型判断，而不是每次根据当前指标判断）
+                # 下方图显示准确率/mAP（根据持久化的任务类型判断）
                 if any(m > 0 for m in maps):  # 有性能指标数据
                     # 根据持久化的任务类型设置图表
                     if self.task_type == 'classification':
@@ -589,7 +599,7 @@ class TrainingVisualizationWidget(QWidget):
                     if train_maps and any(m > 0 for m in train_maps):
                         self.acc_ax.plot(epochs, train_maps, 'c-', label=train_metric_label, marker='o', markersize=4)
                         
-                    # 收集所有有效的准确率/mAP值
+                    # 收集所有有效的准确率/mAP值用于计算坐标轴范围
                     all_metrics = []
                     if maps:
                         all_metrics.extend([m for m in maps if m is not None and m > 0])
@@ -598,45 +608,38 @@ class TrainingVisualizationWidget(QWidget):
                     
                     # 确保有有效值
                     if all_metrics:
-                        # 计算y轴范围
-                        all_max = max(all_metrics)  # 记录最大值
+                        # 获取当前数据的范围
+                        current_min = min(all_metrics)
+                        current_max = max(all_metrics)
                         
-                        # 过滤可能的异常值但确保所有点都可见
-                        # 如果数据点有明显的间断或异常，要特别处理
-                        if len(all_metrics) > 3:  # 如果有足够的数据点可以分析
-                            y_min = min(all_metrics)
-                            y_max = all_max
-                            
-                            # 计算更大的边距确保点均可见
-                            y_margin = max(y_max * 0.15, 0.02)
+                        # 更新历史记录，确保包含所有历史数据
+                        if current_min < self.acc_min_history:
+                            self.acc_min_history = current_min
+                        if current_max > self.acc_max_history:
+                            self.acc_max_history = current_max
+                        
+                        # 设置y轴范围，确保所有历史数据可见
+                        y_min = max(0, self.acc_min_history * 0.9)
+                        y_max = min(1.05, self.acc_max_history * 1.1)
+                        
+                        # 特殊情况处理
+                        if y_max < 0.1:  # 如果所有值都很小
+                            y_max = 0.2  # 设置更合理的上限
+                        elif y_min > 0.9:  # 如果所有值都很大
+                            y_min = 0.8  # 设置更合理的下限
+                        
+                        # 如果范围太小，扩大显示
+                        if y_max - y_min < 0.1:
+                            y_margin = (0.2 - (y_max - y_min)) / 2
                             y_min = max(0, y_min - y_margin)
-                            
-                            # 如果接近或超过1，直接调整上限
-                            if y_max >= 0.95:
-                                y_max = 1.05
-                            else:
-                                # 确保有足够的上边距
-                                y_max = min(1.05, y_max + y_margin)
-                            
-                            # 如果最小值很小，增加下边距
-                            if y_min < 0.05 and y_max > 0.1:
-                                y_min = 0
-                            
-                            # 如果范围太小，扩大显示
-                            if y_max - y_min < 0.1:
-                                y_max = min(1.0, y_min + 0.2)
-                            
-                            self.acc_ax.set_ylim([y_min, y_max])
-                        else:  # 数据点太少
-                            # 用更保守的方式设置范围
-                            y_min = max(0, min(all_metrics) - 0.05)
-                            y_max = min(1.05, all_max + 0.05)
-                            
-                            self.acc_ax.set_ylim([y_min, y_max])
+                            y_max = min(1.05, y_max + y_margin)
+                        
+                        self.acc_ax.set_ylim([y_min, y_max])
                     else:
                         # 无有效数据时使用默认范围
                         self.acc_ax.set_ylim([0, 1.0])
                     
+                    # 添加回图例和刻度设置
                     self.acc_ax.legend(loc='lower right')
                     self.acc_ax.set_xticks(x_ticks)
                     self.acc_ax.set_visible(True)
@@ -659,8 +662,7 @@ class TrainingVisualizationWidget(QWidget):
                 if val_losses:
                     self.loss_ax.plot(epochs, val_losses, 'r-', label='验证损失', marker='o', markersize=4)
                     
-                    # 设置y轴范围 - 使用更健壮的方法
-                    # 收集所有有效的损失值
+                    # 收集所有有效的损失值用于计算坐标轴范围
                     all_losses = []
                     if train_losses:
                         all_losses.extend([l for l in train_losses if l is not None and l > 0])
@@ -668,40 +670,46 @@ class TrainingVisualizationWidget(QWidget):
                         all_losses.extend([l for l in val_losses if l is not None and l > 0])
                     
                     if all_losses:
-                        # 计算y轴范围时要考虑异常值
-                        all_max = max(all_losses)  # 记录最大值以便显示
+                        # 更新历史最大最小值
+                        current_min = min(all_losses)
+                        current_max = max(all_losses)
                         
-                        # 过滤异常值但保留合理范围
-                        if len(all_losses) > 3:  # 如果有足够的数据点可以筛选
-                            # 排序并去除最大的1-2个点，防止极端异常值影响整体显示
-                            sorted_losses = sorted(all_losses)
-                            # 只考虑前95%的值来计算视图范围
-                            filtered_losses = sorted_losses[:int(len(sorted_losses) * 0.95)]
-                            if filtered_losses:  # 确保筛选后还有值
-                                y_min = min(filtered_losses)
-                                y_max = max(filtered_losses)
-                                
-                                # 使用更大的边距
-                                y_margin = max(y_max * 0.2, 0.1)
-                                y_min = max(0, y_min - y_margin)
-                                
-                                # 判断最大值是否是异常值
-                                if all_max > y_max * 1.5:  # 如果最大值远大于筛选后的最大值
-                                    y_max = all_max * 1.1  # 确保能显示所有点
-                                else:
-                                    y_max = y_max + y_margin
-                                
-                                self.loss_ax.set_ylim([y_min, y_max])
-                        else:  # 数据点太少，不筛选
-                            y_min = min(all_losses)
-                            y_max = all_max
+                        # 更新历史记录，确保包含所有历史数据
+                        self.loss_min_history = min(self.loss_min_history, current_min)
+                        self.loss_max_history = max(self.loss_max_history, current_max)
+                        
+                        # 使用历史记录设置y轴范围
+                        y_min = max(0, self.loss_min_history * 0.9)
+                        y_max = self.loss_max_history * 1.1
+                        
+                        # 处理极端值情况
+                        if len(all_losses) > 3:
+                            # 计算标准差用于检测异常值
+                            mean_loss = sum(all_losses) / len(all_losses)
+                            std_loss = (sum((x - mean_loss) ** 2 for x in all_losses) / len(all_losses)) ** 0.5
                             
-                            # 使用更大的边距
-                            y_margin = max(y_max * 0.2, 0.1)
-                            y_min = max(0, y_min - y_margin)
-                            y_max = y_max + y_margin
-                            
-                            self.loss_ax.set_ylim([y_min, y_max])
+                            # 如果标准差很大，说明数据波动剧烈，需要特殊处理
+                            if std_loss > mean_loss * 0.5:
+                                # 使用百分位数设置范围，排除极端值的影响
+                                sorted_losses = sorted(all_losses)
+                                lower_bound = sorted_losses[int(len(sorted_losses) * 0.05)]  # 5%分位数
+                                upper_bound = sorted_losses[int(len(sorted_losses) * 0.95)]  # 95%分位数
+                                
+                                # 但仍然确保能显示所有点，只是缩小主要显示区域
+                                y_min = max(0, lower_bound * 0.9)
+                                y_max = upper_bound * 1.1
+                                
+                                # 如果有更极端的值，增加上限但不影响主显示区域的清晰度
+                                if current_max > upper_bound * 1.5:
+                                    # 在右侧添加文本标注极值
+                                    self.loss_ax.text(
+                                        max(epochs), upper_bound * 1.05, 
+                                        f"最大值: {current_max:.4f}", 
+                                        ha='right', va='bottom', fontsize=8, color='red'
+                                    )
+                                
+                        # 设置y轴范围
+                        self.loss_ax.set_ylim([y_min, y_max])
                 
                 self.loss_ax.legend(loc='upper right')
                 self.loss_ax.set_xticks(x_ticks)
@@ -765,6 +773,7 @@ class TrainingVisualizationWidget(QWidget):
                             # 如果没有大于0的准确率，使用默认范围
                             self.acc_ax.set_ylim([0, 1.0])
                     
+                    # 添加回图例和刻度设置
                     self.acc_ax.legend(loc='lower right')
                     self.acc_ax.set_xticks(x_ticks)
                     self.acc_ax.set_visible(True)
@@ -843,6 +852,7 @@ class TrainingVisualizationWidget(QWidget):
                             # 如果没有大于0的mAP，使用默认范围
                             self.acc_ax.set_ylim([0, 1.0])
                     
+                    # 添加回图例和刻度设置
                     self.acc_ax.legend(loc='lower right')
                     self.acc_ax.set_xticks(x_ticks)
                     self.acc_ax.set_visible(True)
@@ -1393,6 +1403,12 @@ class TrainingVisualizationWidget(QWidget):
         self.maps = []
         self.train_maps = []  # 重置训练准确率/mAP
         self.learning_rates = []
+        
+        # 重置历史极值记录
+        self.loss_min_history = float('inf')
+        self.loss_max_history = 0.0
+        self.acc_min_history = float('inf')
+        self.acc_max_history = 0.0
         
         # 重置共用指标
         self.precisions = []
