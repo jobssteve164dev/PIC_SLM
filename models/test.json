@@ -1,0 +1,26 @@
+{
+    "layers": [
+        {
+            "name": "layer_0",
+            "type": "Conv2d",
+            "position": {
+                "x": 25.297239687661033,
+                "y": -125.11878007681035
+            }
+        },
+        {
+            "name": "layer_1",
+            "type": "AvgPool2d",
+            "position": {
+                "x": 140.0,
+                "y": 0.0
+            }
+        }
+    ],
+    "connections": [
+        {
+            "from": "layer_0",
+            "to": "layer_1"
+        }
+    ]
+}
