@@ -4,6 +4,7 @@ from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QGroupBox,
                            QCheckBox, QPushButton, QListWidget, QScrollArea,
                            QMessageBox, QLineEdit, QGridLayout)
 from PyQt5.QtCore import Qt, pyqtSignal
+from .model_structure_editor import ModelStructureEditor
 
 class LayerConfigWidget(QWidget):
     """模型层配置组件"""
@@ -13,6 +14,7 @@ class LayerConfigWidget(QWidget):
     
     def __init__(self, parent=None):
         super().__init__(parent)
+        self.model_structure = None  # 存储模型结构
         self.init_ui()
         
     def init_ui(self):
@@ -134,6 +136,12 @@ class LayerConfigWidget(QWidget):
         self.custom_layers_cb = QCheckBox("启用自定义层结构")
         advanced_layout.addWidget(self.custom_layers_cb, 1, 0)
         
+        # 添加编辑按钮
+        self.edit_structure_btn = QPushButton("编辑模型结构")
+        self.edit_structure_btn.clicked.connect(self.open_structure_editor)
+        self.edit_structure_btn.setEnabled(False)  # 初始禁用
+        advanced_layout.addWidget(self.edit_structure_btn, 1, 1)
+        
         advanced_group.setLayout(advanced_layout)
         self.config_layout.addWidget(advanced_group)
         
@@ -154,7 +162,7 @@ class LayerConfigWidget(QWidget):
         self.fpn_levels_spin.valueChanged.connect(self.emit_config)
         self.head_combo.currentTextChanged.connect(self.emit_config)
         self.skip_connection_cb.stateChanged.connect(self.emit_config)
-        self.custom_layers_cb.stateChanged.connect(self.emit_config)
+        self.custom_layers_cb.stateChanged.connect(self.on_custom_layers_changed)
     
     def on_enable_changed(self, state):
         """启用状态改变时的处理"""
@@ -185,6 +193,41 @@ class LayerConfigWidget(QWidget):
         # 发送配置变更信号
         self.emit_config()
     
+    def on_custom_layers_changed(self, state):
+        """自定义层结构启用状态改变时的处理"""
+        enabled = state == Qt.Checked
+        self.edit_structure_btn.setEnabled(enabled)
+        
+        # 如果禁用自定义层结构，清除已有的结构
+        if not enabled:
+            self.model_structure = None
+            
+        self.emit_config()
+    
+    def open_structure_editor(self):
+        """打开模型结构编辑器"""
+        editor = ModelStructureEditor(self)
+        
+        # 如果已有模型结构，加载到编辑器中
+        if self.model_structure:
+            editor.layers = self.model_structure['layers']
+            editor.connections = self.model_structure['connections']
+            editor.clear_all()  # 清除现有显示
+            
+            # 重新创建层部件
+            for layer_info in editor.layers:
+                layer_widget = editor.LayerWidget(layer_info)
+                layer_widget.layer_selected.connect(editor.on_layer_selected)
+                layer_widget.layer_modified.connect(editor.on_layer_modified)
+                layer_widget.layer_deleted.connect(editor.on_layer_deleted)
+                editor.layer_layout.addWidget(layer_widget)
+                
+            editor.update_connection_display()
+        
+        if editor.exec_() == editor.Accepted:
+            self.model_structure = editor.get_model_structure()
+            self.emit_config()
+    
     def set_task_type(self, task_type):
         """设置任务类型，显示/隐藏相应的配置选项"""
         self.classification_group.setVisible(task_type == "classification")
@@ -212,6 +255,10 @@ class LayerConfigWidget(QWidget):
             "skip_connection": self.skip_connection_cb.isChecked(),
             "custom_layers": self.custom_layers_cb.isChecked()
         }
+        
+        # 如果启用了自定义层结构，添加结构信息
+        if self.custom_layers_cb.isChecked() and self.model_structure:
+            config['model_structure'] = self.model_structure
         
         # 添加分类模型特有配置
         if self.classification_group.isVisible():

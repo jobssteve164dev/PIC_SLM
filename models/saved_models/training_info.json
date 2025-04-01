@@ -1,9 +1,9 @@
 {
-    "model_name": "DenseNet201",
+    "model_name": "ResNet18",
     "num_epochs": 20,
     "batch_size": 32,
     "learning_rate": 0.001,
-    "best_accuracy": 0.25,
+    "best_accuracy": 0.16666666666666666,
     "class_names": [
         "Missing_hole",
         "Mouse_bite",
@@ -12,6 +12,6 @@
         "Spur",
         "Spurious_copper"
     ],
-    "model_path": "F:/Qsync/00.AI_PROJECT/\u56fe\u7247\u5206\u7c7b\u6a21\u578b\u8bad\u7ec3/C1/models/saved_models\\DenseNet201_20250331-124229__final.pth",
-    "timestamp": "20250331-124229"
+    "model_path": "F:/Qsync/00.AI_PROJECT/\u56fe\u7247\u5206\u7c7b\u6a21\u578b\u8bad\u7ec3/C1/models/saved_models\\ResNet18_20250401-123940__final.pth",
+    "timestamp": "20250401-123940"
 }

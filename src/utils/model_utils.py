@@ -1,6 +1,10 @@
 import torch
 import torch.nn as nn
 from torchvision import models
+from typing import Dict, Any, List, Tuple, Optional
+import logging
+
+logger = logging.getLogger(__name__)
 
 def create_model(config):
     """创建基础模型"""
@@ -124,16 +128,164 @@ def configure_detection_model(model, anchor_size, fpn_levels, head_structure, ne
     
     return model
 
-def apply_common_configs(model, layer_config):
+def apply_common_configs(model: nn.Module, layer_config: Dict[str, Any]) -> nn.Module:
     """应用通用的层配置"""
     # 处理跳跃连接
     if layer_config.get('skip_connection', False):
-        # 添加跳跃连接
-        pass
+        model = add_skip_connections(model)
     
     # 处理自定义层结构
-    if layer_config.get('custom_layers', False):
-        # 允许自定义层的添加和修改
-        pass
+    if layer_config.get('custom_layers', False) and 'model_structure' in layer_config:
+        model = create_custom_model(layer_config['model_structure'])
     
-    return model 
+    return model
+
+def add_skip_connections(model: nn.Module) -> nn.Module:
+    """为模型添加跳跃连接"""
+    # TODO: 实现跳跃连接逻辑
+    return model
+
+def create_custom_model(structure: Dict[str, Any]) -> nn.Module:
+    """根据自定义结构创建模型"""
+    layers = structure.get('layers', [])
+    connections = structure.get('connections', [])
+    
+    # 创建层字典
+    layer_dict = {}
+    for layer_info in layers:
+        layer_name = layer_info['name']
+        layer = create_layer(layer_info)
+        layer_dict[layer_name] = layer
+    
+    # 创建自定义模型类
+    class CustomModel(nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.layers = nn.ModuleDict(layer_dict)
+            self.connections = connections
+            
+        def forward(self, x):
+            # 存储每层的输出
+            outputs = {}
+            
+            # 找到输入层
+            input_layers = get_input_layers(self.connections)
+            if not input_layers:
+                raise ValueError("无法找到输入层")
+            
+            # 从输入层开始前向传播
+            for input_layer in input_layers:
+                outputs[input_layer] = self.layers[input_layer](x)
+            
+            # 按照连接关系进行前向传播
+            processed = set(input_layers)
+            while len(processed) < len(self.layers):
+                for conn in self.connections:
+                    from_layer = conn['from']
+                    to_layer = conn['to']
+                    
+                    # 如果源层已处理但目标层未处理
+                    if from_layer in processed and to_layer not in processed:
+                        # 获取输入
+                        layer_input = outputs[from_layer]
+                        
+                        # 处理层
+                        outputs[to_layer] = self.layers[to_layer](layer_input)
+                        processed.add(to_layer)
+            
+            # 找到输出层
+            output_layers = get_output_layers(self.connections)
+            if not output_layers:
+                raise ValueError("无法找到输出层")
+            
+            # 如果只有一个输出层，直接返回其输出
+            if len(output_layers) == 1:
+                return outputs[output_layers[0]]
+            
+            # 如果有多个输出层，返回所有输出的列表
+            return [outputs[layer] for layer in output_layers]
+    
+    return CustomModel()
+
+def create_layer(layer_info: Dict[str, Any]) -> nn.Module:
+    """根据层信息创建对应的PyTorch层"""
+    layer_type = layer_info['type']
+    
+    if layer_type == 'Conv2d':
+        return nn.Conv2d(
+            in_channels=layer_info.get('in_channels', 3),
+            out_channels=layer_info.get('out_channels', 64),
+            kernel_size=layer_info.get('kernel_size', (3, 3)),
+            stride=layer_info.get('stride', 1),
+            padding=layer_info.get('padding', 1)
+        )
+    elif layer_type == 'ConvTranspose2d':
+        return nn.ConvTranspose2d(
+            in_channels=layer_info.get('in_channels', 64),
+            out_channels=layer_info.get('out_channels', 3),
+            kernel_size=layer_info.get('kernel_size', (3, 3)),
+            stride=layer_info.get('stride', 1),
+            padding=layer_info.get('padding', 1)
+        )
+    elif layer_type == 'Linear':
+        return nn.Linear(
+            in_features=layer_info.get('in_features', 512),
+            out_features=layer_info.get('out_features', 10)
+        )
+    elif layer_type == 'MaxPool2d':
+        return nn.MaxPool2d(
+            kernel_size=layer_info.get('kernel_size', (2, 2))
+        )
+    elif layer_type == 'AvgPool2d':
+        return nn.AvgPool2d(
+            kernel_size=layer_info.get('kernel_size', (2, 2))
+        )
+    elif layer_type == 'ReLU':
+        return nn.ReLU(inplace=True)
+    elif layer_type == 'LeakyReLU':
+        return nn.LeakyReLU(
+            negative_slope=layer_info.get('negative_slope', 0.01),
+            inplace=True
+        )
+    elif layer_type == 'Sigmoid':
+        return nn.Sigmoid()
+    elif layer_type == 'Tanh':
+        return nn.Tanh()
+    elif layer_type == 'BatchNorm2d':
+        return nn.BatchNorm2d(
+            num_features=layer_info.get('num_features', 64)
+        )
+    elif layer_type == 'Dropout':
+        return nn.Dropout(
+            p=layer_info.get('p', 0.5)
+        )
+    elif layer_type == 'Flatten':
+        return nn.Flatten()
+    else:
+        raise ValueError(f"不支持的层类型: {layer_type}")
+
+def get_input_layers(connections: List[Dict[str, str]]) -> List[str]:
+    """找到所有输入层（没有输入连接的层）"""
+    all_layers = set()
+    target_layers = set()
+    
+    for conn in connections:
+        all_layers.add(conn['from'])
+        all_layers.add(conn['to'])
+        target_layers.add(conn['to'])
+    
+    # 输入层是那些在所有层中但不是任何连接的目标的层
+    return list(all_layers - target_layers)
+
+def get_output_layers(connections: List[Dict[str, str]]) -> List[str]:
+    """找到所有输出层（没有输出连接的层）"""
+    all_layers = set()
+    source_layers = set()
+    
+    for conn in connections:
+        all_layers.add(conn['from'])
+        all_layers.add(conn['to'])
+        source_layers.add(conn['from'])
+    
+    # 输出层是那些在所有层中但不是任何连接的源的层
+    return list(all_layers - source_layers) 
