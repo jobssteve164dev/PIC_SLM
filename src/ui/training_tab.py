@@ -11,6 +11,7 @@ from .base_tab import BaseTab
 from .training_help_dialog import TrainingHelpDialog
 import json
 import subprocess
+from .layer_config_widget import LayerConfigWidget
 
 class ModelDownloadDialog(QDialog):
     """模型下载失败时显示的对话框，提供下载链接和文件夹打开按钮"""
@@ -622,6 +623,12 @@ class TrainingTab(BaseTab):
         
         advanced_group.setLayout(advanced_layout)
         main_layout.addWidget(advanced_group)
+        
+        # 添加层配置组件
+        self.classification_layer_config = LayerConfigWidget(self)
+        self.classification_layer_config.set_task_type("classification")
+        self.classification_layer_config.config_changed.connect(self.on_layer_config_changed)
+        main_layout.addWidget(self.classification_layer_config)
 
     def init_detection_ui(self):
         """初始化目标检测训练界面"""
@@ -957,6 +964,12 @@ class TrainingTab(BaseTab):
         
         advanced_group.setLayout(advanced_layout)
         main_layout.addWidget(advanced_group)
+        
+        # 添加层配置组件
+        self.detection_layer_config = LayerConfigWidget(self)
+        self.detection_layer_config.set_task_type("detection")
+        self.detection_layer_config.config_changed.connect(self.on_layer_config_changed)
+        main_layout.addWidget(self.detection_layer_config)
 
     def on_task_changed(self, button):
         """训练任务改变时调用"""
@@ -1353,6 +1366,12 @@ class TrainingTab(BaseTab):
                 "activation_function": self.classification_activation_combo.currentText(),  # 添加激活函数参数
                 "dropout_rate": self.classification_dropout_spin.value(),  # 添加dropout参数
             })
+            
+            # 添加层配置
+            if hasattr(self, 'classification_layer_config'):
+                layer_config = self.classification_layer_config.get_config()
+                if layer_config:
+                    params['layer_config'] = layer_config
         else:
             # 获取所有选中的评估指标
             selected_metrics = [item.text() for item in self.detection_metrics_list.selectedItems()]
@@ -1398,6 +1417,12 @@ class TrainingTab(BaseTab):
                 "activation_function": self.detection_activation_combo.currentText(),  # 添加激活函数参数
                 "dropout_rate": self.detection_dropout_spin.value(),  # 添加dropout参数
             })
+            
+            # 添加层配置
+            if hasattr(self, 'detection_layer_config'):
+                layer_config = self.detection_layer_config.get_config()
+                if layer_config:
+                    params['layer_config'] = layer_config
             
         return params
 
@@ -1640,3 +1665,11 @@ class TrainingTab(BaseTab):
         except Exception as e:
             print(f"浏览选择检测文件夹时出错: {str(e)}")
             QMessageBox.warning(self, "错误", f"选择文件夹时出错: {str(e)}")
+
+    def on_layer_config_changed(self, config):
+        """处理层配置变更"""
+        if config is None:
+            return
+            
+        # 将层配置保存到训练参数中
+        self.layer_config = config

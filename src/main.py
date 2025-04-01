@@ -2,6 +2,9 @@ import sys
 import os
 import json
 
+# 将src目录添加到Python路径中
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 print("程序开始执行...")
 print(f"Python版本: {sys.version}")
 print(f"当前工作目录: {os.getcwd()}")
@@ -9,18 +12,18 @@ print(f"当前工作目录: {os.getcwd()}")
 from PyQt5.QtWidgets import QApplication, QMessageBox, QTabWidget, QVBoxLayout, QWidget, QMainWindow
 print("PyQt5模块已导入")
 from PyQt5.QtCore import QThread, QObject
-from ui.main_window import MainWindow
+from src.ui.main_window import MainWindow
 print("MainWindow已导入")
-from ui.evaluation_tab import EvaluationTab  # 从ui模块导入EvaluationTab
+from src.ui.evaluation_tab import EvaluationTab  # 从ui模块导入EvaluationTab
 print("EvaluationTab已导入")
-from data_processor import DataProcessor
+from src.data_processor import DataProcessor
 print("DataProcessor已导入")
-from model_trainer import ModelTrainer
+from src.model_trainer import ModelTrainer
 print("ModelTrainer已导入")
-from predictor import Predictor
-from image_preprocessor import ImagePreprocessor
-from annotation_tool import AnnotationTool
-from config_loader import ConfigLoader
+from src.predictor import Predictor
+from src.image_preprocessor import ImagePreprocessor
+from src.annotation_tool import AnnotationTool
+from src.config_loader import ConfigLoader
 
 # 配置matplotlib使用Agg后端（非交互式）以避免线程安全问题
 import matplotlib

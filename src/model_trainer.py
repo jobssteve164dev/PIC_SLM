@@ -14,6 +14,7 @@ import sys
 from torch.utils.tensorboard import SummaryWriter
 from detection_trainer import DetectionTrainer
 import time
+from utils.model_utils import create_model, configure_model_layers  # 修改为绝对导入
 
 # 设置matplotlib后端为Agg，解决线程安全问题
 import matplotlib
@@ -959,11 +960,22 @@ class ModelTrainer(QObject):
         self.training_thread = None
         self.detection_trainer = None
 
+    def configure_model(self, model, layer_config):
+        """根据层配置调整模型结构"""
+        if not layer_config or not layer_config.get('enabled', False):
+            return model
+            
+        return configure_model_layers(model, layer_config)
+        
     def train_model_with_config(self, config):
-        """使用配置字典进行训练"""
+        """使用配置训练模型"""
         try:
-            # 保存原始配置
-            self.config = config.copy()
+            # 创建基础模型
+            self.model = create_model(config)
+            
+            # 如果有层配置，应用层配置
+            if 'layer_config' in config:
+                self.model = self.configure_model(self.model, config['layer_config'])
             
             # 提取核心训练参数
             task_type = config.get('task_type', 'classification')
