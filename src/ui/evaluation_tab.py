@@ -16,12 +16,12 @@ from .sensitivity_analysis import SensitivityAnalysisWidget
 from .lime_explanation import LIMEExplanationWidget
 from .model_structure_viewer import ModelStructureViewer
 from .params_compare_widget import ParamsCompareWidget
+from .components.training_charts.training_visualization_widget import TrainingVisualizationWidget
 import torch
 import torchvision
 from PIL import Image
 import time
-from .components.training_visualization_widget import TrainingVisualizationWidget
-from .components.tensorboard_widget import TensorBoardWidget
+from .components.training_charts.tensorboard_widget import TensorBoardWidget
 
 class EvaluationTab(BaseTab):
     """评估标签页，负责模型评估和比较功能，以及TensorBoard可视化"""

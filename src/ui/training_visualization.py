@@ -3,8 +3,8 @@ import webbrowser
 import logging
 
 # 导入拆分后的组件
-from .components.training_visualization_widget import TrainingVisualizationWidget
-from .components.tensorboard_widget import TensorBoardWidget
+from .components.training_charts.training_visualization_widget import TrainingVisualizationWidget
+from .components.training_charts.tensorboard_widget import TensorBoardWidget
 
 # 创建logger
 logger = logging.getLogger(__name__)
