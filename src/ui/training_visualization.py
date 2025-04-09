@@ -44,15 +44,15 @@ class TrainingVisualization(QWidget):
         # 如果有TensorBoard相关信号也可以在这里连接
         if hasattr(trainer, 'tensorboard_updated'):
             trainer.tensorboard_updated.connect(self.tensorboard_widget.update_tensorboard)
-        
+            
     def update_metrics(self, metrics):
         """更新训练指标"""
         self.visualization_widget.update_metrics(metrics)
-        
+            
     def set_update_frequency(self, frequency):
         """设置更新频率"""
         self.visualization_widget.set_update_frequency(frequency)
-        
+            
     def on_training_finished(self):
         """训练完成处理"""
         self.visualization_widget.on_training_finished()
@@ -64,11 +64,11 @@ class TrainingVisualization(QWidget):
     def on_training_error(self, error_msg):
         """训练错误处理"""
         self.visualization_widget.on_training_error(error_msg)
-        
+            
     def on_training_stopped(self):
         """训练停止处理"""
         self.visualization_widget.on_training_stopped()
-        
+            
     def save_training_data(self):
         """保存训练数据"""
         return self.visualization_widget.save_training_data()
