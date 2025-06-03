@@ -1,0 +1,13 @@
+{
+    "defect_classes": [
+        "Missing_hole",
+        "Mouse_bite",
+        "Open_circuit",
+        "Short",
+        "Spur",
+        "Spurious_copper"
+    ],
+    "total_count": 6,
+    "created_by": "图片模型训练系统",
+    "version": "1.0"
+}

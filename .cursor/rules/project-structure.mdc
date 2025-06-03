@@ -1,0 +1,63 @@
+---
+description: 
+globs: 
+alwaysApply: false
+---
+# 图像缺陷检测系统项目结构规范
+
+## 目录结构
+- [src/](mdc:src) 包含项目的所有源代码
+  - [src/main.py](mdc:src/main.py) 程序的主入口
+  - [src/ui/](mdc:src/ui) 包含所有UI相关组件
+  - [src/utils/](mdc:src/utils) 包含项目工具函数
+  - [src/config_loader.py](mdc:src/config_loader.py) 配置加载模块
+  - [src/data_processor.py](mdc:src/data_processor.py) 数据处理模块
+  - [src/model_trainer.py](mdc:src/model_trainer.py) 分类模型训练模块
+  - [src/detection_trainer.py](mdc:src/detection_trainer.py) 检测模型训练模块
+  - [src/image_preprocessor.py](mdc:src/image_preprocessor.py) 图像预处理模块
+  - [src/annotation_tool.py](mdc:src/annotation_tool.py) 标注工具模块
+  - [src/predictor.py](mdc:src/predictor.py) 预测模块
+- [models/](mdc:models) 用于存储所有训练好的模型
+- [train_config/](mdc:train_config) 存储训练配置文件
+- [config.json](mdc:config.json) 项目全局配置文件
+- [requirements.txt](mdc:requirements.txt) 项目依赖包列表
+
+## 开发规范
+
+### 代码风格
+1. 使用PEP 8风格指南
+2. 类名使用驼峰命名法（CamelCase）
+3. 函数和变量使用下划线命名法（snake_case）
+4. 常量使用全大写加下划线命名法（UPPER_SNAKE_CASE）
+5. 所有函数必须包含文档字符串，描述功能、参数和返回值
+
+### 错误处理
+1. 使用try/except结构捕获预期的异常
+2. 自定义异常类用于特定错误场景
+3. 确保错误消息清晰，便于调试
+4. 避免使用空的except语句
+
+### 配置管理
+1. 所有配置通过[config.json](mdc:config.json)文件管理
+2. 模型训练配置存储在[train_config/](mdc:train_config)目录中
+3. 不要在代码中硬编码路径或参数值
+4. 使用[config_loader.py](mdc:src/config_loader.py)模块加载配置
+
+### 模型开发
+1. 模型定义和训练代码应易于扩展
+2. 支持多种不同的模型架构（ResNet、MobileNet等）
+3. 模型保存格式应保持一致
+4. 训练好的模型应保存在[models/saved_models/](mdc:models/saved_models)目录
+
+### UI开发
+1. UI组件应与业务逻辑分离
+2. 使用信号和槽机制处理UI事件
+3. 所有耗时操作应在独立线程中执行
+4. 提供用户友好的错误提示和进度反馈
+
+### 数据处理
+1. 数据预处理操作应模块化
+2. 支持数据增强方法
+3. 确保数据集拆分的一致性
+4. 使用标准化格式存储中间结果
+

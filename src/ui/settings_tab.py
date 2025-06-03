@@ -103,6 +103,16 @@ class SettingsTab(BaseTab):
         remove_class_btn.clicked.connect(self.settings_remove_defect_class)
         btn_layout.addWidget(remove_class_btn)
         
+        # 添加保存到文件按钮
+        save_to_file_btn = QPushButton("保存到文件")
+        save_to_file_btn.clicked.connect(self.save_classes_to_file)
+        btn_layout.addWidget(save_to_file_btn)
+        
+        # 添加从文件加载按钮
+        load_from_file_btn = QPushButton("从文件加载")
+        load_from_file_btn.clicked.connect(self.load_classes_from_file)
+        btn_layout.addWidget(load_from_file_btn)
+        
         classes_layout.addLayout(btn_layout)
         classes_group.setLayout(classes_layout)
         general_layout.addWidget(classes_group)
@@ -468,4 +478,165 @@ class SettingsTab(BaseTab):
         except Exception as e:
             print(f"尝试修复设置标签页布局时出错: {str(e)}")
             import traceback
-            traceback.print_exc() 
+            traceback.print_exc()
+    
+    def save_classes_to_file(self):
+        """保存缺陷类别到文件"""
+        if not self.default_classes:
+            QMessageBox.warning(self, "警告", "没有缺陷类别可以保存!")
+            return
+            
+        # 选择保存文件
+        file_path, _ = QFileDialog.getSaveFileName(
+            self, 
+            "保存缺陷类别", 
+            "defect_classes.json", 
+            "JSON文件 (*.json);;文本文件 (*.txt);;所有文件 (*.*)"
+        )
+        
+        if not file_path:
+            return
+            
+        try:
+            # 根据文件扩展名决定保存格式
+            if file_path.endswith('.json'):
+                # 保存为JSON格式
+                data = {
+                    "defect_classes": self.default_classes,
+                    "total_count": len(self.default_classes),
+                    "created_by": "图片模型训练系统",
+                    "version": "1.0"
+                }
+                with open(file_path, 'w', encoding='utf-8') as f:
+                    json.dump(data, f, ensure_ascii=False, indent=4)
+            else:
+                # 保存为纯文本格式
+                with open(file_path, 'w', encoding='utf-8') as f:
+                    f.write("缺陷类别列表\n")
+                    f.write("=" * 20 + "\n")
+                    for i, class_name in enumerate(self.default_classes, 1):
+                        f.write(f"{i}. {class_name}\n")
+                    f.write(f"\n总计: {len(self.default_classes)} 个类别\n")
+                    
+            QMessageBox.information(
+                self, 
+                "成功", 
+                f"缺陷类别已成功保存到文件:\n{file_path}\n\n共保存了 {len(self.default_classes)} 个类别"
+            )
+            
+        except Exception as e:
+            QMessageBox.critical(
+                self, 
+                "错误", 
+                f"保存文件失败:\n{str(e)}"
+            ) 
+    
+    def load_classes_from_file(self):
+        """从文件加载缺陷类别"""
+        # 选择要加载的文件
+        file_path, _ = QFileDialog.getOpenFileName(
+            self, 
+            "加载缺陷类别", 
+            "", 
+            "JSON文件 (*.json);;文本文件 (*.txt);;所有文件 (*.*)"
+        )
+        
+        if not file_path:
+            return
+            
+        try:
+            classes_to_load = []
+            
+            # 根据文件扩展名决定加载格式
+            if file_path.endswith('.json'):
+                # 从JSON格式加载
+                with open(file_path, 'r', encoding='utf-8') as f:
+                    data = json.load(f)
+                    
+                # 支持多种JSON格式
+                if isinstance(data, dict):
+                    if 'defect_classes' in data:
+                        # 我们自己保存的格式
+                        classes_to_load = data['defect_classes']
+                    elif 'classes' in data:
+                        # 其他可能的格式
+                        classes_to_load = data['classes']
+                    else:
+                        # 如果字典包含其他键值对，尝试找到包含类别列表的键
+                        for key, value in data.items():
+                            if isinstance(value, list) and all(isinstance(item, str) for item in value):
+                                classes_to_load = value
+                                break
+                elif isinstance(data, list):
+                    # 直接是列表格式
+                    classes_to_load = data
+            else:
+                # 从文本文件加载，每行一个类别
+                with open(file_path, 'r', encoding='utf-8') as f:
+                    lines = f.readlines()
+                    
+                for line in lines:
+                    line = line.strip()
+                    # 跳过空行、标题行和分隔符行
+                    if line and not line.startswith('=') and not line.startswith('缺陷类别') and not line.startswith('总计'):
+                        # 处理编号格式 "1. 类别名"
+                        if '. ' in line and line[0].isdigit():
+                            class_name = line.split('. ', 1)[1]
+                        else:
+                            class_name = line
+                        
+                        if class_name and class_name not in classes_to_load:
+                            classes_to_load.append(class_name)
+            
+            if not classes_to_load:
+                QMessageBox.warning(self, "警告", "文件中没有找到有效的缺陷类别!")
+                return
+                
+            # 询问用户是要替换还是追加
+            reply = QMessageBox.question(
+                self, 
+                "加载方式", 
+                f"从文件中找到 {len(classes_to_load)} 个类别:\n" + 
+                "\n".join(f"• {cls}" for cls in classes_to_load[:5]) + 
+                ("\n..." if len(classes_to_load) > 5 else "") +
+                f"\n\n您想要:\n• 替换当前类别 (是)\n• 追加到当前类别 (否)", 
+                QMessageBox.Yes | QMessageBox.No | QMessageBox.Cancel
+            )
+            
+            if reply == QMessageBox.Cancel:
+                return
+            elif reply == QMessageBox.Yes:
+                # 替换当前类别
+                self.default_classes.clear()
+                self.default_class_list.clear()
+                
+            # 添加新类别（去重）
+            added_count = 0
+            for class_name in classes_to_load:
+                if class_name not in self.default_classes:
+                    self.default_classes.append(class_name)
+                    self.default_class_list.addItem(class_name)
+                    added_count += 1
+                    
+            action = "替换" if reply == QMessageBox.Yes else "追加"
+            QMessageBox.information(
+                self, 
+                "成功", 
+                f"已成功{action}缺陷类别!\n\n"
+                f"从文件加载: {len(classes_to_load)} 个类别\n"
+                f"实际添加: {added_count} 个类别\n"
+                f"当前总计: {len(self.default_classes)} 个类别"
+            )
+            
+        except json.JSONDecodeError as e:
+            QMessageBox.critical(
+                self, 
+                "错误", 
+                f"JSON文件格式错误:\n{str(e)}"
+            )
+        except Exception as e:
+            QMessageBox.critical(
+                self, 
+                "错误", 
+                f"加载文件失败:\n{str(e)}"
+            ) 

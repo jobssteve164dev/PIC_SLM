@@ -1,0 +1,14 @@
+缺陷类别列表
+====================
+1. Missing_hole
+2. Mouse_bite
+3. Open_circuit
+4. Short
+5. Spur
+6. Spurious_copper
+7. Scratch
+8. Crack
+9. Contamination
+10. Dent
+
+总计: 10 个类别 
