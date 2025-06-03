@@ -1,11 +1,13 @@
 from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QPushButton, QLabel, QFileDialog,
                            QHBoxLayout, QComboBox, QSpinBox, QGroupBox, QGridLayout,
                            QSizePolicy, QLineEdit, QCheckBox, QListWidget, QInputDialog,
-                           QMessageBox, QTabWidget, QScrollArea)
+                           QMessageBox, QTabWidget, QScrollArea, QTableWidget, QTableWidgetItem,
+                           QDoubleSpinBox, QSpacerItem, QFrame)
 from PyQt5.QtCore import Qt, pyqtSignal, QTimer
 from PyQt5.QtGui import QFont
 import os
 import json
+import time
 from .base_tab import BaseTab
 
 class SettingsTab(BaseTab):
@@ -18,6 +20,7 @@ class SettingsTab(BaseTab):
         super().__init__(parent, main_window)
         self.config = {}
         self.default_classes = []
+        self.class_weights = {}  # 添加类别权重字典
         self.init_ui()
         
         # BaseTab已经连接了标签页切换信号，这里不需要重复连接
@@ -83,14 +86,49 @@ class SettingsTab(BaseTab):
         general_layout.addWidget(folders_group)
         
         # 创建默认类别组
-        classes_group = QGroupBox("默认缺陷类别")
+        classes_group = QGroupBox("默认缺陷类别与权重配置")
         classes_layout = QVBoxLayout()
         classes_layout.setContentsMargins(10, 20, 10, 10)
         
-        # 添加类别列表
-        self.default_class_list = QListWidget()
-        self.default_class_list.setMinimumHeight(150)
-        classes_layout.addWidget(self.default_class_list)
+        # 添加权重策略选择
+        strategy_layout = QHBoxLayout()
+        strategy_layout.addWidget(QLabel("权重策略:"))
+        
+        self.weight_strategy_combo = QComboBox()
+        self.weight_strategy_combo.addItems([
+            "balanced (平衡权重)",
+            "inverse (逆频率权重)", 
+            "log_inverse (对数逆频率权重)",
+            "custom (自定义权重)",
+            "none (无权重)"
+        ])
+        self.weight_strategy_combo.setCurrentText("balanced (平衡权重)")
+        self.weight_strategy_combo.currentTextChanged.connect(self.on_weight_strategy_changed)
+        strategy_layout.addWidget(self.weight_strategy_combo)
+        strategy_layout.addStretch()
+        
+        classes_layout.addLayout(strategy_layout)
+        
+        # 添加说明标签
+        info_label = QLabel("说明: balanced自动平衡权重, inverse逆频率权重, log_inverse对数逆频率权重, custom使用自定义权重, none不使用权重")
+        info_label.setWordWrap(True)
+        info_label.setStyleSheet("color: #666; font-size: 11px;")
+        classes_layout.addWidget(info_label)
+        
+        # 分隔线
+        line = QFrame()
+        line.setFrameShape(QFrame.HLine)
+        line.setFrameShadow(QFrame.Sunken)
+        classes_layout.addWidget(line)
+        
+        # 添加类别权重表格
+        self.class_weight_table = QTableWidget()
+        self.class_weight_table.setColumnCount(2)
+        self.class_weight_table.setHorizontalHeaderLabels(["类别名称", "权重值"])
+        self.class_weight_table.horizontalHeader().setStretchLastSection(True)
+        self.class_weight_table.setMinimumHeight(200)
+        self.class_weight_table.setAlternatingRowColors(True)
+        classes_layout.addWidget(self.class_weight_table)
         
         # 添加按钮组
         btn_layout = QHBoxLayout()
@@ -102,6 +140,13 @@ class SettingsTab(BaseTab):
         remove_class_btn = QPushButton("删除类别")
         remove_class_btn.clicked.connect(self.settings_remove_defect_class)
         btn_layout.addWidget(remove_class_btn)
+        
+        # 添加重置权重按钮
+        reset_weights_btn = QPushButton("重置权重")
+        reset_weights_btn.clicked.connect(self.reset_class_weights)
+        btn_layout.addWidget(reset_weights_btn)
+        
+        btn_layout.addSpacerItem(QSpacerItem(20, 0, QSizePolicy.Expanding, QSizePolicy.Minimum))
         
         # 添加保存到文件按钮
         save_to_file_btn = QPushButton("保存到文件")
@@ -291,15 +336,92 @@ class SettingsTab(BaseTab):
                 return
                 
             self.default_classes.append(class_name)
-            self.default_class_list.addItem(class_name)
+            # 为新类别设置默认权重
+            self.class_weights[class_name] = 1.0
+            
+            # 添加到表格
+            row_count = self.class_weight_table.rowCount()
+            self.class_weight_table.insertRow(row_count)
+            self.class_weight_table.setItem(row_count, 0, QTableWidgetItem(class_name))
+            
+            # 创建权重输入框
+            weight_spinbox = QDoubleSpinBox()
+            weight_spinbox.setMinimum(0.01)
+            weight_spinbox.setMaximum(100.0)
+            weight_spinbox.setSingleStep(0.1)
+            weight_spinbox.setDecimals(2)
+            weight_spinbox.setValue(1.0)
+            weight_spinbox.valueChanged.connect(lambda value, name=class_name: self.on_weight_changed(name, value))
+            
+            self.class_weight_table.setCellWidget(row_count, 1, weight_spinbox)
+            self.update_weight_widgets_state()
     
     def settings_remove_defect_class(self):
         """删除默认缺陷类别"""
-        current_item = self.default_class_list.currentItem()
-        if current_item:
-            class_name = current_item.text()
-            self.default_classes.remove(class_name)
-            self.default_class_list.takeItem(self.default_class_list.row(current_item))
+        current_row = self.class_weight_table.currentRow()
+        if current_row >= 0:
+            class_name_item = self.class_weight_table.item(current_row, 0)
+            if class_name_item:
+                class_name = class_name_item.text()
+                
+                # 从列表和权重字典中移除
+                if class_name in self.default_classes:
+                    self.default_classes.remove(class_name)
+                if class_name in self.class_weights:
+                    del self.class_weights[class_name]
+                
+                # 从表格中移除
+                self.class_weight_table.removeRow(current_row)
+    
+    def on_weight_changed(self, class_name, value):
+        """处理权重值变化"""
+        self.class_weights[class_name] = value
+    
+    def on_weight_strategy_changed(self):
+        """处理权重策略选择变化"""
+        strategy = self.weight_strategy_combo.currentText()
+        self.update_weight_widgets_state()
+        
+        # 如果选择了自定义权重策略，显示提示
+        if "custom" in strategy.lower():
+            QMessageBox.information(
+                self, 
+                "自定义权重", 
+                "您选择了自定义权重策略。\n请在下表中设置每个类别的权重值。\n较高的权重值会让模型更关注该类别的样本。"
+            )
+    
+    def update_weight_widgets_state(self):
+        """根据权重策略更新权重输入框的状态"""
+        strategy = self.weight_strategy_combo.currentText()
+        is_custom = "custom" in strategy.lower()
+        
+        # 启用或禁用权重输入框
+        for row in range(self.class_weight_table.rowCount()):
+            weight_widget = self.class_weight_table.cellWidget(row, 1)
+            if weight_widget:
+                weight_widget.setEnabled(is_custom)
+    
+    def reset_class_weights(self):
+        """重置类别权重"""
+        reply = QMessageBox.question(
+            self, 
+            "重置权重", 
+            "确定要重置所有类别权重为1.0吗？",
+            QMessageBox.Yes | QMessageBox.No
+        )
+        
+        if reply == QMessageBox.Yes:
+            # 重置所有权重为1.0
+            for class_name in self.default_classes:
+                self.class_weights[class_name] = 1.0
+            
+            # 更新表格中的权重显示
+            for row in range(self.class_weight_table.rowCount()):
+                weight_widget = self.class_weight_table.cellWidget(row, 1)
+                if weight_widget:
+                    weight_widget.setValue(1.0)
+                    
+            QMessageBox.information(self, "完成", "已重置所有类别权重为1.0")
     
     def select_default_model_file(self):
         """选择默认模型文件"""
@@ -392,15 +514,55 @@ class SettingsTab(BaseTab):
         self.default_dataset_dir_edit.setText(self.config.get('default_dataset_dir', ''))
         self.default_param_save_dir_edit.setText(self.config.get('default_param_save_dir', ''))
         
-        # 设置默认类别
+        # 设置默认类别和权重
         self.default_classes = self.config.get('default_classes', [])
-        self.default_class_list.clear()
+        self.class_weights = self.config.get('class_weights', {})
+        
+        # 设置权重策略
+        weight_strategy = self.config.get('weight_strategy', 'balanced')
+        strategy_mapping = {
+            'balanced': 'balanced (平衡权重)',
+            'inverse': 'inverse (逆频率权重)',
+            'log_inverse': 'log_inverse (对数逆频率权重)',
+            'custom': 'custom (自定义权重)',
+            'none': 'none (无权重)'
+        }
+        strategy_text = strategy_mapping.get(weight_strategy, 'balanced (平衡权重)')
+        self.weight_strategy_combo.setCurrentText(strategy_text)
+        
+        # 清空并重新填充类别权重表格
+        self.class_weight_table.setRowCount(0)
+        
         for class_name in self.default_classes:
-            self.default_class_list.addItem(class_name)
+            row_count = self.class_weight_table.rowCount()
+            self.class_weight_table.insertRow(row_count)
+            self.class_weight_table.setItem(row_count, 0, QTableWidgetItem(class_name))
+            
+            # 创建权重输入框
+            weight_value = self.class_weights.get(class_name, 1.0)
+            weight_spinbox = QDoubleSpinBox()
+            weight_spinbox.setMinimum(0.01)
+            weight_spinbox.setMaximum(100.0)
+            weight_spinbox.setSingleStep(0.1)
+            weight_spinbox.setDecimals(2)
+            weight_spinbox.setValue(weight_value)
+            weight_spinbox.valueChanged.connect(lambda value, name=class_name: self.on_weight_changed(name, value))
+            
+            self.class_weight_table.setCellWidget(row_count, 1, weight_spinbox)
+        
+        # 更新权重输入框状态
+        self.update_weight_widgets_state()
     
     def save_settings(self):
         """保存设置"""
         try:
+            # 从表格收集最新的类别权重数据
+            self.collect_weights_from_table()
+            
+            # 获取权重策略
+            strategy_text = self.weight_strategy_combo.currentText()
+            weight_strategy = strategy_text.split(' ')[0]  # 提取策略名称部分
+            
             # 创建配置字典
             config = {
                 'default_source_folder': self.default_source_edit.text(),
@@ -412,7 +574,10 @@ class SettingsTab(BaseTab):
                 'default_tensorboard_log_dir': self.default_tensorboard_log_dir_edit.text(),
                 'default_dataset_dir': self.default_dataset_dir_edit.text(),
                 'default_param_save_dir': self.default_param_save_dir_edit.text(),
-                'default_classes': self.default_classes
+                'default_classes': self.default_classes,
+                'class_weights': self.class_weights,
+                'weight_strategy': weight_strategy,
+                'use_class_weights': weight_strategy != 'none'
             }
             
             # 保存配置到文件
@@ -433,6 +598,23 @@ class SettingsTab(BaseTab):
             print(f"SettingsTab: 保存设置失败: {str(e)}")
             import traceback
             traceback.print_exc()
+    
+    def collect_weights_from_table(self):
+        """从表格收集权重数据"""
+        self.class_weights.clear()
+        self.default_classes.clear()
+        
+        for row in range(self.class_weight_table.rowCount()):
+            class_name_item = self.class_weight_table.item(row, 0)
+            if class_name_item:
+                class_name = class_name_item.text()
+                self.default_classes.append(class_name)
+                
+                # 获取权重值
+                weight_widget = self.class_weight_table.cellWidget(row, 1)
+                if weight_widget:
+                    weight_value = weight_widget.value()
+                    self.class_weights[class_name] = weight_value
     
     def on_tab_changed(self, index):
         """处理标签页切换事件，设置标签页需要特殊处理"""
@@ -498,303 +680,269 @@ class SettingsTab(BaseTab):
             traceback.print_exc()
     
     def save_classes_to_file(self):
-        """保存缺陷类别到文件"""
-        if not self.default_classes:
-            QMessageBox.warning(self, "警告", "没有缺陷类别可以保存!")
-            return
-            
-        # 选择保存文件
-        file_path, _ = QFileDialog.getSaveFileName(
-            self, 
-            "保存缺陷类别", 
-            "defect_classes.json", 
-            "JSON文件 (*.json);;文本文件 (*.txt);;所有文件 (*.*)"
-        )
-        
-        if not file_path:
-            return
-            
+        """保存类别配置到文件"""
         try:
-            # 根据文件扩展名决定保存格式
-            if file_path.endswith('.json'):
-                # 保存为JSON格式
-                data = {
-                    "defect_classes": self.default_classes,
-                    "total_count": len(self.default_classes),
-                    "created_by": "图片模型训练系统",
-                    "version": "1.0"
-                }
-                with open(file_path, 'w', encoding='utf-8') as f:
-                    json.dump(data, f, ensure_ascii=False, indent=4)
-            else:
-                # 保存为纯文本格式
-                with open(file_path, 'w', encoding='utf-8') as f:
-                    f.write("缺陷类别列表\n")
-                    f.write("=" * 20 + "\n")
-                    for i, class_name in enumerate(self.default_classes, 1):
-                        f.write(f"{i}. {class_name}\n")
-                    f.write(f"\n总计: {len(self.default_classes)} 个类别\n")
-                    
-            QMessageBox.information(
+            # 从表格收集最新数据
+            self.collect_weights_from_table()
+            
+            # 获取权重策略
+            strategy_text = self.weight_strategy_combo.currentText()
+            weight_strategy = strategy_text.split(' ')[0]
+            
+            file_path, _ = QFileDialog.getSaveFileName(
                 self, 
-                "成功", 
-                f"缺陷类别已成功保存到文件:\n{file_path}\n\n共保存了 {len(self.default_classes)} 个类别"
+                "保存类别配置文件", 
+                "defect_classes_config.json", 
+                "JSON文件 (*.json)"
             )
             
+            if file_path:
+                # 创建包含权重信息的配置数据
+                classes_config = {
+                    "classes": self.default_classes,
+                    "class_weights": self.class_weights,
+                    "weight_strategy": weight_strategy,
+                    "use_class_weights": weight_strategy != 'none',
+                    "description": "缺陷类别配置文件，包含类别名称、权重信息和权重策略",
+                    "version": "2.0"
+                }
+                
+                with open(file_path, 'w', encoding='utf-8') as f:
+                    json.dump(classes_config, f, ensure_ascii=False, indent=4)
+                
+                QMessageBox.information(
+                    self, 
+                    "保存成功", 
+                    f"类别配置已保存到:\n{file_path}\n\n"
+                    f"包含 {len(self.default_classes)} 个类别\n"
+                    f"权重策略: {weight_strategy}"
+                )
+                
         except Exception as e:
-            QMessageBox.critical(
-                self, 
-                "错误", 
-                f"保存文件失败:\n{str(e)}"
-            ) 
-    
+            QMessageBox.critical(self, "保存失败", f"保存类别配置文件时出错:\n{str(e)}")
+
     def load_classes_from_file(self):
-        """从文件加载缺陷类别"""
-        # 选择要加载的文件
-        file_path, _ = QFileDialog.getOpenFileName(
-            self, 
-            "加载缺陷类别", 
-            "", 
-            "JSON文件 (*.json);;文本文件 (*.txt);;所有文件 (*.*)"
-        )
-        
-        if not file_path:
-            return
-            
+        """从文件加载类别配置"""
         try:
-            classes_to_load = []
+            file_path, _ = QFileDialog.getOpenFileName(
+                self, 
+                "加载类别配置文件", 
+                "", 
+                "文本文件 (*.txt);;JSON文件 (*.json);;所有文件 (*)"
+            )
             
-            # 根据文件扩展名决定加载格式
-            if file_path.endswith('.json'):
-                # 从JSON格式加载
+            if not file_path:
+                return
+            
+            # 询问是否替换现有类别
+            if self.default_classes:
+                reply = QMessageBox.question(
+                    self, 
+                    "加载确认", 
+                    "是否替换现有的类别配置？\n选择'是'将替换所有现有类别，选择'否'将添加到现有类别。",
+                    QMessageBox.Yes | QMessageBox.No | QMessageBox.Cancel
+                )
+                
+                if reply == QMessageBox.Cancel:
+                    return
+                    
+                replace_existing = reply == QMessageBox.Yes
+            else:
+                replace_existing = True
+            
+            loaded_classes = []
+            loaded_weights = {}
+            loaded_strategy = 'balanced'
+            
+            # 根据文件扩展名处理不同格式
+            if file_path.lower().endswith('.json'):
+                # JSON文件格式
                 with open(file_path, 'r', encoding='utf-8') as f:
                     data = json.load(f)
+                
+                # 检查新版本格式（包含权重信息）
+                if isinstance(data, dict) and 'classes' in data:
+                    loaded_classes = data.get('classes', [])
+                    loaded_weights = data.get('class_weights', {})
+                    loaded_strategy = data.get('weight_strategy', 'balanced')
                     
-                # 支持多种JSON格式
-                if isinstance(data, dict):
-                    if 'defect_classes' in data:
-                        # 我们自己保存的格式
-                        classes_to_load = data['defect_classes']
-                    elif 'classes' in data:
-                        # 其他可能的格式
-                        classes_to_load = data['classes']
-                    else:
-                        # 如果字典包含其他键值对，尝试找到包含类别列表的键
-                        for key, value in data.items():
-                            if isinstance(value, list) and all(isinstance(item, str) for item in value):
-                                classes_to_load = value
-                                break
+                    QMessageBox.information(
+                        self, 
+                        "加载信息", 
+                        f"检测到包含权重信息的配置文件\n"
+                        f"类别数量: {len(loaded_classes)}\n"
+                        f"权重策略: {loaded_strategy}"
+                    )
+                # 检查旧版本格式或简单列表格式
                 elif isinstance(data, list):
-                    # 直接是列表格式
-                    classes_to_load = data
+                    loaded_classes = data
+                    # 为所有类别设置默认权重
+                    loaded_weights = {class_name: 1.0 for class_name in loaded_classes}
+                else:
+                    raise ValueError("不支持的JSON文件格式")
             else:
-                # 从文本文件加载，每行一个类别
+                # 文本文件格式（每行一个类别）
                 with open(file_path, 'r', encoding='utf-8') as f:
-                    lines = f.readlines()
-                    
-                for line in lines:
-                    line = line.strip()
-                    # 跳过空行、标题行和分隔符行
-                    if line and not line.startswith('=') and not line.startswith('缺陷类别') and not line.startswith('总计'):
-                        # 处理编号格式 "1. 类别名"
-                        if '. ' in line and line[0].isdigit():
-                            class_name = line.split('. ', 1)[1]
-                        else:
-                            class_name = line
-                        
-                        if class_name and class_name not in classes_to_load:
-                            classes_to_load.append(class_name)
+                    loaded_classes = [line.strip() for line in f if line.strip()]
+                # 为所有类别设置默认权重
+                loaded_weights = {class_name: 1.0 for class_name in loaded_classes}
             
-            if not classes_to_load:
-                QMessageBox.warning(self, "警告", "文件中没有找到有效的缺陷类别!")
+            if not loaded_classes:
+                QMessageBox.warning(self, "警告", "文件中没有找到有效的类别信息")
                 return
-                
-            # 询问用户是要替换还是追加
-            reply = QMessageBox.question(
-                self, 
-                "加载方式", 
-                f"从文件中找到 {len(classes_to_load)} 个类别:\n" + 
-                "\n".join(f"• {cls}" for cls in classes_to_load[:5]) + 
-                ("\n..." if len(classes_to_load) > 5 else "") +
-                f"\n\n您想要:\n• 替换当前类别 (是)\n• 追加到当前类别 (否)", 
-                QMessageBox.Yes | QMessageBox.No | QMessageBox.Cancel
-            )
             
-            if reply == QMessageBox.Cancel:
-                return
-            elif reply == QMessageBox.Yes:
-                # 替换当前类别
+            # 根据用户选择处理现有类别
+            if replace_existing:
+                # 替换现有类别
                 self.default_classes.clear()
-                self.default_class_list.clear()
-                
-            # 添加新类别（去重）
+                self.class_weights.clear()
+                self.class_weight_table.setRowCount(0)
+            
+            # 添加新类别
             added_count = 0
-            for class_name in classes_to_load:
+            for class_name in loaded_classes:
                 if class_name not in self.default_classes:
                     self.default_classes.append(class_name)
-                    self.default_class_list.addItem(class_name)
-                    added_count += 1
+                    # 使用加载的权重或默认权重
+                    weight_value = loaded_weights.get(class_name, 1.0)
+                    self.class_weights[class_name] = weight_value
                     
-            action = "替换" if reply == QMessageBox.Yes else "追加"
+                    # 添加到表格
+                    row_count = self.class_weight_table.rowCount()
+                    self.class_weight_table.insertRow(row_count)
+                    self.class_weight_table.setItem(row_count, 0, QTableWidgetItem(class_name))
+                    
+                    # 创建权重输入框
+                    weight_spinbox = QDoubleSpinBox()
+                    weight_spinbox.setMinimum(0.01)
+                    weight_spinbox.setMaximum(100.0)
+                    weight_spinbox.setSingleStep(0.1)
+                    weight_spinbox.setDecimals(2)
+                    weight_spinbox.setValue(weight_value)
+                    weight_spinbox.valueChanged.connect(lambda value, name=class_name: self.on_weight_changed(name, value))
+                    
+                    self.class_weight_table.setCellWidget(row_count, 1, weight_spinbox)
+                    added_count += 1
+            
+            # 设置权重策略
+            strategy_mapping = {
+                'balanced': 'balanced (平衡权重)',
+                'inverse': 'inverse (逆频率权重)',
+                'log_inverse': 'log_inverse (对数逆频率权重)',
+                'custom': 'custom (自定义权重)',
+                'none': 'none (无权重)'
+            }
+            strategy_text = strategy_mapping.get(loaded_strategy, 'balanced (平衡权重)')
+            self.weight_strategy_combo.setCurrentText(strategy_text)
+            
+            # 更新权重输入框状态
+            self.update_weight_widgets_state()
+            
+            action_text = "替换" if replace_existing else "添加"
             QMessageBox.information(
                 self, 
-                "成功", 
-                f"已成功{action}缺陷类别!\n\n"
-                f"从文件加载: {len(classes_to_load)} 个类别\n"
-                f"实际添加: {added_count} 个类别\n"
-                f"当前总计: {len(self.default_classes)} 个类别"
+                "加载成功", 
+                f"成功{action_text}了 {added_count} 个类别\n"
+                f"权重策略: {loaded_strategy}\n"
+                f"当前总类别数: {len(self.default_classes)}"
             )
-            
-        except json.JSONDecodeError as e:
-            QMessageBox.critical(
-                self, 
-                "错误", 
-                f"JSON文件格式错误:\n{str(e)}"
-            )
+                
         except Exception as e:
-            QMessageBox.critical(
-                self, 
-                "错误", 
-                f"加载文件失败:\n{str(e)}"
-            ) 
+            QMessageBox.critical(self, "加载失败", f"加载类别配置文件时出错:\n{str(e)}")
     
     def save_config_to_file(self):
-        """保存完整配置到文件"""
-        # 创建当前配置字典
-        config = {
-            'default_source_folder': self.default_source_edit.text(),
-            'default_output_folder': self.default_output_edit.text(),
-            'default_model_file': self.default_model_edit.text(),
-            'default_class_info_file': self.default_class_info_edit.text(),
-            'default_model_eval_dir': self.default_model_eval_dir_edit.text(),
-            'default_model_save_dir': self.default_model_save_dir_edit.text(),
-            'default_tensorboard_log_dir': self.default_tensorboard_log_dir_edit.text(),
-            'default_dataset_dir': self.default_dataset_dir_edit.text(),
-            'default_param_save_dir': self.default_param_save_dir_edit.text(),
-            'default_classes': self.default_classes
-        }
-        
-        # 选择保存文件
-        file_path, _ = QFileDialog.getSaveFileName(
-            self, 
-            "保存配置文件", 
-            "settings_config.json", 
-            "JSON文件 (*.json);;所有文件 (*.*)"
-        )
-        
-        if not file_path:
-            return
-            
+        """保存配置到文件"""
         try:
-            # 添加元数据
-            config_with_metadata = {
-                "config": config,
-                "metadata": {
-                    "created_by": "图片模型训练系统",
-                    "version": "1.0",
-                    "description": "应用设置配置文件",
-                    "export_time": __import__('datetime').datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            # 从表格收集最新数据
+            self.collect_weights_from_table()
+            
+            # 获取权重策略
+            strategy_text = self.weight_strategy_combo.currentText()
+            weight_strategy = strategy_text.split(' ')[0]
+            
+            file_path, _ = QFileDialog.getSaveFileName(
+                self, 
+                "保存配置文件", 
+                "app_config.json", 
+                "JSON文件 (*.json)"
+            )
+            
+            if file_path:
+                # 创建完整的配置数据
+                config = {
+                    'default_source_folder': self.default_source_edit.text(),
+                    'default_output_folder': self.default_output_edit.text(),
+                    'default_model_file': self.default_model_edit.text(),
+                    'default_class_info_file': self.default_class_info_edit.text(),
+                    'default_model_eval_dir': self.default_model_eval_dir_edit.text(),
+                    'default_model_save_dir': self.default_model_save_dir_edit.text(),
+                    'default_tensorboard_log_dir': self.default_tensorboard_log_dir_edit.text(),
+                    'default_dataset_dir': self.default_dataset_dir_edit.text(),
+                    'default_param_save_dir': self.default_param_save_dir_edit.text(),
+                    'default_classes': self.default_classes,
+                    'class_weights': self.class_weights,
+                    'weight_strategy': weight_strategy,
+                    'use_class_weights': weight_strategy != 'none',
+                    'version': '2.0',
+                    'export_time': time.strftime("%Y-%m-%d %H:%M:%S")
                 }
-            }
-            
-            with open(file_path, 'w', encoding='utf-8') as f:
-                json.dump(config_with_metadata, f, ensure_ascii=False, indent=4)
                 
-            QMessageBox.information(
-                self, 
-                "成功", 
-                f"配置已成功保存到文件:\n{file_path}\n\n"
-                f"包含内容:\n"
-                f"• 默认源文件夹\n"
-                f"• 默认输出文件夹\n"
-                f"• 默认模型文件\n"
-                f"• 默认类别信息文件\n"
-                f"• 默认模型评估文件夹\n"
-                f"• 默认模型保存文件夹\n"
-                f"• 默认TensorBoard日志文件夹\n"
-                f"• 默认数据集评估文件夹\n"
-                f"• 默认训练参数保存文件夹\n"
-                f"• 缺陷类别设置 ({len(self.default_classes)} 个类别)"
-            )
-            
+                with open(file_path, 'w', encoding='utf-8') as f:
+                    json.dump(config, f, ensure_ascii=False, indent=4)
+                
+                QMessageBox.information(
+                    self, 
+                    "保存成功", 
+                    f"配置已保存到:\n{file_path}\n\n"
+                    f"包含 {len(self.default_classes)} 个类别\n"
+                    f"权重策略: {weight_strategy}"
+                )
+                
         except Exception as e:
-            QMessageBox.critical(
-                self, 
-                "错误", 
-                f"保存配置文件失败:\n{str(e)}"
-            )
-    
+            QMessageBox.critical(self, "保存失败", f"保存配置文件时出错:\n{str(e)}")
+
     def load_config_from_file(self):
-        """从文件加载完整配置"""
-        # 选择要加载的文件
-        file_path, _ = QFileDialog.getOpenFileName(
-            self, 
-            "加载配置文件", 
-            "", 
-            "JSON文件 (*.json);;所有文件 (*.*)"
-        )
-        
-        if not file_path:
-            return
-            
+        """从文件加载配置"""
         try:
-            with open(file_path, 'r', encoding='utf-8') as f:
-                data = json.load(f)
+            file_path, _ = QFileDialog.getOpenFileName(
+                self, 
+                "加载配置文件", 
+                "", 
+                "JSON文件 (*.json);;所有文件 (*)"
+            )
             
-            # 支持不同的配置文件格式
-            config = None
-            if isinstance(data, dict):
-                if 'config' in data:
-                    # 带元数据的格式
-                    config = data['config']
-                    metadata = data.get('metadata', {})
-                    created_by = metadata.get('created_by', '未知')
-                    export_time = metadata.get('export_time', '未知')
-                else:
-                    # 直接配置格式
-                    config = data
-                    created_by = "未知"
-                    export_time = "未知"
-            
-            if not config:
-                QMessageBox.warning(self, "警告", "文件格式不正确，无法找到有效的配置数据!")
+            if not file_path:
                 return
+                
+            with open(file_path, 'r', encoding='utf-8') as f:
+                config = json.load(f)
+                
+            # 检查配置文件版本
+            version = config.get('version', '1.0')
+            has_weight_config = 'class_weights' in config and 'weight_strategy' in config
             
-            # 显示配置预览并询问用户是否加载
-            preview_text = f"配置文件信息:\n"
-            if 'metadata' in data:
-                preview_text += f"创建者: {created_by}\n"
-                preview_text += f"导出时间: {export_time}\n\n"
+            if has_weight_config:
+                QMessageBox.information(
+                    self, 
+                    "配置信息", 
+                    f"检测到版本 {version} 的配置文件\n"
+                    f"包含权重配置信息\n"
+                    f"类别数量: {len(config.get('default_classes', []))}\n"
+                    f"权重策略: {config.get('weight_strategy', 'balanced')}"
+                )
             
-            preview_text += f"配置内容:\n"
-            preview_text += f"• 默认源文件夹: {config.get('default_source_folder', '未设置')}\n"
-            preview_text += f"• 默认输出文件夹: {config.get('default_output_folder', '未设置')}\n"
-            preview_text += f"• 默认模型文件: {config.get('default_model_file', '未设置')}\n"
-            preview_text += f"• 默认类别信息文件: {config.get('default_class_info_file', '未设置')}\n"
-            preview_text += f"• 默认模型评估文件夹: {config.get('default_model_eval_dir', '未设置')}\n"
-            preview_text += f"• 默认模型保存文件夹: {config.get('default_model_save_dir', '未设置')}\n"
-            preview_text += f"• 默认TensorBoard日志文件夹: {config.get('default_tensorboard_log_dir', '未设置')}\n"
-            preview_text += f"• 默认数据集评估文件夹: {config.get('default_dataset_dir', '未设置')}\n"
-            preview_text += f"• 默认训练参数保存文件夹: {config.get('default_param_save_dir', '未设置')}\n"
-            preview_text += f"• 缺陷类别数量: {len(config.get('default_classes', []))} 个\n"
-            
-            if config.get('default_classes'):
-                preview_text += f"• 缺陷类别: {', '.join(config['default_classes'][:3])}"
-                if len(config['default_classes']) > 3:
-                    preview_text += f" 等{len(config['default_classes'])}个"
-                preview_text += "\n"
-            
+            # 确认是否要应用配置
             reply = QMessageBox.question(
                 self, 
-                "确认加载配置", 
-                f"{preview_text}\n是否要加载此配置？\n\n注意：这将覆盖当前的所有设置！", 
+                "确认加载", 
+                "确定要应用这个配置文件吗？\n这将覆盖当前的所有设置。",
                 QMessageBox.Yes | QMessageBox.No
             )
             
             if reply != QMessageBox.Yes:
                 return
             
-            # 应用配置到UI
+            # 应用文件夹配置
             self.default_source_edit.setText(config.get('default_source_folder', ''))
             self.default_output_edit.setText(config.get('default_output_folder', ''))
             self.default_model_edit.setText(config.get('default_model_file', ''))
@@ -805,39 +953,58 @@ class SettingsTab(BaseTab):
             self.default_dataset_dir_edit.setText(config.get('default_dataset_dir', ''))
             self.default_param_save_dir_edit.setText(config.get('default_param_save_dir', ''))
             
-            # 更新缺陷类别
+            # 应用类别和权重配置
             self.default_classes = config.get('default_classes', [])
-            self.default_class_list.clear()
+            self.class_weights = config.get('class_weights', {})
+            
+            # 设置权重策略
+            weight_strategy = config.get('weight_strategy', 'balanced')
+            strategy_mapping = {
+                'balanced': 'balanced (平衡权重)',
+                'inverse': 'inverse (逆频率权重)',
+                'log_inverse': 'log_inverse (对数逆频率权重)',
+                'custom': 'custom (自定义权重)',
+                'none': 'none (无权重)'
+            }
+            strategy_text = strategy_mapping.get(weight_strategy, 'balanced (平衡权重)')
+            self.weight_strategy_combo.setCurrentText(strategy_text)
+            
+            # 重新填充类别权重表格
+            self.class_weight_table.setRowCount(0)
             for class_name in self.default_classes:
-                self.default_class_list.addItem(class_name)
+                row_count = self.class_weight_table.rowCount()
+                self.class_weight_table.insertRow(row_count)
+                self.class_weight_table.setItem(row_count, 0, QTableWidgetItem(class_name))
+                
+                # 创建权重输入框
+                weight_value = self.class_weights.get(class_name, 1.0)
+                weight_spinbox = QDoubleSpinBox()
+                weight_spinbox.setMinimum(0.01)
+                weight_spinbox.setMaximum(100.0)
+                weight_spinbox.setSingleStep(0.1)
+                weight_spinbox.setDecimals(2)
+                weight_spinbox.setValue(weight_value)
+                weight_spinbox.valueChanged.connect(lambda value, name=class_name: self.on_weight_changed(name, value))
+                
+                self.class_weight_table.setCellWidget(row_count, 1, weight_spinbox)
+            
+            # 更新权重输入框状态
+            self.update_weight_widgets_state()
+            
+            # 保存更新后的配置
+            self.config = config
             
             QMessageBox.information(
                 self, 
-                "成功", 
-                f"配置已成功加载!\n\n"
-                f"已加载:\n"
-                f"• 默认源文件夹\n"
-                f"• 默认输出文件夹\n"
-                f"• 默认模型文件\n"
-                f"• 默认类别信息文件\n"
-                f"• 默认模型评估文件夹\n"
-                f"• 默认模型保存文件夹\n"
-                f"• 默认TensorBoard日志文件夹\n"
-                f"• 默认数据集评估文件夹\n"
-                f"• 默认训练参数保存文件夹\n"
-                f"• {len(self.default_classes)} 个缺陷类别\n\n"
-                f"请点击'保存设置'按钮来保存这些更改。"
+                "加载成功", 
+                f"配置文件已成功加载\n"
+                f"类别数量: {len(self.default_classes)}\n"
+                f"权重策略: {weight_strategy}"
             )
-            
-        except json.JSONDecodeError as e:
-            QMessageBox.critical(
-                self, 
-                "错误", 
-                f"JSON文件格式错误:\n{str(e)}"
-            )
+                
         except Exception as e:
             QMessageBox.critical(
                 self, 
-                "错误", 
+                "加载失败", 
                 f"加载配置文件失败:\n{str(e)}"
             ) 

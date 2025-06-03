@@ -15,6 +15,8 @@ from torch.utils.tensorboard import SummaryWriter
 from detection_trainer import DetectionTrainer
 import time
 from utils.model_utils import create_model, configure_model_layers  # 修改为绝对导入
+from sklearn.utils.class_weight import compute_class_weight  # 添加sklearn的类别权重计算
+from collections import Counter  # 添加Counter用于统计类别分布
 
 # 设置matplotlib后端为Agg，解决线程安全问题
 import matplotlib
@@ -43,6 +45,157 @@ class TrainingThread(QThread):
         self.model = None
         # 添加training_info字典，用于存储训练过程中的信息
         self.training_info = {}
+        # 添加类别权重相关属性
+        self.class_weights = None
+        self.class_distribution = None
+    
+    def _calculate_class_weights(self, dataset, class_names, weight_strategy='balanced'):
+        """
+        计算类别权重
+        
+        Args:
+            dataset: 训练数据集
+            class_names: 类别名称列表
+            weight_strategy: 权重策略 ('balanced', 'inverse', 'log_inverse', 'custom')
+            
+        Returns:
+            torch.Tensor: 类别权重张量
+        """
+        self.status_updated.emit("正在计算类别权重...")
+        
+        # 获取所有标签
+        all_labels = []
+        if hasattr(dataset, 'targets'):
+            # ImageFolder dataset
+            all_labels = dataset.targets
+        else:
+            # 手动遍历数据集获取标签
+            for _, label in dataset:
+                all_labels.append(label)
+        
+        # 统计类别分布
+        label_counts = Counter(all_labels)
+        self.class_distribution = {class_names[i]: label_counts.get(i, 0) for i in range(len(class_names))}
+        
+        # 打印类别分布信息
+        self.status_updated.emit("类别分布统计:")
+        for class_name, count in self.class_distribution.items():
+            self.status_updated.emit(f"  {class_name}: {count} 个样本")
+        
+        # 计算权重
+        if weight_strategy == 'balanced':
+            # 使用sklearn的balanced权重计算
+            class_weights = compute_class_weight(
+                'balanced',
+                classes=np.arange(len(class_names)),
+                y=all_labels
+            )
+        elif weight_strategy == 'inverse':
+            # 逆频率权重
+            total_samples = len(all_labels)
+            class_weights = []
+            for i in range(len(class_names)):
+                count = label_counts.get(i, 1)  # 避免除零
+                weight = total_samples / (len(class_names) * count)
+                class_weights.append(weight)
+            class_weights = np.array(class_weights)
+        elif weight_strategy == 'log_inverse':
+            # 对数逆频率权重（减少权重差异）
+            total_samples = len(all_labels)
+            class_weights = []
+            for i in range(len(class_names)):
+                count = label_counts.get(i, 1)
+                weight = np.log(total_samples / count)
+                class_weights.append(weight)
+            class_weights = np.array(class_weights)
+        elif weight_strategy == 'custom':
+            # 自定义权重（从配置中读取）
+            custom_weights = self.config.get('custom_class_weights', {})
+            class_weights = []
+            for class_name in class_names:
+                weight = custom_weights.get(class_name, 1.0)
+                class_weights.append(weight)
+            class_weights = np.array(class_weights)
+        else:
+            # 默认均等权重
+            class_weights = np.ones(len(class_names))
+        
+        # 打印权重信息
+        self.status_updated.emit(f"使用权重策略: {weight_strategy}")
+        for i, (class_name, weight) in enumerate(zip(class_names, class_weights)):
+            self.status_updated.emit(f"  {class_name}: 权重 = {weight:.4f}")
+        
+        # 转换为torch张量
+        class_weights_tensor = torch.FloatTensor(class_weights).to(self.device)
+        
+        return class_weights_tensor
+    
+    def _log_class_info_to_tensorboard(self, writer, class_names, epoch=0):
+        """
+        将类别分布和权重信息记录到TensorBoard
+        
+        Args:
+            writer: TensorBoard writer
+            class_names: 类别名称列表
+            epoch: 当前epoch
+        """
+        if not writer or not self.class_distribution or self.class_weights is None:
+            return
+            
+        try:
+            # 记录类别分布柱状图
+            plt.figure(figsize=(12, 6))
+            
+            # 子图1: 类别分布
+            plt.subplot(1, 2, 1)
+            counts = [self.class_distribution[name] for name in class_names]
+            plt.bar(range(len(class_names)), counts)
+            plt.title('类别样本分布')
+            plt.xlabel('类别')
+            plt.ylabel('样本数量')
+            plt.xticks(range(len(class_names)), class_names, rotation=45)
+            
+            # 在柱状图上添加数值
+            for i, count in enumerate(counts):
+                plt.text(i, count + max(counts) * 0.01, str(count), 
+                        ha='center', va='bottom')
+            
+            # 子图2: 类别权重
+            plt.subplot(1, 2, 2)
+            weights = self.class_weights.cpu().numpy()
+            plt.bar(range(len(class_names)), weights, color='orange')
+            plt.title('类别权重分布')
+            plt.xlabel('类别')
+            plt.ylabel('权重值')
+            plt.xticks(range(len(class_names)), class_names, rotation=45)
+            
+            # 在柱状图上添加数值
+            for i, weight in enumerate(weights):
+                plt.text(i, weight + max(weights) * 0.01, f'{weight:.3f}', 
+                        ha='center', va='bottom')
+            
+            plt.tight_layout()
+            
+            # 保存为图像并添加到TensorBoard
+            import io
+            from PIL import Image
+            buf = io.BytesIO()
+            plt.savefig(buf, format='png', dpi=150)
+            buf.seek(0)
+            img = Image.open(buf)
+            img_tensor = transforms.ToTensor()(img)
+            writer.add_image('Class Distribution and Weights', img_tensor, epoch)
+            
+            plt.close()
+            
+            # 记录权重数值到标量
+            for i, (name, weight) in enumerate(zip(class_names, weights)):
+                writer.add_scalar(f'Class_Weights/{name}', weight, epoch)
+                writer.add_scalar(f'Class_Distribution/{name}', 
+                                self.class_distribution[name], epoch)
+                
+        except Exception as e:
+            print(f"记录类别信息到TensorBoard时出错: {str(e)}")
     
     def run(self):
         """线程运行入口，执行模型训练"""
@@ -290,8 +443,23 @@ class TrainingThread(QThread):
             
             self.model = self.model.to(self.device)
 
-            # 定义损失函数和优化器
-            criterion = nn.CrossEntropyLoss()
+            # 计算类别权重（如果启用）
+            use_class_weights = self.config.get('use_class_weights', True)  # 默认启用类别权重
+            weight_strategy = self.config.get('weight_strategy', 'balanced')  # 默认使用balanced策略
+            
+            if use_class_weights:
+                self.class_weights = self._calculate_class_weights(
+                    image_datasets['train'], class_names, weight_strategy
+                )
+                # 定义加权损失函数
+                criterion = nn.CrossEntropyLoss(weight=self.class_weights)
+                self.status_updated.emit(f"使用加权损失函数，权重策略: {weight_strategy}")
+            else:
+                self.class_weights = None
+                # 定义标准损失函数
+                criterion = nn.CrossEntropyLoss()
+                self.status_updated.emit("使用标准损失函数（无类别权重）")
+                
             optimizer = optim.Adam(self.model.parameters(), lr=learning_rate)
             
             # 初始化TensorBoard
@@ -309,6 +477,10 @@ class TrainingThread(QThread):
                 
                 # 在训练信息中记录TensorBoard日志目录路径
                 self.training_info['tensorboard_log_dir'] = tensorboard_run_dir
+                
+                # 记录类别信息到TensorBoard
+                if use_class_weights and self.class_weights is not None:
+                    self._log_class_info_to_tensorboard(writer, class_names, epoch=0)
                 
                 # 记录模型图
                 try:
@@ -959,6 +1131,9 @@ class ModelTrainer(QObject):
         self.stop_training = False
         self.training_thread = None
         self.detection_trainer = None
+        # 添加类别权重相关属性
+        self.class_weights = None
+        self.class_distribution = None
 
     def configure_model(self, model, layer_config):
         """根据层配置调整模型结构"""
