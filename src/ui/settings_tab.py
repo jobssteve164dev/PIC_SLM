@@ -222,11 +222,28 @@ class SettingsTab(BaseTab):
         
         main_layout.addWidget(settings_tabs)
         
-        # 添加保存按钮
+        # 添加按钮组
+        button_layout = QHBoxLayout()
+        
+        # 添加保存设置按钮
         save_btn = QPushButton("保存设置")
         save_btn.clicked.connect(self.save_settings)
         save_btn.setMinimumHeight(40)
-        main_layout.addWidget(save_btn)
+        button_layout.addWidget(save_btn)
+        
+        # 添加保存配置到文件按钮
+        save_config_to_file_btn = QPushButton("保存配置到文件")
+        save_config_to_file_btn.clicked.connect(self.save_config_to_file)
+        save_config_to_file_btn.setMinimumHeight(40)
+        button_layout.addWidget(save_config_to_file_btn)
+        
+        # 添加从文件加载配置按钮
+        load_config_from_file_btn = QPushButton("从文件加载配置")
+        load_config_from_file_btn.clicked.connect(self.load_config_from_file)
+        load_config_from_file_btn.setMinimumHeight(40)
+        button_layout.addWidget(load_config_from_file_btn)
+        
+        main_layout.addLayout(button_layout)
         
         # 添加弹性空间
         main_layout.addStretch(1)
@@ -639,4 +656,188 @@ class SettingsTab(BaseTab):
                 self, 
                 "错误", 
                 f"加载文件失败:\n{str(e)}"
+            ) 
+    
+    def save_config_to_file(self):
+        """保存完整配置到文件"""
+        # 创建当前配置字典
+        config = {
+            'default_source_folder': self.default_source_edit.text(),
+            'default_output_folder': self.default_output_edit.text(),
+            'default_model_file': self.default_model_edit.text(),
+            'default_class_info_file': self.default_class_info_edit.text(),
+            'default_model_eval_dir': self.default_model_eval_dir_edit.text(),
+            'default_model_save_dir': self.default_model_save_dir_edit.text(),
+            'default_tensorboard_log_dir': self.default_tensorboard_log_dir_edit.text(),
+            'default_dataset_dir': self.default_dataset_dir_edit.text(),
+            'default_param_save_dir': self.default_param_save_dir_edit.text(),
+            'default_classes': self.default_classes
+        }
+        
+        # 选择保存文件
+        file_path, _ = QFileDialog.getSaveFileName(
+            self, 
+            "保存配置文件", 
+            "settings_config.json", 
+            "JSON文件 (*.json);;所有文件 (*.*)"
+        )
+        
+        if not file_path:
+            return
+            
+        try:
+            # 添加元数据
+            config_with_metadata = {
+                "config": config,
+                "metadata": {
+                    "created_by": "图片模型训练系统",
+                    "version": "1.0",
+                    "description": "应用设置配置文件",
+                    "export_time": __import__('datetime').datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                }
+            }
+            
+            with open(file_path, 'w', encoding='utf-8') as f:
+                json.dump(config_with_metadata, f, ensure_ascii=False, indent=4)
+                
+            QMessageBox.information(
+                self, 
+                "成功", 
+                f"配置已成功保存到文件:\n{file_path}\n\n"
+                f"包含内容:\n"
+                f"• 默认源文件夹\n"
+                f"• 默认输出文件夹\n"
+                f"• 默认模型文件\n"
+                f"• 默认类别信息文件\n"
+                f"• 默认模型评估文件夹\n"
+                f"• 默认模型保存文件夹\n"
+                f"• 默认TensorBoard日志文件夹\n"
+                f"• 默认数据集评估文件夹\n"
+                f"• 默认训练参数保存文件夹\n"
+                f"• 缺陷类别设置 ({len(self.default_classes)} 个类别)"
+            )
+            
+        except Exception as e:
+            QMessageBox.critical(
+                self, 
+                "错误", 
+                f"保存配置文件失败:\n{str(e)}"
+            )
+    
+    def load_config_from_file(self):
+        """从文件加载完整配置"""
+        # 选择要加载的文件
+        file_path, _ = QFileDialog.getOpenFileName(
+            self, 
+            "加载配置文件", 
+            "", 
+            "JSON文件 (*.json);;所有文件 (*.*)"
+        )
+        
+        if not file_path:
+            return
+            
+        try:
+            with open(file_path, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+            
+            # 支持不同的配置文件格式
+            config = None
+            if isinstance(data, dict):
+                if 'config' in data:
+                    # 带元数据的格式
+                    config = data['config']
+                    metadata = data.get('metadata', {})
+                    created_by = metadata.get('created_by', '未知')
+                    export_time = metadata.get('export_time', '未知')
+                else:
+                    # 直接配置格式
+                    config = data
+                    created_by = "未知"
+                    export_time = "未知"
+            
+            if not config:
+                QMessageBox.warning(self, "警告", "文件格式不正确，无法找到有效的配置数据!")
+                return
+            
+            # 显示配置预览并询问用户是否加载
+            preview_text = f"配置文件信息:\n"
+            if 'metadata' in data:
+                preview_text += f"创建者: {created_by}\n"
+                preview_text += f"导出时间: {export_time}\n\n"
+            
+            preview_text += f"配置内容:\n"
+            preview_text += f"• 默认源文件夹: {config.get('default_source_folder', '未设置')}\n"
+            preview_text += f"• 默认输出文件夹: {config.get('default_output_folder', '未设置')}\n"
+            preview_text += f"• 默认模型文件: {config.get('default_model_file', '未设置')}\n"
+            preview_text += f"• 默认类别信息文件: {config.get('default_class_info_file', '未设置')}\n"
+            preview_text += f"• 默认模型评估文件夹: {config.get('default_model_eval_dir', '未设置')}\n"
+            preview_text += f"• 默认模型保存文件夹: {config.get('default_model_save_dir', '未设置')}\n"
+            preview_text += f"• 默认TensorBoard日志文件夹: {config.get('default_tensorboard_log_dir', '未设置')}\n"
+            preview_text += f"• 默认数据集评估文件夹: {config.get('default_dataset_dir', '未设置')}\n"
+            preview_text += f"• 默认训练参数保存文件夹: {config.get('default_param_save_dir', '未设置')}\n"
+            preview_text += f"• 缺陷类别数量: {len(config.get('default_classes', []))} 个\n"
+            
+            if config.get('default_classes'):
+                preview_text += f"• 缺陷类别: {', '.join(config['default_classes'][:3])}"
+                if len(config['default_classes']) > 3:
+                    preview_text += f" 等{len(config['default_classes'])}个"
+                preview_text += "\n"
+            
+            reply = QMessageBox.question(
+                self, 
+                "确认加载配置", 
+                f"{preview_text}\n是否要加载此配置？\n\n注意：这将覆盖当前的所有设置！", 
+                QMessageBox.Yes | QMessageBox.No
+            )
+            
+            if reply != QMessageBox.Yes:
+                return
+            
+            # 应用配置到UI
+            self.default_source_edit.setText(config.get('default_source_folder', ''))
+            self.default_output_edit.setText(config.get('default_output_folder', ''))
+            self.default_model_edit.setText(config.get('default_model_file', ''))
+            self.default_class_info_edit.setText(config.get('default_class_info_file', ''))
+            self.default_model_eval_dir_edit.setText(config.get('default_model_eval_dir', ''))
+            self.default_model_save_dir_edit.setText(config.get('default_model_save_dir', ''))
+            self.default_tensorboard_log_dir_edit.setText(config.get('default_tensorboard_log_dir', ''))
+            self.default_dataset_dir_edit.setText(config.get('default_dataset_dir', ''))
+            self.default_param_save_dir_edit.setText(config.get('default_param_save_dir', ''))
+            
+            # 更新缺陷类别
+            self.default_classes = config.get('default_classes', [])
+            self.default_class_list.clear()
+            for class_name in self.default_classes:
+                self.default_class_list.addItem(class_name)
+            
+            QMessageBox.information(
+                self, 
+                "成功", 
+                f"配置已成功加载!\n\n"
+                f"已加载:\n"
+                f"• 默认源文件夹\n"
+                f"• 默认输出文件夹\n"
+                f"• 默认模型文件\n"
+                f"• 默认类别信息文件\n"
+                f"• 默认模型评估文件夹\n"
+                f"• 默认模型保存文件夹\n"
+                f"• 默认TensorBoard日志文件夹\n"
+                f"• 默认数据集评估文件夹\n"
+                f"• 默认训练参数保存文件夹\n"
+                f"• {len(self.default_classes)} 个缺陷类别\n\n"
+                f"请点击'保存设置'按钮来保存这些更改。"
+            )
+            
+        except json.JSONDecodeError as e:
+            QMessageBox.critical(
+                self, 
+                "错误", 
+                f"JSON文件格式错误:\n{str(e)}"
+            )
+        except Exception as e:
+            QMessageBox.critical(
+                self, 
+                "错误", 
+                f"加载配置文件失败:\n{str(e)}"
             ) 

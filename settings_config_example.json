@@ -1,0 +1,32 @@
+{
+    "config": {
+        "default_source_folder": "E:\\EPIC_SLM\\TEST\\SOURCE2",
+        "default_output_folder": "E:\\EPIC_SLM\\TEST\\OUTPUT2",
+        "default_model_file": "models\\best_model.pth",
+        "default_class_info_file": "config\\class_info.json",
+        "default_model_eval_dir": "evaluations\\models",
+        "default_model_save_dir": "saved_models",
+        "default_tensorboard_log_dir": "logs\\tensorboard",
+        "default_dataset_dir": "datasets\\evaluation",
+        "default_param_save_dir": "config\\training_params",
+        "default_classes": [
+            "Missing_hole",
+            "Mouse_bite",
+            "Open_circuit",
+            "Short",
+            "Spur",
+            "Spurious_copper",
+            "Scratch",
+            "Crack",
+            "Contamination",
+            "Dent"
+        ]
+    },
+    "metadata": {
+        "created_by": "图片模型训练系统",
+        "version": "1.0",
+        "description": "应用设置配置文件示例",
+        "export_time": "2024-01-01 12:00:00",
+        "notes": "这是一个完整的示例配置文件，包含了PCB缺陷检测系统的所有设置项"
+    }
+} 
