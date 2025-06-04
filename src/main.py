@@ -425,6 +425,21 @@ def main():
         os.makedirs(param_save_dir, exist_ok=True)
         os.makedirs(tensorboard_log_dir, exist_ok=True)
         
+        # 获取类别权重配置 - 直接从配置中读取，确保与界面显示一致
+        use_class_weights = config.get('use_class_weights', True)
+        weight_strategy = config.get('weight_strategy', 'balanced')
+        
+        # 收集所有可能的权重配置源
+        weight_config = {}
+        if 'class_weights' in config and config['class_weights']:
+            weight_config['class_weights'] = config['class_weights']
+        if 'custom_class_weights' in config and config['custom_class_weights']:
+            weight_config['custom_class_weights'] = config['custom_class_weights']
+        if 'weight_config_file' in config and config['weight_config_file']:
+            weight_config['weight_config_file'] = config['weight_config_file']
+        if 'all_strategies' in config and config['all_strategies']:
+            weight_config['all_strategies'] = config['all_strategies']
+        
         # 获取数据目录（根据任务类型选择）
         if task_type == 'classification':
             # 直接使用annotation_folder而不是从控件获取
@@ -511,6 +526,10 @@ def main():
             'use_tensorboard': True,
             'model_note': params.get('model_note', ''),  # 添加模型命名备注
             
+            # 添加类别权重配置 - 确保与界面显示一致
+            'use_class_weights': use_class_weights,
+            'weight_strategy': weight_strategy,
+            
             # 添加所有共用训练参数
             'weight_decay': weight_decay,
             'lr_scheduler': lr_scheduler,
@@ -524,6 +543,9 @@ def main():
             'activation_function': params.get('activation_function', 'ReLU')  # 添加激活函数参数
         }
         
+        # 将权重配置添加到训练配置中
+        training_config.update(weight_config)
+        
         # 添加任务特有参数
         if task_type == 'detection':
             training_config.update({
@@ -536,6 +558,11 @@ def main():
                 'use_multiscale': use_multiscale,
                 'use_ema': use_ema
             })
+        
+        # 输出调试信息，显示传递给训练器的权重配置
+        print(f"传递给训练器的权重配置: use_class_weights={use_class_weights}, weight_strategy={weight_strategy}")
+        if weight_config:
+            print(f"权重配置源: {list(weight_config.keys())}")
         
         # 更新UI状态 - 修复：使用update_status方法代替status_bar.showMessage
         self.update_status(f"开始{task_type}训练：{model_name}")

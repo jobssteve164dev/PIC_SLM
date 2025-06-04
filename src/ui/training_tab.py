@@ -12,6 +12,7 @@ from .training_help_dialog import TrainingHelpDialog
 import json
 import subprocess
 from .layer_config_widget import LayerConfigWidget
+from src.config_loader import ConfigLoader
 
 class ModelDownloadDialog(QDialog):
     """模型下载失败时显示的对话框，提供下载链接和文件夹打开按钮"""
@@ -1810,68 +1811,76 @@ class TrainingTab(BaseTab):
                 'found_sources': []
             }
             
-            # 获取主配置文件
-            config_file = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), 'config.json')
-            if os.path.exists(config_file):
-                with open(config_file, 'r', encoding='utf-8') as f:
-                    config = json.load(f)
+            # 使用与主窗口prepare_training_config相同的配置加载逻辑
+            config_loader = ConfigLoader()
+            config = config_loader.get_config()
+            
+            if config:
+                # 获取权重策略和启用状态 - 与主窗口逻辑一致
+                use_class_weights = config.get('use_class_weights', True)
+                weight_strategy = config.get('weight_strategy', 'balanced')
                 
-                # 检查各种权重配置源
+                # 检查各种权重配置源 - 按照模型训练器中的优先级顺序
                 sources_found = []
                 
-                # 1. 检查直接配置的class_weights
+                # 1. 首先检查class_weights字段（设置界面格式）
                 if 'class_weights' in config and config['class_weights']:
                     sources_found.append('配置文件中的class_weights')
                     weight_info['class_weights'] = config['class_weights']
-                    weight_info['strategy'] = config.get('weight_strategy', 'custom')
+                    weight_info['strategy'] = weight_strategy
                     weight_info['source'] = '配置文件(class_weights)'
                 
-                # 2. 检查custom_class_weights
+                # 2. 如果为空，检查custom_class_weights字段（旧版格式）
                 elif 'custom_class_weights' in config and config['custom_class_weights']:
                     sources_found.append('配置文件中的custom_class_weights')
                     weight_info['class_weights'] = config['custom_class_weights']
-                    weight_info['strategy'] = config.get('weight_strategy', 'custom')
+                    weight_info['strategy'] = weight_strategy
                     weight_info['source'] = '配置文件(custom_class_weights)'
                 
-                # 3. 检查外部权重配置文件
+                # 3. 如果还为空，检查外部权重配置文件
                 elif 'weight_config_file' in config and config['weight_config_file']:
                     weight_file = config['weight_config_file']
-                    if os.path.exists(weight_file):
+                    if weight_file and os.path.exists(weight_file):
                         sources_found.append(f'外部权重文件: {os.path.basename(weight_file)}')
                         try:
                             with open(weight_file, 'r', encoding='utf-8') as wf:
                                 weight_data = json.load(wf)
                             
+                            # 支持多种权重文件格式 - 与模型训练器逻辑一致
                             if 'weight_config' in weight_data:
+                                # 数据集评估导出格式
                                 weight_info['class_weights'] = weight_data['weight_config'].get('class_weights', {})
-                                weight_info['strategy'] = weight_data['weight_config'].get('weight_strategy', 'custom')
+                                weight_info['strategy'] = weight_data['weight_config'].get('weight_strategy', weight_strategy)
                             elif 'class_weights' in weight_data:
+                                # 直接包含class_weights的格式
                                 weight_info['class_weights'] = weight_data.get('class_weights', {})
-                                weight_info['strategy'] = weight_data.get('weight_strategy', 'custom')
+                                weight_info['strategy'] = weight_data.get('weight_strategy', weight_strategy)
                             
                             weight_info['source'] = f'外部文件({os.path.basename(weight_file)})'
                         except Exception as e:
                             sources_found.append(f'外部权重文件读取失败: {str(e)}')
                 
-                # 4. 检查all_strategies配置
+                # 4. 如果仍然为空，检查all_strategies配置
                 elif 'all_strategies' in config and config['all_strategies']:
                     strategies = config['all_strategies']
                     sources_found.append('配置文件中的all_strategies')
                     
-                    # 优先使用custom策略
-                    if 'custom' in strategies:
+                    # 优先使用当前weight_strategy指定的策略，如果不存在则使用custom
+                    if weight_strategy in strategies:
+                        weight_info['class_weights'] = strategies[weight_strategy]
+                        weight_info['strategy'] = weight_strategy
+                    elif 'custom' in strategies:
                         weight_info['class_weights'] = strategies['custom']
                         weight_info['strategy'] = 'custom'
                     else:
-                        # 使用第一个可用策略
+                        # 使用第一个可用的策略
                         first_strategy = list(strategies.keys())[0]
                         weight_info['class_weights'] = strategies[first_strategy]
                         weight_info['strategy'] = first_strategy
                     
                     weight_info['source'] = 'all_strategies配置'
                 
-                # 检查是否启用了类别权重
-                use_class_weights = config.get('use_class_weights', False)
+                # 检查是否启用了类别权重 - 与主窗口逻辑一致
                 if not use_class_weights:
                     weight_info['strategy'] += ' (已禁用)'
                 
@@ -1882,6 +1891,7 @@ class TrainingTab(BaseTab):
                     details = []
                     details.append(f"权重策略: {weight_info['strategy']}")
                     details.append(f"配置源: {weight_info['source']}")
+                    details.append(f"启用状态: {'启用' if use_class_weights else '禁用'}")
                     details.append(f"类别数量: {len(weight_info['class_weights'])}")
                     
                     # 显示权重范围
@@ -1900,19 +1910,26 @@ class TrainingTab(BaseTab):
                     if len(weight_info['class_weights']) > 5:
                         details.append(f"  ... 还有 {len(weight_info['class_weights']) - 5} 个类别")
                     
+                    details.append("")
+                    details.append("注意: 此配置与实际训练时使用的配置保持同步")
+                    
                     weight_info['details'] = '\n'.join(details)
                 else:
                     if sources_found:
                         weight_info['details'] = f"发现权重配置源但无有效权重数据:\n" + '\n'.join(f"- {s}" for s in sources_found)
+                        weight_info['details'] += f"\n\n当前权重策略: {weight_strategy}"
+                        weight_info['details'] += f"\n启用状态: {'启用' if use_class_weights else '禁用'}"
                     else:
-                        weight_info['details'] = "未发现任何权重配置\n\n建议:\n- 在设置页面配置类别权重\n- 使用数据集评估功能生成权重配置\n- 手动编辑配置文件添加权重信息"
+                        weight_info['details'] = f"未发现任何权重配置\n\n当前设置:\n- 权重策略: {weight_strategy}\n- 启用状态: {'启用' if use_class_weights else '禁用'}\n\n建议:\n- 在设置页面配置类别权重\n- 使用数据集评估功能生成权重配置\n- 手动编辑配置文件添加权重信息"
             
             else:
-                weight_info['details'] = "配置文件不存在"
+                weight_info['details'] = "配置文件不存在或无法访问"
             
             return weight_info
             
         except Exception as e:
+            import traceback
+            traceback.print_exc()
             return {
                 'strategy': '加载失败',
                 'source': '错误',
