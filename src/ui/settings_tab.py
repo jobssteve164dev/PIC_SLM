@@ -773,6 +773,24 @@ class SettingsTab(BaseTab):
                         f"类别数量: {len(loaded_classes)}\n"
                         f"权重策略: {loaded_strategy}"
                     )
+                # 检查数据集评估导出的格式（包含weight_config节点）
+                elif isinstance(data, dict) and 'weight_config' in data:
+                    weight_config = data.get('weight_config', {})
+                    loaded_classes = weight_config.get('classes', [])
+                    loaded_weights = weight_config.get('class_weights', {})
+                    loaded_strategy = weight_config.get('weight_strategy', 'balanced')
+                    
+                    dataset_info = data.get('dataset_info', {})
+                    QMessageBox.information(
+                        self, 
+                        "数据集评估配置", 
+                        f"检测到数据集评估生成的权重配置文件\n"
+                        f"数据集: {dataset_info.get('dataset_path', '未知')}\n"
+                        f"类别数量: {len(loaded_classes)}\n"
+                        f"权重策略: {loaded_strategy}\n"
+                        f"不平衡度: {dataset_info.get('imbalance_ratio', '未知')}\n"
+                        f"分析日期: {dataset_info.get('analysis_date', '未知')}"
+                    )
                 # 检查旧版本格式或简单列表格式
                 elif isinstance(data, list):
                     loaded_classes = data

@@ -13,6 +13,7 @@ import seaborn as sns
 from collections import Counter
 import cv2
 from scipy import spatial
+from sklearn.utils.class_weight import compute_class_weight  # 添加sklearn的类别权重计算
 
 class DatasetEvaluationTab(QWidget):
     """数据集评估标签页，负责数据集质量分析和评估功能"""
@@ -66,7 +67,8 @@ class DatasetEvaluationTab(QWidget):
             "数据分布分析",
             "图像质量分析",
             "标注质量分析",
-            "特征分布分析"
+            "特征分布分析",
+            "生成类别权重"  # 添加权重生成选项
         ])
         metrics_layout.addWidget(self.metrics_combo)
         options_layout.addLayout(metrics_layout)
@@ -203,8 +205,10 @@ class DatasetEvaluationTab(QWidget):
         train_path = os.path.join(dataset_path, "train")
         val_path = os.path.join(dataset_path, "val")
         
+        # 检查数据集结构
         if not os.path.exists(train_path) or not os.path.exists(val_path):
-            raise ValueError("数据集结构不正确，缺少train或val文件夹")
+            QMessageBox.warning(self, "警告", "数据集结构不正确，需要包含train和val文件夹")
+            return
             
         if metric_type == "数据分布分析":
             self.analyze_class_distribution(train_path, val_path)
@@ -214,7 +218,11 @@ class DatasetEvaluationTab(QWidget):
             self.analyze_annotation_quality(train_path)
         elif metric_type == "特征分布分析":
             self.analyze_feature_distribution(train_path)
+        elif metric_type == "生成类别权重":  # 添加权重生成处理
+            self.generate_class_weights(train_path, val_path)
             
+        self.update_status(f"评估完成: {metric_type}")
+        
     def evaluate_detection_dataset(self, metric_type):
         """评估目标检测数据集"""
         dataset_path = self.dataset_path
@@ -314,6 +322,317 @@ class DatasetEvaluationTab(QWidget):
         # 更新画布
         self.canvas.draw()
         
+    def generate_class_weights(self, train_path, val_path):
+        """生成类别权重参数"""
+        # 清空图表
+        self.ax1.clear()
+        self.ax2.clear()
+        
+        # 统计训练集类别分布
+        train_classes = {}
+        all_labels = []  # 用于sklearn计算权重
+        
+        for class_name in os.listdir(train_path):
+            class_path = os.path.join(train_path, class_name)
+            if os.path.isdir(class_path):
+                count = len(os.listdir(class_path))
+                train_classes[class_name] = count
+                # 为sklearn准备标签列表
+                all_labels.extend([class_name] * count)
+                
+        if not train_classes:
+            QMessageBox.warning(self, "警告", "训练集中没有找到类别文件夹")
+            return
+        
+        # 获取类别名称和样本数量
+        class_names = list(train_classes.keys())
+        class_counts = list(train_classes.values())
+        total_samples = sum(class_counts)
+        
+        # 计算各种权重策略
+        weight_strategies = {}
+        
+        # 1. Balanced权重 (使用sklearn)
+        try:
+            balanced_weights = compute_class_weight(
+                'balanced', 
+                classes=np.unique(class_names), 
+                y=all_labels
+            )
+            weight_strategies['balanced'] = dict(zip(class_names, balanced_weights))
+        except Exception as e:
+            print(f"计算balanced权重失败: {e}")
+            weight_strategies['balanced'] = {name: 1.0 for name in class_names}
+        
+        # 2. Inverse权重
+        inverse_weights = {}
+        for class_name, count in train_classes.items():
+            inverse_weights[class_name] = total_samples / (len(class_names) * count)
+        weight_strategies['inverse'] = inverse_weights
+        
+        # 3. Log inverse权重
+        log_inverse_weights = {}
+        for class_name, count in train_classes.items():
+            log_inverse_weights[class_name] = np.log(total_samples / count)
+        weight_strategies['log_inverse'] = log_inverse_weights
+        
+        # 4. 归一化权重 (将权重调整到合理范围)
+        normalized_weights = {}
+        max_count = max(class_counts)
+        for class_name, count in train_classes.items():
+            normalized_weights[class_name] = max_count / count
+        weight_strategies['normalized'] = normalized_weights
+        
+        # 绘制类别分布柱状图
+        bars = self.ax1.bar(range(len(class_names)), class_counts, color='skyblue', alpha=0.7)
+        self.ax1.set_xlabel('类别')
+        self.ax1.set_ylabel('样本数量')
+        self.ax1.set_title('训练集类别分布')
+        self.ax1.set_xticks(range(len(class_names)))
+        self.ax1.set_xticklabels(class_names, rotation=45, ha='right')
+        
+        # 在柱状图上添加数值标签
+        for bar, count in zip(bars, class_counts):
+            height = bar.get_height()
+            self.ax1.text(bar.get_x() + bar.get_width()/2., height + total_samples*0.01,
+                         f'{count}', ha='center', va='bottom', fontsize=8)
+        
+        # 绘制balanced权重分布
+        balanced_values = [weight_strategies['balanced'][name] for name in class_names]
+        bars2 = self.ax2.bar(range(len(class_names)), balanced_values, color='lightcoral', alpha=0.7)
+        self.ax2.set_xlabel('类别')
+        self.ax2.set_ylabel('权重值')
+        self.ax2.set_title('Balanced权重分布')
+        self.ax2.set_xticks(range(len(class_names)))
+        self.ax2.set_xticklabels(class_names, rotation=45, ha='right')
+        
+        # 在权重图上添加数值标签
+        for bar, weight in zip(bars2, balanced_values):
+            height = bar.get_height()
+            self.ax2.text(bar.get_x() + bar.get_width()/2., height + max(balanced_values)*0.01,
+                         f'{weight:.2f}', ha='center', va='bottom', fontsize=8)
+        
+        # 调整图形布局
+        self.figure.tight_layout(pad=2.0)
+        
+        # 计算类别不平衡指标
+        imbalance_ratio = max(class_counts) / min(class_counts) if min(class_counts) > 0 else np.inf
+        cv_coefficient = np.std(class_counts) / np.mean(class_counts)  # 变异系数
+        
+        # 更新表格显示权重策略对比
+        self.result_table.setRowCount(len(class_names) + 4)
+        
+        # 添加统计信息
+        self.result_table.setItem(0, 0, QTableWidgetItem("总类别数"))
+        self.result_table.setItem(0, 1, QTableWidgetItem(str(len(class_names))))
+        
+        self.result_table.setItem(1, 0, QTableWidgetItem("总样本数"))
+        self.result_table.setItem(1, 1, QTableWidgetItem(str(total_samples)))
+        
+        self.result_table.setItem(2, 0, QTableWidgetItem("类别不平衡度"))
+        self.result_table.setItem(2, 1, QTableWidgetItem(f"{imbalance_ratio:.2f}"))
+        
+        self.result_table.setItem(3, 0, QTableWidgetItem("变异系数"))
+        self.result_table.setItem(3, 1, QTableWidgetItem(f"{cv_coefficient:.3f}"))
+        
+        # 创建权重对比表格
+        self.result_table.setColumnCount(6)
+        self.result_table.setHorizontalHeaderLabels([
+            "类别", "样本数", "Balanced", "Inverse", "Log_Inverse", "Normalized"
+        ])
+        
+        # 填充每个类别的权重信息
+        for i, class_name in enumerate(class_names):
+            row = i + 4
+            self.result_table.setItem(row, 0, QTableWidgetItem(class_name))
+            self.result_table.setItem(row, 1, QTableWidgetItem(str(train_classes[class_name])))
+            self.result_table.setItem(row, 2, QTableWidgetItem(f"{weight_strategies['balanced'][class_name]:.3f}"))
+            self.result_table.setItem(row, 3, QTableWidgetItem(f"{weight_strategies['inverse'][class_name]:.3f}"))
+            self.result_table.setItem(row, 4, QTableWidgetItem(f"{weight_strategies['log_inverse'][class_name]:.3f}"))
+            self.result_table.setItem(row, 5, QTableWidgetItem(f"{weight_strategies['normalized'][class_name]:.3f}"))
+        
+        # 设置表格列宽自适应
+        self.result_table.resizeColumnsToContents()
+        
+        # 保存权重信息到实例变量，供导出使用
+        self.current_class_weights = weight_strategies
+        self.current_class_counts = train_classes
+        
+        # 更新指标说明
+        imbalance_level = "轻度" if imbalance_ratio < 3 else "中度" if imbalance_ratio < 10 else "严重"
+        recommended_strategy = self.get_recommended_strategy(imbalance_ratio, cv_coefficient)
+        
+        metrics_info = f"""
+        <b>类别权重生成结果:</b><br>
+        <b>数据集不平衡程度:</b> {imbalance_level} (比率: {imbalance_ratio:.2f})<br>
+        <b>推荐权重策略:</b> <span style="color: red; font-weight: bold;">{recommended_strategy}</span><br><br>
+        
+        <b>权重策略说明:</b><br>
+        • <b>Balanced</b>: sklearn自动平衡权重，适合大多数情况<br>
+        • <b>Inverse</b>: 逆频率权重，样本少的类别权重高<br>
+        • <b>Log_Inverse</b>: 对数逆频率，适合极度不平衡的数据<br>
+        • <b>Normalized</b>: 归一化权重，相对温和的权重调整<br><br>
+        
+        <b>使用建议:</b><br>
+        • 不平衡度 < 3: 可以不使用权重或使用Normalized<br>
+        • 不平衡度 3-10: 推荐使用Balanced或Inverse<br>
+        • 不平衡度 > 10: 推荐使用Log_Inverse<br><br>
+        
+        <b>点击下方按钮导出权重配置到文件</b>
+        """
+        self.metrics_info_label.setText(metrics_info)
+        
+        # 添加导出按钮(如果还没有的话)
+        self.add_export_weights_button()
+        
+        # 启用导出按钮
+        if hasattr(self, 'export_weights_btn'):
+            self.export_weights_btn.setEnabled(True)
+        
+        # 更新画布
+        self.canvas.draw()
+        
+    def get_recommended_strategy(self, imbalance_ratio, cv_coefficient):
+        """根据数据集特征推荐权重策略"""
+        if imbalance_ratio < 2:
+            return "none (数据相对平衡)"
+        elif imbalance_ratio < 5:
+            return "balanced (推荐)"
+        elif imbalance_ratio < 15:
+            return "inverse (中度不平衡)"
+        else:
+            return "log_inverse (严重不平衡)"
+    
+    def add_export_weights_button(self):
+        """添加导出权重按钮"""
+        # 检查是否已经存在导出按钮
+        if hasattr(self, 'export_weights_btn'):
+            return
+            
+        # 在结果区域下方添加导出按钮
+        self.export_weights_btn = QPushButton("导出类别权重配置")
+        self.export_weights_btn.clicked.connect(self.export_class_weights)
+        self.export_weights_btn.setEnabled(False)  # 初始状态禁用
+        
+        # 将按钮添加到主布局
+        main_layout = self.layout()
+        main_layout.insertWidget(main_layout.count() - 1, self.export_weights_btn)  # 在最后一个widget之前插入
+    
+    def export_class_weights(self):
+        """导出类别权重配置到文件"""
+        if not hasattr(self, 'current_class_weights'):
+            QMessageBox.warning(self, "警告", "请先生成类别权重!")
+            return
+            
+        # 让用户选择权重策略
+        strategies = list(self.current_class_weights.keys())
+        strategy_names = {
+            'balanced': 'Balanced (推荐)',
+            'inverse': 'Inverse (逆频率)', 
+            'log_inverse': 'Log Inverse (对数逆频率)',
+            'normalized': 'Normalized (归一化)'
+        }
+        
+        # 创建策略选择对话框
+        from PyQt5.QtWidgets import QDialog, QDialogButtonBox, QVBoxLayout, QRadioButton, QButtonGroup
+        
+        dialog = QDialog(self)
+        dialog.setWindowTitle("选择权重策略")
+        dialog.setModal(True)
+        
+        layout = QVBoxLayout(dialog)
+        layout.addWidget(QLabel("请选择要导出的权重策略:"))
+        
+        button_group = QButtonGroup(dialog)
+        radio_buttons = {}
+        
+        for strategy in strategies:
+            display_name = strategy_names.get(strategy, strategy)
+            radio_btn = QRadioButton(display_name)
+            if strategy == 'balanced':  # 默认选择balanced
+                radio_btn.setChecked(True)
+            button_group.addButton(radio_btn)
+            radio_buttons[strategy] = radio_btn
+            layout.addWidget(radio_btn)
+        
+        # 添加对话框按钮
+        button_box = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        button_box.accepted.connect(dialog.accept)
+        button_box.rejected.connect(dialog.reject)
+        layout.addWidget(button_box)
+        
+        if dialog.exec_() != QDialog.Accepted:
+            return
+            
+        # 获取选择的策略
+        selected_strategy = None
+        for strategy, radio_btn in radio_buttons.items():
+            if radio_btn.isChecked():
+                selected_strategy = strategy
+                break
+                
+        if not selected_strategy:
+            return
+            
+        # 获取保存路径
+        file_path, _ = QFileDialog.getSaveFileName(
+            self, 
+            "保存类别权重配置", 
+            f"class_weights_{selected_strategy}.json", 
+            "JSON文件 (*.json)"
+        )
+        
+        if not file_path:
+            return
+            
+        try:
+            # 准备导出数据
+            class_names = list(self.current_class_counts.keys())
+            export_data = {
+                "dataset_info": {
+                    "dataset_path": self.dataset_path,
+                    "total_classes": len(class_names),
+                    "total_samples": sum(self.current_class_counts.values()),
+                    "class_distribution": self.current_class_counts,
+                    "imbalance_ratio": max(self.current_class_counts.values()) / min(self.current_class_counts.values()),
+                    "analysis_date": __import__('datetime').datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                },
+                "weight_config": {
+                    "classes": class_names,
+                    "class_weights": self.current_class_weights[selected_strategy],
+                    "weight_strategy": selected_strategy,
+                    "use_class_weights": True,
+                    "description": f"使用{strategy_names.get(selected_strategy, selected_strategy)}策略生成的类别权重配置"
+                },
+                "all_strategies": self.current_class_weights,
+                "usage_instructions": {
+                    "设置界面": "在设置-默认缺陷类别与权重配置中，选择'custom'策略并手动设置权重值",
+                    "训练配置": "在训练配置文件中设置use_class_weights=true和weight_strategy='custom'",
+                    "权重含义": "较高的权重值会让模型更关注该类别的样本，用于平衡类别不均衡问题"
+                },
+                "version": "2.0"
+            }
+            
+            # 保存到文件
+            with open(file_path, 'w', encoding='utf-8') as f:
+                json.dump(export_data, f, ensure_ascii=False, indent=4)
+                
+            QMessageBox.information(
+                self, 
+                "导出成功", 
+                f"类别权重配置已导出到:\n{file_path}\n\n"
+                f"策略: {strategy_names.get(selected_strategy, selected_strategy)}\n"
+                f"类别数: {len(class_names)}\n"
+                f"总样本数: {sum(self.current_class_counts.values())}\n\n"
+                f"使用方法:\n"
+                f"1. 在设置界面导入此配置文件\n"
+                f"2. 或手动复制权重值到设置界面\n"
+                f"3. 选择对应的权重策略进行训练"
+            )
+            
+        except Exception as e:
+            QMessageBox.critical(self, "导出失败", f"导出权重配置失败:\n{str(e)}")
+    
     def analyze_image_quality(self, train_path):
         """分析图像质量"""
         # 清空图表

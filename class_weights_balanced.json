@@ -1,0 +1,78 @@
+{
+    "dataset_info": {
+        "dataset_path": "E:\\PIC_SLM\\TEST\\OUTPUT2\\dataset",
+        "total_classes": 6,
+        "total_samples": 528,
+        "class_distribution": {
+            "Missing_hole": 88,
+            "Mouse_bite": 88,
+            "Open_circuit": 88,
+            "Short": 88,
+            "Spur": 88,
+            "Spurious_copper": 88
+        },
+        "imbalance_ratio": 1.0,
+        "analysis_date": "2025-06-04 08:01:05"
+    },
+    "weight_config": {
+        "classes": [
+            "Missing_hole",
+            "Mouse_bite",
+            "Open_circuit",
+            "Short",
+            "Spur",
+            "Spurious_copper"
+        ],
+        "class_weights": {
+            "Missing_hole": 1.0,
+            "Mouse_bite": 1.0,
+            "Open_circuit": 1.0,
+            "Short": 1.0,
+            "Spur": 1.0,
+            "Spurious_copper": 1.0
+        },
+        "weight_strategy": "balanced",
+        "use_class_weights": true,
+        "description": "使用Balanced (推荐)策略生成的类别权重配置"
+    },
+    "all_strategies": {
+        "balanced": {
+            "Missing_hole": 1.0,
+            "Mouse_bite": 1.0,
+            "Open_circuit": 1.0,
+            "Short": 1.0,
+            "Spur": 1.0,
+            "Spurious_copper": 1.0
+        },
+        "inverse": {
+            "Missing_hole": 1.0,
+            "Mouse_bite": 1.0,
+            "Open_circuit": 1.0,
+            "Short": 1.0,
+            "Spur": 1.0,
+            "Spurious_copper": 1.0
+        },
+        "log_inverse": {
+            "Missing_hole": 1.791759469228055,
+            "Mouse_bite": 1.791759469228055,
+            "Open_circuit": 1.791759469228055,
+            "Short": 1.791759469228055,
+            "Spur": 1.791759469228055,
+            "Spurious_copper": 1.791759469228055
+        },
+        "normalized": {
+            "Missing_hole": 1.0,
+            "Mouse_bite": 1.0,
+            "Open_circuit": 1.0,
+            "Short": 1.0,
+            "Spur": 1.0,
+            "Spurious_copper": 1.0
+        }
+    },
+    "usage_instructions": {
+        "设置界面": "在设置-默认缺陷类别与权重配置中，选择'custom'策略并手动设置权重值",
+        "训练配置": "在训练配置文件中设置use_class_weights=true和weight_strategy='custom'",
+        "权重含义": "较高的权重值会让模型更关注该类别的样本，用于平衡类别不均衡问题"
+    },
+    "version": "2.0"
+}
