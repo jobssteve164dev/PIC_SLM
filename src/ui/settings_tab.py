@@ -757,57 +757,109 @@ class SettingsTab(BaseTab):
             # 根据文件扩展名处理不同格式
             if file_path.lower().endswith('.json'):
                 # JSON文件格式
-                with open(file_path, 'r', encoding='utf-8') as f:
-                    data = json.load(f)
-                
-                # 检查新版本格式（包含权重信息）
-                if isinstance(data, dict) and 'classes' in data:
-                    loaded_classes = data.get('classes', [])
-                    loaded_weights = data.get('class_weights', {})
-                    loaded_strategy = data.get('weight_strategy', 'balanced')
+                try:
+                    with open(file_path, 'r', encoding='utf-8') as f:
+                        data = json.load(f)
                     
-                    QMessageBox.information(
-                        self, 
-                        "加载信息", 
-                        f"检测到包含权重信息的配置文件\n"
-                        f"类别数量: {len(loaded_classes)}\n"
-                        f"权重策略: {loaded_strategy}"
-                    )
-                # 检查数据集评估导出的格式（包含weight_config节点）
-                elif isinstance(data, dict) and 'weight_config' in data:
-                    weight_config = data.get('weight_config', {})
-                    loaded_classes = weight_config.get('classes', [])
-                    loaded_weights = weight_config.get('class_weights', {})
-                    loaded_strategy = weight_config.get('weight_strategy', 'balanced')
+                    print(f"加载的JSON数据类型: {type(data)}")
+                    if isinstance(data, dict):
+                        print(f"JSON字典的主要键: {list(data.keys())}")
                     
-                    dataset_info = data.get('dataset_info', {})
-                    QMessageBox.information(
-                        self, 
-                        "数据集评估配置", 
-                        f"检测到数据集评估生成的权重配置文件\n"
-                        f"数据集: {dataset_info.get('dataset_path', '未知')}\n"
-                        f"类别数量: {len(loaded_classes)}\n"
-                        f"权重策略: {loaded_strategy}\n"
-                        f"不平衡度: {dataset_info.get('imbalance_ratio', '未知')}\n"
-                        f"分析日期: {dataset_info.get('analysis_date', '未知')}"
-                    )
-                # 检查旧版本格式或简单列表格式
-                elif isinstance(data, list):
-                    loaded_classes = data
-                    # 为所有类别设置默认权重
-                    loaded_weights = {class_name: 1.0 for class_name in loaded_classes}
-                else:
-                    raise ValueError("不支持的JSON文件格式")
+                    # 检查数据集评估导出的格式（包含weight_config节点）- 优先检查
+                    if isinstance(data, dict) and 'weight_config' in data:
+                        print("检测到数据集评估导出格式")
+                        weight_config = data.get('weight_config', {})
+                        loaded_classes = weight_config.get('classes', [])
+                        loaded_weights = weight_config.get('class_weights', {})
+                        loaded_strategy = weight_config.get('weight_strategy', 'balanced')
+                        
+                        dataset_info = data.get('dataset_info', {})
+                        QMessageBox.information(
+                            self, 
+                            "数据集评估配置", 
+                            f"检测到数据集评估生成的权重配置文件\n"
+                            f"数据集: {dataset_info.get('dataset_path', '未知')}\n"
+                            f"类别数量: {len(loaded_classes)}\n"
+                            f"权重策略: {loaded_strategy}\n"
+                            f"不平衡度: {dataset_info.get('imbalance_ratio', '未知')}\n"
+                            f"分析日期: {dataset_info.get('analysis_date', '未知')}"
+                        )
+                    
+                    # 检查新版本格式（包含权重信息但不是数据集评估格式）
+                    elif isinstance(data, dict) and 'classes' in data:
+                        print("检测到包含权重信息的配置文件格式")
+                        loaded_classes = data.get('classes', [])
+                        loaded_weights = data.get('class_weights', {})
+                        loaded_strategy = data.get('weight_strategy', 'balanced')
+                        
+                        QMessageBox.information(
+                            self, 
+                            "加载信息", 
+                            f"检测到包含权重信息的配置文件\n"
+                            f"类别数量: {len(loaded_classes)}\n"
+                            f"权重策略: {loaded_strategy}"
+                        )
+                    
+                    # 检查旧版本格式或简单列表格式
+                    elif isinstance(data, list):
+                        print("检测到简单列表格式")
+                        loaded_classes = data
+                        # 为所有类别设置默认权重
+                        loaded_weights = {class_name: 1.0 for class_name in loaded_classes}
+                    
+                    # 检查是否是主配置文件格式（包含default_classes）
+                    elif isinstance(data, dict) and 'default_classes' in data:
+                        print("检测到主配置文件格式")
+                        loaded_classes = data.get('default_classes', [])
+                        loaded_weights = data.get('class_weights', {})
+                        loaded_strategy = data.get('weight_strategy', 'balanced')
+                        
+                        QMessageBox.information(
+                            self, 
+                            "主配置文件", 
+                            f"检测到主配置文件格式\n"
+                            f"类别数量: {len(loaded_classes)}\n"
+                            f"权重策略: {loaded_strategy}"
+                        )
+                    
+                    else:
+                        # 提供更详细的错误信息
+                        if isinstance(data, dict):
+                            available_keys = list(data.keys())
+                            error_msg = f"不支持的JSON文件格式。\n\n检测到的键: {available_keys}\n\n支持的格式:\n1. 数据集评估导出: 包含'weight_config'键\n2. 类别配置: 包含'classes'键\n3. 主配置文件: 包含'default_classes'键\n4. 简单列表: 直接的类别名称列表"
+                        else:
+                            error_msg = f"不支持的JSON文件格式。文件内容类型: {type(data)}\n\n期望的格式: 字典或列表"
+                        
+                        raise ValueError(error_msg)
+                        
+                except json.JSONDecodeError as e:
+                    raise ValueError(f"JSON文件格式错误: {str(e)}")
+                except UnicodeDecodeError as e:
+                    raise ValueError(f"文件编码错误，请确保文件是UTF-8编码: {str(e)}")
+                    
             else:
                 # 文本文件格式（每行一个类别）
-                with open(file_path, 'r', encoding='utf-8') as f:
-                    loaded_classes = [line.strip() for line in f if line.strip()]
-                # 为所有类别设置默认权重
-                loaded_weights = {class_name: 1.0 for class_name in loaded_classes}
+                try:
+                    with open(file_path, 'r', encoding='utf-8') as f:
+                        loaded_classes = [line.strip() for line in f if line.strip()]
+                    # 为所有类别设置默认权重
+                    loaded_weights = {class_name: 1.0 for class_name in loaded_classes}
+                except UnicodeDecodeError:
+                    # 尝试其他编码
+                    try:
+                        with open(file_path, 'r', encoding='gbk') as f:
+                            loaded_classes = [line.strip() for line in f if line.strip()]
+                        loaded_weights = {class_name: 1.0 for class_name in loaded_classes}
+                    except UnicodeDecodeError as e:
+                        raise ValueError(f"无法读取文件，请检查文件编码: {str(e)}")
             
             if not loaded_classes:
                 QMessageBox.warning(self, "警告", "文件中没有找到有效的类别信息")
                 return
+            
+            print(f"成功加载类别: {loaded_classes}")
+            print(f"加载的权重: {loaded_weights}")
+            print(f"权重策略: {loaded_strategy}")
             
             # 根据用户选择处理现有类别
             if replace_existing:
@@ -866,6 +918,9 @@ class SettingsTab(BaseTab):
             )
                 
         except Exception as e:
+            print(f"加载类别配置时出错: {str(e)}")
+            import traceback
+            traceback.print_exc()
             QMessageBox.critical(self, "加载失败", f"加载类别配置文件时出错:\n{str(e)}")
     
     def save_config_to_file(self):
