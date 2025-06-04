@@ -49,6 +49,93 @@ class TrainingThread(QThread):
         self.class_weights = None
         self.class_distribution = None
     
+    def _validate_weight_config(self, class_names):
+        """
+        验证权重配置是否与数据集类别匹配
+        
+        Args:
+            class_names: 数据集中的类别名称列表
+        """
+        self.status_updated.emit("验证权重配置...")
+        
+        # 收集所有可能的权重源
+        weight_sources = []
+        
+        if 'class_weights' in self.config:
+            weight_sources.append(('配置中的class_weights', self.config.get('class_weights', {})))
+        
+        if 'custom_class_weights' in self.config:
+            weight_sources.append(('配置中的custom_class_weights', self.config.get('custom_class_weights', {})))
+        
+        if 'weight_config_file' in self.config:
+            weight_config_file = self.config.get('weight_config_file')
+            if weight_config_file and os.path.exists(weight_config_file):
+                try:
+                    with open(weight_config_file, 'r', encoding='utf-8') as f:
+                        weight_data = json.load(f)
+                    
+                    if 'weight_config' in weight_data:
+                        weight_sources.append(('权重文件(weight_config)', weight_data['weight_config'].get('class_weights', {})))
+                    elif 'class_weights' in weight_data:
+                        weight_sources.append(('权重文件(class_weights)', weight_data.get('class_weights', {})))
+                        
+                except Exception as e:
+                    self.status_updated.emit(f"无法读取权重配置文件: {str(e)}")
+        
+        if 'all_strategies' in self.config:
+            strategies = self.config.get('all_strategies', {})
+            if 'custom' in strategies:
+                weight_sources.append(('all_strategies中的custom', strategies['custom']))
+            elif strategies:
+                first_strategy = list(strategies.keys())[0]
+                weight_sources.append((f'all_strategies中的{first_strategy}', strategies[first_strategy]))
+        
+        # 分析权重配置
+        if not weight_sources:
+            self.status_updated.emit("警告: 未找到任何权重配置源，将使用默认权重1.0")
+            return
+        
+        # 检查每个权重源
+        for source_name, weights_dict in weight_sources:
+            self.status_updated.emit(f"检查权重源: {source_name}")
+            
+            config_classes = set(weights_dict.keys())
+            dataset_classes = set(class_names)
+            
+            # 检查类别匹配情况
+            missing_in_config = dataset_classes - config_classes
+            extra_in_config = config_classes - dataset_classes
+            matching_classes = dataset_classes & config_classes
+            
+            self.status_updated.emit(f"  数据集类别数: {len(dataset_classes)}")
+            self.status_updated.emit(f"  配置中类别数: {len(config_classes)}")
+            self.status_updated.emit(f"  匹配类别数: {len(matching_classes)}")
+            
+            if missing_in_config:
+                self.status_updated.emit(f"  数据集中有但配置中缺失的类别: {list(missing_in_config)[:3]}{'...' if len(missing_in_config) > 3 else ''}")
+            
+            if extra_in_config:
+                self.status_updated.emit(f"  配置中有但数据集中不存在的类别: {list(extra_in_config)[:3]}{'...' if len(extra_in_config) > 3 else ''}")
+            
+            # 权重统计
+            if weights_dict:
+                weight_values = list(weights_dict.values())
+                self.status_updated.emit(f"  权重范围: {min(weight_values):.3f} - {max(weight_values):.3f}")
+                self.status_updated.emit(f"  权重均值: {sum(weight_values)/len(weight_values):.3f}")
+                
+                # 检查是否所有权重都相同
+                if len(set(weight_values)) == 1:
+                    self.status_updated.emit(f"  注意: 所有权重都相同 ({weight_values[0]:.3f})")
+            
+            # 如果有完全匹配的权重源，推荐使用
+            if len(matching_classes) == len(dataset_classes) and not extra_in_config:
+                self.status_updated.emit(f"  ✓ 推荐权重源: {source_name} (完全匹配)")
+                break
+            elif len(matching_classes) > 0:
+                self.status_updated.emit(f"  ○ 可用权重源: {source_name} (部分匹配)")
+            else:
+                self.status_updated.emit(f"  ✗ 不可用权重源: {source_name} (无匹配)")
+    
     def _calculate_class_weights(self, dataset, class_names, weight_strategy='balanced'):
         """
         计算类别权重
@@ -62,6 +149,10 @@ class TrainingThread(QThread):
             torch.Tensor: 类别权重张量
         """
         self.status_updated.emit("正在计算类别权重...")
+        
+        # 验证和诊断权重配置
+        if weight_strategy == 'custom':
+            self._validate_weight_config(class_names)
         
         # 获取所有标签
         all_labels = []
@@ -110,12 +201,66 @@ class TrainingThread(QThread):
             class_weights = np.array(class_weights)
         elif weight_strategy == 'custom':
             # 自定义权重（从配置中读取）
-            custom_weights = self.config.get('custom_class_weights', {})
+            # 支持多种配置格式的权重读取
+            custom_weights = {}
+            
+            # 1. 首先尝试从 class_weights 字段读取 (设置界面格式)
+            if 'class_weights' in self.config:
+                custom_weights = self.config.get('class_weights', {})
+                self.status_updated.emit("从配置中的class_weights字段读取权重")
+            
+            # 2. 如果为空，尝试从 custom_class_weights 字段读取 (旧版格式)
+            elif 'custom_class_weights' in self.config:
+                custom_weights = self.config.get('custom_class_weights', {})
+                self.status_updated.emit("从配置中的custom_class_weights字段读取权重")
+            
+            # 3. 如果还为空，尝试从外部权重配置文件读取
+            elif 'weight_config_file' in self.config:
+                weight_config_file = self.config.get('weight_config_file')
+                if weight_config_file and os.path.exists(weight_config_file):
+                    try:
+                        with open(weight_config_file, 'r', encoding='utf-8') as f:
+                            weight_data = json.load(f)
+                        
+                        # 支持多种权重文件格式
+                        if 'weight_config' in weight_data:
+                            # 数据集评估导出格式
+                            custom_weights = weight_data['weight_config'].get('class_weights', {})
+                            self.status_updated.emit(f"从权重配置文件读取权重: {weight_config_file}")
+                        elif 'class_weights' in weight_data:
+                            # 直接包含class_weights的格式
+                            custom_weights = weight_data.get('class_weights', {})
+                            self.status_updated.emit(f"从权重配置文件读取权重: {weight_config_file}")
+                        else:
+                            self.status_updated.emit(f"权重配置文件格式不支持: {weight_config_file}")
+                            
+                    except Exception as e:
+                        self.status_updated.emit(f"读取权重配置文件失败: {str(e)}")
+            
+            # 4. 如果仍然为空，检查是否有其他策略的权重可以使用
+            if not custom_weights and 'all_strategies' in self.config:
+                strategies = self.config.get('all_strategies', {})
+                if 'custom' in strategies:
+                    custom_weights = strategies['custom']
+                    self.status_updated.emit("从all_strategies中的custom策略读取权重")
+                elif strategies:
+                    # 使用第一个可用的策略
+                    first_strategy = list(strategies.keys())[0]
+                    custom_weights = strategies[first_strategy]
+                    self.status_updated.emit(f"使用{first_strategy}策略权重作为自定义权重")
+            
+            # 构建权重数组
             class_weights = []
             for class_name in class_names:
                 weight = custom_weights.get(class_name, 1.0)
                 class_weights.append(weight)
             class_weights = np.array(class_weights)
+            
+            # 如果所有权重都是1.0，给出警告
+            if all(w == 1.0 for w in class_weights):
+                self.status_updated.emit("警告: 所有类别权重都是1.0，相当于未使用权重")
+            else:
+                self.status_updated.emit(f"成功加载自定义权重，权重范围: {min(class_weights):.3f} - {max(class_weights):.3f}")
         else:
             # 默认均等权重
             class_weights = np.ones(len(class_names))
@@ -1328,7 +1473,7 @@ class ModelTrainer(QObject):
         replace_activations(model)
         
         return model
-
+    
     def _apply_dropout(self, model, dropout_rate):
         """将dropout应用到模型的所有全连接层
         
@@ -1373,7 +1518,7 @@ class ModelTrainer(QObject):
         add_dropout(model)
         
         return model
-
+    
     def _create_model(self, model_name, num_classes, task_type='classification'):
         """与ModelTrainer._create_model相同的实现"""
         try:

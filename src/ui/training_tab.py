@@ -189,6 +189,9 @@ class TrainingTab(BaseTab):
             import traceback
             traceback.print_exc()
         
+        # 初始化权重配置显示
+        self.refresh_weight_config()
+        
     def apply_config(self, config):
         """应用配置设置到训练标签页"""
         try:
@@ -199,27 +202,24 @@ class TrainingTab(BaseTab):
                 print(f"发现默认输出文件夹配置: {config['default_output_folder']}")
                 self.annotation_folder = config['default_output_folder']
                 
-                # 根据当前任务类型设置相应的路径输入框
+                # 设置相应的路径输入框
                 if hasattr(self, 'classification_path_edit'):
-                    print(f"设置classification_path_edit: {self.annotation_folder}")
                     self.classification_path_edit.setText(self.annotation_folder)
-                else:
-                    print("classification_path_edit尚未创建")
-                    
+                    print(f"设置分类路径输入框: {self.annotation_folder}")
+                
                 if hasattr(self, 'detection_path_edit'):
-                    print(f"设置detection_path_edit: {self.annotation_folder}")
                     self.detection_path_edit.setText(self.annotation_folder)
-                else:
-                    print("detection_path_edit尚未创建")
+                    print(f"设置检测路径输入框: {self.annotation_folder}")
                 
-                # 检查是否满足开始训练的条件
+                # 检查是否可以开始训练
                 self.check_training_ready()
-            else:
-                print("配置中没有找到default_output_folder或为空值")
                 
-            print(f"已应用训练标签页配置，标注文件夹: {self.annotation_folder}")
+            # 刷新权重配置显示
+            if hasattr(self, 'refresh_weight_config'):
+                self.refresh_weight_config()
+                
         except Exception as e:
-            print(f"应用训练标签页配置时出错: {str(e)}")
+            print(f"训练标签页apply_config出错: {str(e)}")
             import traceback
             traceback.print_exc()
         
@@ -386,6 +386,54 @@ class TrainingTab(BaseTab):
         
         folder_group.setLayout(folder_layout)
         main_layout.addWidget(folder_group)
+        
+        # 创建类别权重信息显示组
+        weight_info_group = QGroupBox("类别权重配置")
+        weight_info_layout = QVBoxLayout()
+        weight_info_layout.setContentsMargins(10, 15, 10, 15)
+        weight_info_layout.setSpacing(8)
+        
+        # 权重策略显示行
+        strategy_layout = QHBoxLayout()
+        strategy_layout.addWidget(QLabel("权重策略:"))
+        self.classification_weight_strategy_label = QLabel("未配置")
+        self.classification_weight_strategy_label.setStyleSheet("color: #666; font-weight: bold;")
+        self.classification_weight_strategy_label.setToolTip("当前使用的类别权重策略")
+        strategy_layout.addWidget(self.classification_weight_strategy_label)
+        strategy_layout.addStretch()
+        
+        # 权重配置源显示
+        source_layout = QHBoxLayout()
+        source_layout.addWidget(QLabel("配置源:"))
+        self.classification_weight_source_label = QLabel("无")
+        self.classification_weight_source_label.setStyleSheet("color: #666;")
+        self.classification_weight_source_label.setToolTip("权重配置的来源")
+        source_layout.addWidget(self.classification_weight_source_label)
+        source_layout.addStretch()
+        
+        # 刷新权重配置按钮
+        refresh_weight_btn = QPushButton("刷新权重配置")
+        refresh_weight_btn.setFixedWidth(120)
+        refresh_weight_btn.setToolTip("重新检测和加载类别权重配置")
+        refresh_weight_btn.clicked.connect(self.refresh_weight_config)
+        source_layout.addWidget(refresh_weight_btn)
+        
+        weight_info_layout.addLayout(strategy_layout)
+        weight_info_layout.addLayout(source_layout)
+        
+        # 权重详细信息显示
+        self.classification_weight_details_label = QLabel("权重配置详情:")
+        weight_info_layout.addWidget(self.classification_weight_details_label)
+        
+        # 权重信息文本框
+        self.classification_weight_info_text = QTextBrowser()
+        self.classification_weight_info_text.setMaximumHeight(100)
+        self.classification_weight_info_text.setStyleSheet("background-color: #F8F9FA; border: 1px solid #E0E0E0; font-family: monospace; font-size: 11px;")
+        self.classification_weight_info_text.setToolTip("显示详细的类别权重配置信息")
+        weight_info_layout.addWidget(self.classification_weight_info_text)
+        
+        weight_info_group.setLayout(weight_info_layout)
+        main_layout.addWidget(weight_info_group)
         
         # 创建预训练模型组
         pretrained_group = QGroupBox("预训练模型")
@@ -662,6 +710,54 @@ class TrainingTab(BaseTab):
         
         folder_group.setLayout(folder_layout)
         main_layout.addWidget(folder_group)
+        
+        # 创建类别权重信息显示组（目标检测）
+        weight_info_group = QGroupBox("类别权重配置")
+        weight_info_layout = QVBoxLayout()
+        weight_info_layout.setContentsMargins(10, 15, 10, 15)
+        weight_info_layout.setSpacing(8)
+        
+        # 权重策略显示行
+        strategy_layout = QHBoxLayout()
+        strategy_layout.addWidget(QLabel("权重策略:"))
+        self.detection_weight_strategy_label = QLabel("未配置")
+        self.detection_weight_strategy_label.setStyleSheet("color: #666; font-weight: bold;")
+        self.detection_weight_strategy_label.setToolTip("当前使用的类别权重策略")
+        strategy_layout.addWidget(self.detection_weight_strategy_label)
+        strategy_layout.addStretch()
+        
+        # 权重配置源显示
+        source_layout = QHBoxLayout()
+        source_layout.addWidget(QLabel("配置源:"))
+        self.detection_weight_source_label = QLabel("无")
+        self.detection_weight_source_label.setStyleSheet("color: #666;")
+        self.detection_weight_source_label.setToolTip("权重配置的来源")
+        source_layout.addWidget(self.detection_weight_source_label)
+        source_layout.addStretch()
+        
+        # 刷新权重配置按钮
+        refresh_weight_btn = QPushButton("刷新权重配置")
+        refresh_weight_btn.setFixedWidth(120)
+        refresh_weight_btn.setToolTip("重新检测和加载类别权重配置")
+        refresh_weight_btn.clicked.connect(self.refresh_weight_config)
+        source_layout.addWidget(refresh_weight_btn)
+        
+        weight_info_layout.addLayout(strategy_layout)
+        weight_info_layout.addLayout(source_layout)
+        
+        # 权重详细信息显示
+        self.detection_weight_details_label = QLabel("权重配置详情:")
+        weight_info_layout.addWidget(self.detection_weight_details_label)
+        
+        # 权重信息文本框
+        self.detection_weight_info_text = QTextBrowser()
+        self.detection_weight_info_text.setMaximumHeight(100)
+        self.detection_weight_info_text.setStyleSheet("background-color: #F8F9FA; border: 1px solid #E0E0E0; font-family: monospace; font-size: 11px;")
+        self.detection_weight_info_text.setToolTip("显示详细的类别权重配置信息")
+        weight_info_layout.addWidget(self.detection_weight_info_text)
+        
+        weight_info_group.setLayout(weight_info_layout)
+        main_layout.addWidget(weight_info_group)
         
         # 创建预训练模型组
         pretrained_group = QGroupBox("预训练模型")
@@ -986,6 +1082,10 @@ class TrainingTab(BaseTab):
             
         self.check_training_ready()
         
+        # 刷新权重配置显示
+        if hasattr(self, 'refresh_weight_config'):
+            self.refresh_weight_config()
+    
     def select_classification_folder(self):
         """选择分类标注文件夹"""
         try:
@@ -1673,3 +1773,202 @@ class TrainingTab(BaseTab):
             
         # 将层配置保存到训练参数中
         self.layer_config = config
+
+    def refresh_weight_config(self):
+        """刷新类别权重配置信息"""
+        try:
+            self.update_status("正在刷新权重配置...")
+            
+            # 获取当前任务类型
+            current_task = "classification" if self.task_type == "classification" else "detection"
+            
+            # 从配置加载器获取权重配置信息
+            weight_info = self._load_weight_config()
+            
+            # 更新界面显示
+            if current_task == "classification":
+                self._update_classification_weight_display(weight_info)
+            else:
+                self._update_detection_weight_display(weight_info)
+                
+            self.update_status("权重配置刷新完成")
+            
+        except Exception as e:
+            self.update_status(f"刷新权重配置失败: {str(e)}")
+            print(f"刷新权重配置时出错: {str(e)}")
+            import traceback
+            traceback.print_exc()
+
+    def _load_weight_config(self):
+        """加载权重配置信息"""
+        try:
+            weight_info = {
+                'strategy': '未配置',
+                'source': '无',
+                'details': '暂无权重配置信息',
+                'class_weights': {},
+                'found_sources': []
+            }
+            
+            # 获取主配置文件
+            config_file = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), 'config.json')
+            if os.path.exists(config_file):
+                with open(config_file, 'r', encoding='utf-8') as f:
+                    config = json.load(f)
+                
+                # 检查各种权重配置源
+                sources_found = []
+                
+                # 1. 检查直接配置的class_weights
+                if 'class_weights' in config and config['class_weights']:
+                    sources_found.append('配置文件中的class_weights')
+                    weight_info['class_weights'] = config['class_weights']
+                    weight_info['strategy'] = config.get('weight_strategy', 'custom')
+                    weight_info['source'] = '配置文件(class_weights)'
+                
+                # 2. 检查custom_class_weights
+                elif 'custom_class_weights' in config and config['custom_class_weights']:
+                    sources_found.append('配置文件中的custom_class_weights')
+                    weight_info['class_weights'] = config['custom_class_weights']
+                    weight_info['strategy'] = config.get('weight_strategy', 'custom')
+                    weight_info['source'] = '配置文件(custom_class_weights)'
+                
+                # 3. 检查外部权重配置文件
+                elif 'weight_config_file' in config and config['weight_config_file']:
+                    weight_file = config['weight_config_file']
+                    if os.path.exists(weight_file):
+                        sources_found.append(f'外部权重文件: {os.path.basename(weight_file)}')
+                        try:
+                            with open(weight_file, 'r', encoding='utf-8') as wf:
+                                weight_data = json.load(wf)
+                            
+                            if 'weight_config' in weight_data:
+                                weight_info['class_weights'] = weight_data['weight_config'].get('class_weights', {})
+                                weight_info['strategy'] = weight_data['weight_config'].get('weight_strategy', 'custom')
+                            elif 'class_weights' in weight_data:
+                                weight_info['class_weights'] = weight_data.get('class_weights', {})
+                                weight_info['strategy'] = weight_data.get('weight_strategy', 'custom')
+                            
+                            weight_info['source'] = f'外部文件({os.path.basename(weight_file)})'
+                        except Exception as e:
+                            sources_found.append(f'外部权重文件读取失败: {str(e)}')
+                
+                # 4. 检查all_strategies配置
+                elif 'all_strategies' in config and config['all_strategies']:
+                    strategies = config['all_strategies']
+                    sources_found.append('配置文件中的all_strategies')
+                    
+                    # 优先使用custom策略
+                    if 'custom' in strategies:
+                        weight_info['class_weights'] = strategies['custom']
+                        weight_info['strategy'] = 'custom'
+                    else:
+                        # 使用第一个可用策略
+                        first_strategy = list(strategies.keys())[0]
+                        weight_info['class_weights'] = strategies[first_strategy]
+                        weight_info['strategy'] = first_strategy
+                    
+                    weight_info['source'] = 'all_strategies配置'
+                
+                # 检查是否启用了类别权重
+                use_class_weights = config.get('use_class_weights', False)
+                if not use_class_weights:
+                    weight_info['strategy'] += ' (已禁用)'
+                
+                weight_info['found_sources'] = sources_found
+                
+                # 生成详细信息
+                if weight_info['class_weights']:
+                    details = []
+                    details.append(f"权重策略: {weight_info['strategy']}")
+                    details.append(f"配置源: {weight_info['source']}")
+                    details.append(f"类别数量: {len(weight_info['class_weights'])}")
+                    
+                    # 显示权重范围
+                    weights = list(weight_info['class_weights'].values())
+                    if weights:
+                        details.append(f"权重范围: {min(weights):.3f} - {max(weights):.3f}")
+                        details.append(f"权重均值: {sum(weights)/len(weights):.3f}")
+                    
+                    details.append("")
+                    details.append("类别权重详情:")
+                    
+                    # 显示前5个类别的权重
+                    for i, (class_name, weight) in enumerate(list(weight_info['class_weights'].items())[:5]):
+                        details.append(f"  {class_name}: {weight:.3f}")
+                    
+                    if len(weight_info['class_weights']) > 5:
+                        details.append(f"  ... 还有 {len(weight_info['class_weights']) - 5} 个类别")
+                    
+                    weight_info['details'] = '\n'.join(details)
+                else:
+                    if sources_found:
+                        weight_info['details'] = f"发现权重配置源但无有效权重数据:\n" + '\n'.join(f"- {s}" for s in sources_found)
+                    else:
+                        weight_info['details'] = "未发现任何权重配置\n\n建议:\n- 在设置页面配置类别权重\n- 使用数据集评估功能生成权重配置\n- 手动编辑配置文件添加权重信息"
+            
+            else:
+                weight_info['details'] = "配置文件不存在"
+            
+            return weight_info
+            
+        except Exception as e:
+            return {
+                'strategy': '加载失败',
+                'source': '错误',
+                'details': f'加载权重配置时出错: {str(e)}',
+                'class_weights': {},
+                'found_sources': []
+            }
+
+    def _update_classification_weight_display(self, weight_info):
+        """更新分类任务的权重配置显示"""
+        try:
+            # 更新策略标签
+            strategy_text = weight_info['strategy']
+            if weight_info['class_weights']:
+                self.classification_weight_strategy_label.setStyleSheet("color: #2E7D32; font-weight: bold;")  # 绿色表示有配置
+            else:
+                self.classification_weight_strategy_label.setStyleSheet("color: #D32F2F; font-weight: bold;")  # 红色表示无配置
+            self.classification_weight_strategy_label.setText(strategy_text)
+            
+            # 更新配置源标签
+            self.classification_weight_source_label.setText(weight_info['source'])
+            
+            # 更新详细信息
+            self.classification_weight_info_text.setPlainText(weight_info['details'])
+            
+        except Exception as e:
+            print(f"更新分类权重显示时出错: {str(e)}")
+
+    def _update_detection_weight_display(self, weight_info):
+        """更新检测任务的权重配置显示"""
+        try:
+            # 更新策略标签
+            strategy_text = weight_info['strategy']
+            if weight_info['class_weights']:
+                self.detection_weight_strategy_label.setStyleSheet("color: #2E7D32; font-weight: bold;")  # 绿色表示有配置
+            else:
+                self.detection_weight_strategy_label.setStyleSheet("color: #D32F2F; font-weight: bold;")  # 红色表示无配置
+            self.detection_weight_strategy_label.setText(strategy_text)
+            
+            # 更新配置源标签
+            self.detection_weight_source_label.setText(weight_info['source'])
+            
+            # 更新详细信息
+            self.detection_weight_info_text.setPlainText(weight_info['details'])
+            
+        except Exception as e:
+            print(f"更新检测权重显示时出错: {str(e)}")
+
+    def select_classification_folder(self):
+        """选择分类数据集文件夹"""
+        self.browse_classification_folder()
+        # 刷新权重配置显示
+        self.refresh_weight_config()
+
+    def select_detection_folder(self):
+        """选择检测数据集文件夹"""
+        self.browse_detection_folder()
+        # 刷新权重配置显示
+        self.refresh_weight_config()
