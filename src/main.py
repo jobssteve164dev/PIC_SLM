@@ -212,11 +212,13 @@ def main():
             window.training_tab.apply_config(config)
             print(f"训练标签页配置应用完成，标注文件夹: {window.training_tab.annotation_folder}")
             
-            # 检查路径控件是否有文本
-            if hasattr(window.training_tab, 'classification_path_edit'):
-                print(f"分类路径控件文本: {window.training_tab.classification_path_edit.text()}")
-            if hasattr(window.training_tab, 'detection_path_edit'):
-                print(f"检测路径控件文本: {window.training_tab.detection_path_edit.text()}")
+            # 检查路径控件是否有文本 - 修复：使用新的组件结构
+            if (hasattr(window.training_tab, 'classification_widget') and 
+                hasattr(window.training_tab.classification_widget, 'path_edit')):
+                print(f"分类路径控件文本: {window.training_tab.classification_widget.path_edit.text()}")
+            if (hasattr(window.training_tab, 'detection_widget') and 
+                hasattr(window.training_tab.detection_widget, 'path_edit')):
+                print(f"检测路径控件文本: {window.training_tab.detection_widget.path_edit.text()}")
         else:
             print("警告: 训练标签页没有apply_config方法")
             
@@ -448,8 +450,9 @@ def main():
             # 用于日志调试
             print(f"准备训练配置，使用分类数据集路径: {data_dir}")
             
-            # 确保控件显示的路径与实际使用的路径一致
-            self.training_tab.classification_path_edit.setText(data_dir)
+            # 确保控件显示的路径与实际使用的路径一致 - 修复：使用新的组件结构
+            if hasattr(self.training_tab, 'classification_widget') and hasattr(self.training_tab.classification_widget, 'path_edit'):
+                self.training_tab.classification_widget.path_edit.setText(data_dir)
             
             model_name = params.get('model', 'ResNet50')
             batch_size = params.get('batch_size', 32)
@@ -478,8 +481,9 @@ def main():
             # 用于日志调试
             print(f"准备训练配置，使用目标检测数据集路径: {data_dir}")
             
-            # 确保控件显示的路径与实际使用的路径一致
-            self.training_tab.detection_path_edit.setText(data_dir)
+            # 确保控件显示的路径与实际使用的路径一致 - 修复：使用新的组件结构
+            if hasattr(self.training_tab, 'detection_widget') and hasattr(self.training_tab.detection_widget, 'path_edit'):
+                self.training_tab.detection_widget.path_edit.setText(data_dir)
             
             model_name = params.get('model', 'YOLOv5')
             batch_size = params.get('batch_size', 16)
