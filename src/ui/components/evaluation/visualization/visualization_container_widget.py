@@ -14,7 +14,7 @@ from ui.feature_visualization import FeatureVisualizationWidget
 from ui.gradcam_visualization import GradCAMVisualizationWidget
 from ui.sensitivity_analysis import SensitivityAnalysisWidget
 from ui.lime_explanation import LIMEExplanationWidget
-from ui.model_structure_viewer import ModelStructureViewer
+from ui.components.model_structure_viewer import ModelStructureViewer
 
 
 class VisualizationContainerWidget(QWidget):

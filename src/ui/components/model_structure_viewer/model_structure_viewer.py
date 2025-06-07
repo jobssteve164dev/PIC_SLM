@@ -3,8 +3,8 @@ from PyQt5.QtCore import Qt
 import os
 import traceback
 from .model_loader import ModelLoader
-from .components.model_structure_viewer.visualization_controller import VisualizationController
-from .components.model_structure_viewer.ui_components import UIComponents
+from .visualization_controller import VisualizationController
+from .ui_components import UIComponents
 
 try:
     from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas

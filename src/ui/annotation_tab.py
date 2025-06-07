@@ -12,8 +12,7 @@ from datetime import datetime
 from .base_tab import BaseTab
 import json
 from PyQt5.QtWidgets import QApplication
-from .classification_widget import ClassificationWidget
-from .detection_widget import DetectionWidget
+from .components.annotation import ClassificationWidget, DetectionWidget
 
 class AnnotationTab(BaseTab):
     """标注标签页，负责图像标注功能"""

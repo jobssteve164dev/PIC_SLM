@@ -17,10 +17,10 @@ import matplotlib.pyplot as plt
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 
 # 导入拆分的组件模块
-from .components.dataset_analyzers import ClassificationAnalyzer, DetectionAnalyzer
-from .components.weight_generator import WeightGenerator
-from .components.chart_manager import ChartManager
-from .components.result_display_manager import ResultDisplayManager
+from .components.dataset_evaluation import ClassificationAnalyzer, DetectionAnalyzer
+from .components.dataset_evaluation import WeightGenerator
+from .components.dataset_evaluation import ChartManager
+from .components.dataset_evaluation import ResultDisplayManager
 
 
 class DatasetEvaluationTab(QWidget):

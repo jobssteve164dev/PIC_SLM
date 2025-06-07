@@ -8,15 +8,17 @@ import os
 import sys
 import platform
 from .base_tab import BaseTab
-from .training_help_dialog import TrainingHelpDialog
+from .components.training import (
+    TrainingHelpDialog,
+    LayerConfigWidget,
+    ModelDownloadDialog,
+    ClassificationTrainingWidget,
+    DetectionTrainingWidget,
+    TrainingControlWidget
+)
 import json
 import subprocess
-from .layer_config_widget import LayerConfigWidget
 from src.config_loader import ConfigLoader
-from .model_download_dialog import ModelDownloadDialog
-from .classification_training_widget import ClassificationTrainingWidget
-from .detection_training_widget import DetectionTrainingWidget
-from .training_control_widget import TrainingControlWidget
 
 
 class TrainingTab(BaseTab):

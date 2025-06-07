@@ -4,7 +4,7 @@ from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QGroupBox,
                            QCheckBox, QPushButton, QListWidget, QScrollArea,
                            QMessageBox, QLineEdit, QGridLayout)
 from PyQt5.QtCore import Qt, pyqtSignal
-from .model_structure_editor import ModelStructureEditor
+from ...model_structure_editor import ModelStructureEditor
 
 class LayerConfigWidget(QWidget):
     """模型层配置组件"""

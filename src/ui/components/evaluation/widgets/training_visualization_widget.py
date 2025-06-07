@@ -6,10 +6,10 @@ from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 import matplotlib
 import logging
 
-# 导入分离的组件
-from .metrics_data_manager import MetricsDataManager
-from .chart_renderer import ChartRenderer
-from .metric_explanations import MetricExplanations
+# 导入分离的组件 - 修复路径
+from ..utils.metrics_data_manager import MetricsDataManager
+from ..utils.chart_renderer import ChartRenderer
+from ..utils.metric_explanations import MetricExplanations
 from .tensorboard_widget import TensorBoardWidget
 
 # 在UI组件中使用Qt5Agg后端以正确集成到PyQt中

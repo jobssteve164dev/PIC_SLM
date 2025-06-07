@@ -26,7 +26,7 @@ def test_refactored_viewer():
     
     # 导入重构后的组件
     try:
-        from src.ui.model_structure_viewer import ModelStructureViewer
+        from src.ui.components.model_structure_viewer import ModelStructureViewer
         print("✅ 成功导入重构后的ModelStructureViewer")
     except ImportError as e:
         print(f"❌ 导入ModelStructureViewer失败: {e}")

@@ -12,11 +12,13 @@ if src_dir not in sys.path:
     sys.path.insert(0, src_dir)
 
 from .base_tab import BaseTab
-from .components.training_curve_widget import TrainingCurveWidget
-from .components.tensorboard_manager_widget import TensorBoardManagerWidget
-from .components.model_evaluation_widget import ModelEvaluationWidget
-from .components.params_comparison_widget import ParamsComparisonWidget
-from .components.visualization_container_widget import VisualizationContainerWidget
+from .components.evaluation import (
+    TrainingCurveWidget,
+    TensorBoardManagerWidget,
+    ModelEvaluationWidget,
+    ParamsComparisonWidget,
+    VisualizationContainerWidget
+)
 
 
 class EvaluationTab(BaseTab):

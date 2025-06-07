@@ -1,37 +1,95 @@
 # 训练可视化组件包 
 
-# 评估组件模块
-from .model_evaluation_widget import ModelEvaluationWidget
-from .tensorboard_manager_widget import TensorBoardManagerWidget
-from .training_curve_widget import TrainingCurveWidget
-from .params_comparison_widget import ParamsComparisonWidget
-from .visualization_container_widget import VisualizationContainerWidget
+# 从新的evaluation子包导入评估组件
+from .evaluation import (
+    ModelEvaluationWidget,
+    TensorBoardManagerWidget,
+    TrainingCurveWidget,
+    ParamsComparisonWidget,
+    VisualizationContainerWidget,
+    TrainingVisualizationWidget,
+    TensorBoardWidget,
+    ChartRenderer,
+    MetricsDataManager,
+    MetricExplanations
+)
 
-# 现有的组件
-from .training_visualization_widget import TrainingVisualizationWidget
-from .tensorboard_widget import TensorBoardWidget
-from .chart_manager import ChartManager
-from .chart_renderer import ChartRenderer
-from .metrics_data_manager import MetricsDataManager
-from .result_display_manager import ResultDisplayManager
-from .weight_generator import WeightGenerator
-from .metric_explanations import MetricExplanations
+# 数据集评估组件模块
+from .dataset_evaluation import (
+    ClassificationAnalyzer, 
+    DetectionAnalyzer, 
+    BaseDatasetAnalyzer,
+    WeightGenerator,
+    ChartManager,
+    ResultDisplayManager
+)
+
+# 设置组件模块
+from .settings import (
+    ClassWeightWidget,
+    ModelConfigWidget,
+    FolderConfigWidget,
+    ConfigManager,
+    WeightStrategy
+)
+
+# 标注组件模块
+from .annotation import (
+    ClassificationWidget,
+    DetectionWidget,
+    AnnotationCanvas
+)
+
+# 训练组件模块
+from .training import (
+    ClassificationTrainingWidget,
+    DetectionTrainingWidget,
+    TrainingControlWidget,
+    TrainingHelpDialog,
+    LayerConfigWidget,
+    ModelDownloadDialog,
+    WeightConfigManager
+)
 
 __all__ = [
-    # 评估组件
+    # 评估组件 (从evaluation子包导入)
     'ModelEvaluationWidget',
     'TensorBoardManagerWidget', 
     'TrainingCurveWidget',
     'ParamsComparisonWidget',
     'VisualizationContainerWidget',
-    
-    # 现有组件
     'TrainingVisualizationWidget',
     'TensorBoardWidget',
-    'ChartManager',
     'ChartRenderer',
     'MetricsDataManager',
-    'ResultDisplayManager',
+    'MetricExplanations',
+    
+    # 数据集评估组件
+    'ClassificationAnalyzer',
+    'DetectionAnalyzer', 
+    'BaseDatasetAnalyzer',
     'WeightGenerator',
-    'MetricExplanations'
+    'ChartManager',
+    'ResultDisplayManager',
+    
+    # 设置组件
+    'ClassWeightWidget',
+    'ModelConfigWidget',
+    'FolderConfigWidget',
+    'ConfigManager',
+    'WeightStrategy',
+    
+    # 标注组件
+    'ClassificationWidget',
+    'DetectionWidget',
+    'AnnotationCanvas',
+    
+    # 训练组件
+    'ClassificationTrainingWidget',
+    'DetectionTrainingWidget',
+    'TrainingControlWidget',
+    'TrainingHelpDialog',
+    'LayerConfigWidget',
+    'ModelDownloadDialog',
+    'WeightConfigManager'
 ] 
