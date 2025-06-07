@@ -1,0 +1,932 @@
+{
+    "layers": [
+        {
+            "name": "ResNet_0_Conv2d_1",
+            "type": "Conv2d",
+            "position": {
+                "x": -600.0,
+                "y": 150.0
+            },
+            "in_channels": 3,
+            "out_channels": 64,
+            "kernel_size": [
+                7,
+                7
+            ],
+            "stride": [
+                2,
+                2
+            ],
+            "padding": [
+                3,
+                3
+            ]
+        },
+        {
+            "name": "ResNet_0_BatchNorm2d_2",
+            "type": "BatchNorm2d",
+            "position": {
+                "x": -400.0,
+                "y": 150.0
+            },
+            "num_features": 64
+        },
+        {
+            "name": "ResNet_0_ReLU_3",
+            "type": "ReLU",
+            "position": {
+                "x": -200.0,
+                "y": 150.0
+            }
+        },
+        {
+            "name": "ResNet_0_MaxPool2d_4",
+            "type": "MaxPool2d",
+            "position": {
+                "x": 0.0,
+                "y": 150.0
+            },
+            "kernel_size": [
+                3,
+                3
+            ]
+        },
+        {
+            "name": "ResNet_0_Sequential_5_BasicBlock_6_Conv2d_7",
+            "type": "Conv2d",
+            "position": {
+                "x": -4000.0,
+                "y": 450.0
+            },
+            "in_channels": 64,
+            "out_channels": 64,
+            "kernel_size": [
+                3,
+                3
+            ],
+            "stride": [
+                1,
+                1
+            ],
+            "padding": [
+                1,
+                1
+            ]
+        },
+        {
+            "name": "ResNet_0_Sequential_5_BasicBlock_6_BatchNorm2d_8",
+            "type": "BatchNorm2d",
+            "position": {
+                "x": -3800.0,
+                "y": 450.0
+            },
+            "num_features": 64
+        },
+        {
+            "name": "ResNet_0_Sequential_5_BasicBlock_6_ReLU_9",
+            "type": "ReLU",
+            "position": {
+                "x": -3600.0,
+                "y": 450.0
+            }
+        },
+        {
+            "name": "ResNet_0_Sequential_5_BasicBlock_6_Conv2d_10",
+            "type": "Conv2d",
+            "position": {
+                "x": -3400.0,
+                "y": 450.0
+            },
+            "in_channels": 64,
+            "out_channels": 64,
+            "kernel_size": [
+                3,
+                3
+            ],
+            "stride": [
+                1,
+                1
+            ],
+            "padding": [
+                1,
+                1
+            ]
+        },
+        {
+            "name": "ResNet_0_Sequential_5_BasicBlock_6_BatchNorm2d_11",
+            "type": "BatchNorm2d",
+            "position": {
+                "x": -3200.0,
+                "y": 450.0
+            },
+            "num_features": 64
+        },
+        {
+            "name": "ResNet_0_Sequential_5_BasicBlock_12_Conv2d_13",
+            "type": "Conv2d",
+            "position": {
+                "x": -3000.0,
+                "y": 450.0
+            },
+            "in_channels": 64,
+            "out_channels": 64,
+            "kernel_size": [
+                3,
+                3
+            ],
+            "stride": [
+                1,
+                1
+            ],
+            "padding": [
+                1,
+                1
+            ]
+        },
+        {
+            "name": "ResNet_0_Sequential_5_BasicBlock_12_BatchNorm2d_14",
+            "type": "BatchNorm2d",
+            "position": {
+                "x": -2800.0,
+                "y": 450.0
+            },
+            "num_features": 64
+        },
+        {
+            "name": "ResNet_0_Sequential_5_BasicBlock_12_ReLU_15",
+            "type": "ReLU",
+            "position": {
+                "x": -2600.0,
+                "y": 450.0
+            }
+        },
+        {
+            "name": "ResNet_0_Sequential_5_BasicBlock_12_Conv2d_16",
+            "type": "Conv2d",
+            "position": {
+                "x": -2400.0,
+                "y": 450.0
+            },
+            "in_channels": 64,
+            "out_channels": 64,
+            "kernel_size": [
+                3,
+                3
+            ],
+            "stride": [
+                1,
+                1
+            ],
+            "padding": [
+                1,
+                1
+            ]
+        },
+        {
+            "name": "ResNet_0_Sequential_5_BasicBlock_12_BatchNorm2d_17",
+            "type": "BatchNorm2d",
+            "position": {
+                "x": -2200.0,
+                "y": 450.0
+            },
+            "num_features": 64
+        },
+        {
+            "name": "ResNet_0_Sequential_18_BasicBlock_19_Conv2d_20",
+            "type": "Conv2d",
+            "position": {
+                "x": -2000.0,
+                "y": 450.0
+            },
+            "in_channels": 64,
+            "out_channels": 128,
+            "kernel_size": [
+                3,
+                3
+            ],
+            "stride": [
+                2,
+                2
+            ],
+            "padding": [
+                1,
+                1
+            ]
+        },
+        {
+            "name": "ResNet_0_Sequential_18_BasicBlock_19_BatchNorm2d_21",
+            "type": "BatchNorm2d",
+            "position": {
+                "x": -1800.0,
+                "y": 450.0
+            },
+            "num_features": 128
+        },
+        {
+            "name": "ResNet_0_Sequential_18_BasicBlock_19_ReLU_22",
+            "type": "ReLU",
+            "position": {
+                "x": -1600.0,
+                "y": 450.0
+            }
+        },
+        {
+            "name": "ResNet_0_Sequential_18_BasicBlock_19_Conv2d_23",
+            "type": "Conv2d",
+            "position": {
+                "x": -1400.0,
+                "y": 450.0
+            },
+            "in_channels": 128,
+            "out_channels": 128,
+            "kernel_size": [
+                3,
+                3
+            ],
+            "stride": [
+                1,
+                1
+            ],
+            "padding": [
+                1,
+                1
+            ]
+        },
+        {
+            "name": "ResNet_0_Sequential_18_BasicBlock_19_BatchNorm2d_24",
+            "type": "BatchNorm2d",
+            "position": {
+                "x": -1200.0,
+                "y": 450.0
+            },
+            "num_features": 128
+        },
+        {
+            "name": "ResNet_0_Sequential_18_BasicBlock_19_Sequential_25_Conv2d_26",
+            "type": "Conv2d",
+            "position": {
+                "x": -600.0,
+                "y": 600.0
+            },
+            "in_channels": 64,
+            "out_channels": 128,
+            "kernel_size": [
+                1,
+                1
+            ],
+            "stride": [
+                2,
+                2
+            ],
+            "padding": [
+                0,
+                0
+            ]
+        },
+        {
+            "name": "ResNet_0_Sequential_18_BasicBlock_19_Sequential_25_BatchNorm2d_27",
+            "type": "BatchNorm2d",
+            "position": {
+                "x": -400.0,
+                "y": 600.0
+            },
+            "num_features": 128
+        },
+        {
+            "name": "ResNet_0_Sequential_18_BasicBlock_28_Conv2d_29",
+            "type": "Conv2d",
+            "position": {
+                "x": -1000.0,
+                "y": 450.0
+            },
+            "in_channels": 128,
+            "out_channels": 128,
+            "kernel_size": [
+                3,
+                3
+            ],
+            "stride": [
+                1,
+                1
+            ],
+            "padding": [
+                1,
+                1
+            ]
+        },
+        {
+            "name": "ResNet_0_Sequential_18_BasicBlock_28_BatchNorm2d_30",
+            "type": "BatchNorm2d",
+            "position": {
+                "x": -800.0,
+                "y": 450.0
+            },
+            "num_features": 128
+        },
+        {
+            "name": "ResNet_0_Sequential_18_BasicBlock_28_ReLU_31",
+            "type": "ReLU",
+            "position": {
+                "x": -600.0,
+                "y": 450.0
+            }
+        },
+        {
+            "name": "ResNet_0_Sequential_18_BasicBlock_28_Conv2d_32",
+            "type": "Conv2d",
+            "position": {
+                "x": -400.0,
+                "y": 450.0
+            },
+            "in_channels": 128,
+            "out_channels": 128,
+            "kernel_size": [
+                3,
+                3
+            ],
+            "stride": [
+                1,
+                1
+            ],
+            "padding": [
+                1,
+                1
+            ]
+        },
+        {
+            "name": "ResNet_0_Sequential_18_BasicBlock_28_BatchNorm2d_33",
+            "type": "BatchNorm2d",
+            "position": {
+                "x": -200.0,
+                "y": 450.0
+            },
+            "num_features": 128
+        },
+        {
+            "name": "ResNet_0_Sequential_34_BasicBlock_35_Conv2d_36",
+            "type": "Conv2d",
+            "position": {
+                "x": 0.0,
+                "y": 450.0
+            },
+            "in_channels": 128,
+            "out_channels": 256,
+            "kernel_size": [
+                3,
+                3
+            ],
+            "stride": [
+                2,
+                2
+            ],
+            "padding": [
+                1,
+                1
+            ]
+        },
+        {
+            "name": "ResNet_0_Sequential_34_BasicBlock_35_BatchNorm2d_37",
+            "type": "BatchNorm2d",
+            "position": {
+                "x": 200.0,
+                "y": 450.0
+            },
+            "num_features": 256
+        },
+        {
+            "name": "ResNet_0_Sequential_34_BasicBlock_35_ReLU_38",
+            "type": "ReLU",
+            "position": {
+                "x": 400.0,
+                "y": 450.0
+            }
+        },
+        {
+            "name": "ResNet_0_Sequential_34_BasicBlock_35_Conv2d_39",
+            "type": "Conv2d",
+            "position": {
+                "x": 600.0,
+                "y": 450.0
+            },
+            "in_channels": 256,
+            "out_channels": 256,
+            "kernel_size": [
+                3,
+                3
+            ],
+            "stride": [
+                1,
+                1
+            ],
+            "padding": [
+                1,
+                1
+            ]
+        },
+        {
+            "name": "ResNet_0_Sequential_34_BasicBlock_35_BatchNorm2d_40",
+            "type": "BatchNorm2d",
+            "position": {
+                "x": 800.0,
+                "y": 450.0
+            },
+            "num_features": 256
+        },
+        {
+            "name": "ResNet_0_Sequential_34_BasicBlock_35_Sequential_41_Conv2d_42",
+            "type": "Conv2d",
+            "position": {
+                "x": -200.0,
+                "y": 600.0
+            },
+            "in_channels": 128,
+            "out_channels": 256,
+            "kernel_size": [
+                1,
+                1
+            ],
+            "stride": [
+                2,
+                2
+            ],
+            "padding": [
+                0,
+                0
+            ]
+        },
+        {
+            "name": "ResNet_0_Sequential_34_BasicBlock_35_Sequential_41_BatchNorm2d_43",
+            "type": "BatchNorm2d",
+            "position": {
+                "x": 0.0,
+                "y": 600.0
+            },
+            "num_features": 256
+        },
+        {
+            "name": "ResNet_0_Sequential_34_BasicBlock_44_Conv2d_45",
+            "type": "Conv2d",
+            "position": {
+                "x": 1000.0,
+                "y": 450.0
+            },
+            "in_channels": 256,
+            "out_channels": 256,
+            "kernel_size": [
+                3,
+                3
+            ],
+            "stride": [
+                1,
+                1
+            ],
+            "padding": [
+                1,
+                1
+            ]
+        },
+        {
+            "name": "ResNet_0_Sequential_34_BasicBlock_44_BatchNorm2d_46",
+            "type": "BatchNorm2d",
+            "position": {
+                "x": 1200.0,
+                "y": 450.0
+            },
+            "num_features": 256
+        },
+        {
+            "name": "ResNet_0_Sequential_34_BasicBlock_44_ReLU_47",
+            "type": "ReLU",
+            "position": {
+                "x": 1400.0,
+                "y": 450.0
+            }
+        },
+        {
+            "name": "ResNet_0_Sequential_34_BasicBlock_44_Conv2d_48",
+            "type": "Conv2d",
+            "position": {
+                "x": 1600.0,
+                "y": 450.0
+            },
+            "in_channels": 256,
+            "out_channels": 256,
+            "kernel_size": [
+                3,
+                3
+            ],
+            "stride": [
+                1,
+                1
+            ],
+            "padding": [
+                1,
+                1
+            ]
+        },
+        {
+            "name": "ResNet_0_Sequential_34_BasicBlock_44_BatchNorm2d_49",
+            "type": "BatchNorm2d",
+            "position": {
+                "x": 1800.0,
+                "y": 450.0
+            },
+            "num_features": 256
+        },
+        {
+            "name": "ResNet_0_Sequential_50_BasicBlock_51_Conv2d_52",
+            "type": "Conv2d",
+            "position": {
+                "x": 2000.0,
+                "y": 450.0
+            },
+            "in_channels": 256,
+            "out_channels": 512,
+            "kernel_size": [
+                3,
+                3
+            ],
+            "stride": [
+                2,
+                2
+            ],
+            "padding": [
+                1,
+                1
+            ]
+        },
+        {
+            "name": "ResNet_0_Sequential_50_BasicBlock_51_BatchNorm2d_53",
+            "type": "BatchNorm2d",
+            "position": {
+                "x": 2200.0,
+                "y": 450.0
+            },
+            "num_features": 512
+        },
+        {
+            "name": "ResNet_0_Sequential_50_BasicBlock_51_ReLU_54",
+            "type": "ReLU",
+            "position": {
+                "x": 2400.0,
+                "y": 450.0
+            }
+        },
+        {
+            "name": "ResNet_0_Sequential_50_BasicBlock_51_Conv2d_55",
+            "type": "Conv2d",
+            "position": {
+                "x": 2600.0,
+                "y": 450.0
+            },
+            "in_channels": 512,
+            "out_channels": 512,
+            "kernel_size": [
+                3,
+                3
+            ],
+            "stride": [
+                1,
+                1
+            ],
+            "padding": [
+                1,
+                1
+            ]
+        },
+        {
+            "name": "ResNet_0_Sequential_50_BasicBlock_51_BatchNorm2d_56",
+            "type": "BatchNorm2d",
+            "position": {
+                "x": 2800.0,
+                "y": 450.0
+            },
+            "num_features": 512
+        },
+        {
+            "name": "ResNet_0_Sequential_50_BasicBlock_51_Sequential_57_Conv2d_58",
+            "type": "Conv2d",
+            "position": {
+                "x": 200.0,
+                "y": 600.0
+            },
+            "in_channels": 256,
+            "out_channels": 512,
+            "kernel_size": [
+                1,
+                1
+            ],
+            "stride": [
+                2,
+                2
+            ],
+            "padding": [
+                0,
+                0
+            ]
+        },
+        {
+            "name": "ResNet_0_Sequential_50_BasicBlock_51_Sequential_57_BatchNorm2d_59",
+            "type": "BatchNorm2d",
+            "position": {
+                "x": 400.0,
+                "y": 600.0
+            },
+            "num_features": 512
+        },
+        {
+            "name": "ResNet_0_Sequential_50_BasicBlock_60_Conv2d_61",
+            "type": "Conv2d",
+            "position": {
+                "x": 3000.0,
+                "y": 450.0
+            },
+            "in_channels": 512,
+            "out_channels": 512,
+            "kernel_size": [
+                3,
+                3
+            ],
+            "stride": [
+                1,
+                1
+            ],
+            "padding": [
+                1,
+                1
+            ]
+        },
+        {
+            "name": "ResNet_0_Sequential_50_BasicBlock_60_BatchNorm2d_62",
+            "type": "BatchNorm2d",
+            "position": {
+                "x": 3200.0,
+                "y": 450.0
+            },
+            "num_features": 512
+        },
+        {
+            "name": "ResNet_0_Sequential_50_BasicBlock_60_ReLU_63",
+            "type": "ReLU",
+            "position": {
+                "x": 3400.0,
+                "y": 450.0
+            }
+        },
+        {
+            "name": "ResNet_0_Sequential_50_BasicBlock_60_Conv2d_64",
+            "type": "Conv2d",
+            "position": {
+                "x": 3600.0,
+                "y": 450.0
+            },
+            "in_channels": 512,
+            "out_channels": 512,
+            "kernel_size": [
+                3,
+                3
+            ],
+            "stride": [
+                1,
+                1
+            ],
+            "padding": [
+                1,
+                1
+            ]
+        },
+        {
+            "name": "ResNet_0_Sequential_50_BasicBlock_60_BatchNorm2d_65",
+            "type": "BatchNorm2d",
+            "position": {
+                "x": 3800.0,
+                "y": 450.0
+            },
+            "num_features": 512
+        },
+        {
+            "name": "ResNet_0_AdaptiveAvgPool2d_66",
+            "type": "AdaptiveAvgPool2d",
+            "position": {
+                "x": 200.0,
+                "y": 150.0
+            }
+        },
+        {
+            "name": "ResNet_0_Linear_67",
+            "type": "Linear",
+            "position": {
+                "x": 400.0,
+                "y": 150.0
+            },
+            "in_features": 512,
+            "out_features": 1000
+        }
+    ],
+    "connections": [
+        {
+            "from": "ResNet_0_Conv2d_1",
+            "to": "ResNet_0_BatchNorm2d_2"
+        },
+        {
+            "from": "ResNet_0_BatchNorm2d_2",
+            "to": "ResNet_0_ReLU_3"
+        },
+        {
+            "from": "ResNet_0_ReLU_3",
+            "to": "ResNet_0_MaxPool2d_4"
+        },
+        {
+            "from": "ResNet_0_MaxPool2d_4",
+            "to": "ResNet_0_Sequential_5_BasicBlock_6_Conv2d_7"
+        },
+        {
+            "from": "ResNet_0_Sequential_5_BasicBlock_6_Conv2d_7",
+            "to": "ResNet_0_Sequential_5_BasicBlock_6_BatchNorm2d_8"
+        },
+        {
+            "from": "ResNet_0_Sequential_5_BasicBlock_6_BatchNorm2d_8",
+            "to": "ResNet_0_Sequential_5_BasicBlock_6_ReLU_9"
+        },
+        {
+            "from": "ResNet_0_Sequential_5_BasicBlock_6_ReLU_9",
+            "to": "ResNet_0_Sequential_5_BasicBlock_6_Conv2d_10"
+        },
+        {
+            "from": "ResNet_0_Sequential_5_BasicBlock_6_Conv2d_10",
+            "to": "ResNet_0_Sequential_5_BasicBlock_6_BatchNorm2d_11"
+        },
+        {
+            "from": "ResNet_0_Sequential_5_BasicBlock_6_BatchNorm2d_11",
+            "to": "ResNet_0_Sequential_5_BasicBlock_12_Conv2d_13"
+        },
+        {
+            "from": "ResNet_0_Sequential_5_BasicBlock_12_Conv2d_13",
+            "to": "ResNet_0_Sequential_5_BasicBlock_12_BatchNorm2d_14"
+        },
+        {
+            "from": "ResNet_0_Sequential_5_BasicBlock_12_BatchNorm2d_14",
+            "to": "ResNet_0_Sequential_5_BasicBlock_12_ReLU_15"
+        },
+        {
+            "from": "ResNet_0_Sequential_5_BasicBlock_12_ReLU_15",
+            "to": "ResNet_0_Sequential_5_BasicBlock_12_Conv2d_16"
+        },
+        {
+            "from": "ResNet_0_Sequential_5_BasicBlock_12_Conv2d_16",
+            "to": "ResNet_0_Sequential_5_BasicBlock_12_BatchNorm2d_17"
+        },
+        {
+            "from": "ResNet_0_Sequential_5_BasicBlock_12_BatchNorm2d_17",
+            "to": "ResNet_0_Sequential_18_BasicBlock_19_Conv2d_20"
+        },
+        {
+            "from": "ResNet_0_Sequential_18_BasicBlock_19_Conv2d_20",
+            "to": "ResNet_0_Sequential_18_BasicBlock_19_BatchNorm2d_21"
+        },
+        {
+            "from": "ResNet_0_Sequential_18_BasicBlock_19_BatchNorm2d_21",
+            "to": "ResNet_0_Sequential_18_BasicBlock_19_ReLU_22"
+        },
+        {
+            "from": "ResNet_0_Sequential_18_BasicBlock_19_ReLU_22",
+            "to": "ResNet_0_Sequential_18_BasicBlock_19_Conv2d_23"
+        },
+        {
+            "from": "ResNet_0_Sequential_18_BasicBlock_19_Conv2d_23",
+            "to": "ResNet_0_Sequential_18_BasicBlock_19_BatchNorm2d_24"
+        },
+        {
+            "from": "ResNet_0_Sequential_18_BasicBlock_19_BatchNorm2d_24",
+            "to": "ResNet_0_Sequential_18_BasicBlock_19_Sequential_25_Conv2d_26"
+        },
+        {
+            "from": "ResNet_0_Sequential_18_BasicBlock_19_Sequential_25_Conv2d_26",
+            "to": "ResNet_0_Sequential_18_BasicBlock_19_Sequential_25_BatchNorm2d_27"
+        },
+        {
+            "from": "ResNet_0_Sequential_18_BasicBlock_19_Sequential_25_BatchNorm2d_27",
+            "to": "ResNet_0_Sequential_18_BasicBlock_28_Conv2d_29"
+        },
+        {
+            "from": "ResNet_0_Sequential_18_BasicBlock_28_Conv2d_29",
+            "to": "ResNet_0_Sequential_18_BasicBlock_28_BatchNorm2d_30"
+        },
+        {
+            "from": "ResNet_0_Sequential_18_BasicBlock_28_BatchNorm2d_30",
+            "to": "ResNet_0_Sequential_18_BasicBlock_28_ReLU_31"
+        },
+        {
+            "from": "ResNet_0_Sequential_18_BasicBlock_28_ReLU_31",
+            "to": "ResNet_0_Sequential_18_BasicBlock_28_Conv2d_32"
+        },
+        {
+            "from": "ResNet_0_Sequential_18_BasicBlock_28_Conv2d_32",
+            "to": "ResNet_0_Sequential_18_BasicBlock_28_BatchNorm2d_33"
+        },
+        {
+            "from": "ResNet_0_Sequential_18_BasicBlock_28_BatchNorm2d_33",
+            "to": "ResNet_0_Sequential_34_BasicBlock_35_Conv2d_36"
+        },
+        {
+            "from": "ResNet_0_Sequential_34_BasicBlock_35_Conv2d_36",
+            "to": "ResNet_0_Sequential_34_BasicBlock_35_BatchNorm2d_37"
+        },
+        {
+            "from": "ResNet_0_Sequential_34_BasicBlock_35_BatchNorm2d_37",
+            "to": "ResNet_0_Sequential_34_BasicBlock_35_ReLU_38"
+        },
+        {
+            "from": "ResNet_0_Sequential_34_BasicBlock_35_ReLU_38",
+            "to": "ResNet_0_Sequential_34_BasicBlock_35_Conv2d_39"
+        },
+        {
+            "from": "ResNet_0_Sequential_34_BasicBlock_35_Conv2d_39",
+            "to": "ResNet_0_Sequential_34_BasicBlock_35_BatchNorm2d_40"
+        },
+        {
+            "from": "ResNet_0_Sequential_34_BasicBlock_35_BatchNorm2d_40",
+            "to": "ResNet_0_Sequential_34_BasicBlock_35_Sequential_41_Conv2d_42"
+        },
+        {
+            "from": "ResNet_0_Sequential_34_BasicBlock_35_Sequential_41_Conv2d_42",
+            "to": "ResNet_0_Sequential_34_BasicBlock_35_Sequential_41_BatchNorm2d_43"
+        },
+        {
+            "from": "ResNet_0_Sequential_34_BasicBlock_35_Sequential_41_BatchNorm2d_43",
+            "to": "ResNet_0_Sequential_34_BasicBlock_44_Conv2d_45"
+        },
+        {
+            "from": "ResNet_0_Sequential_34_BasicBlock_44_Conv2d_45",
+            "to": "ResNet_0_Sequential_34_BasicBlock_44_BatchNorm2d_46"
+        },
+        {
+            "from": "ResNet_0_Sequential_34_BasicBlock_44_BatchNorm2d_46",
+            "to": "ResNet_0_Sequential_34_BasicBlock_44_ReLU_47"
+        },
+        {
+            "from": "ResNet_0_Sequential_34_BasicBlock_44_ReLU_47",
+            "to": "ResNet_0_Sequential_34_BasicBlock_44_Conv2d_48"
+        },
+        {
+            "from": "ResNet_0_Sequential_34_BasicBlock_44_Conv2d_48",
+            "to": "ResNet_0_Sequential_34_BasicBlock_44_BatchNorm2d_49"
+        },
+        {
+            "from": "ResNet_0_Sequential_34_BasicBlock_44_BatchNorm2d_49",
+            "to": "ResNet_0_Sequential_50_BasicBlock_51_Conv2d_52"
+        },
+        {
+            "from": "ResNet_0_Sequential_50_BasicBlock_51_Conv2d_52",
+            "to": "ResNet_0_Sequential_50_BasicBlock_51_BatchNorm2d_53"
+        },
+        {
+            "from": "ResNet_0_Sequential_50_BasicBlock_51_BatchNorm2d_53",
+            "to": "ResNet_0_Sequential_50_BasicBlock_51_ReLU_54"
+        },
+        {
+            "from": "ResNet_0_Sequential_50_BasicBlock_51_ReLU_54",
+            "to": "ResNet_0_Sequential_50_BasicBlock_51_Conv2d_55"
+        },
+        {
+            "from": "ResNet_0_Sequential_50_BasicBlock_51_Conv2d_55",
+            "to": "ResNet_0_Sequential_50_BasicBlock_51_BatchNorm2d_56"
+        },
+        {
+            "from": "ResNet_0_Sequential_50_BasicBlock_51_BatchNorm2d_56",
+            "to": "ResNet_0_Sequential_50_BasicBlock_51_Sequential_57_Conv2d_58"
+        },
+        {
+            "from": "ResNet_0_Sequential_50_BasicBlock_51_Sequential_57_Conv2d_58",
+            "to": "ResNet_0_Sequential_50_BasicBlock_51_Sequential_57_BatchNorm2d_59"
+        },
+        {
+            "from": "ResNet_0_Sequential_50_BasicBlock_51_Sequential_57_BatchNorm2d_59",
+            "to": "ResNet_0_Sequential_50_BasicBlock_60_Conv2d_61"
+        },
+        {
+            "from": "ResNet_0_Sequential_50_BasicBlock_60_Conv2d_61",
+            "to": "ResNet_0_Sequential_50_BasicBlock_60_BatchNorm2d_62"
+        },
+        {
+            "from": "ResNet_0_Sequential_50_BasicBlock_60_BatchNorm2d_62",
+            "to": "ResNet_0_Sequential_50_BasicBlock_60_ReLU_63"
+        },
+        {
+            "from": "ResNet_0_Sequential_50_BasicBlock_60_ReLU_63",
+            "to": "ResNet_0_Sequential_50_BasicBlock_60_Conv2d_64"
+        },
+        {
+            "from": "ResNet_0_Sequential_50_BasicBlock_60_Conv2d_64",
+            "to": "ResNet_0_Sequential_50_BasicBlock_60_BatchNorm2d_65"
+        },
+        {
+            "from": "ResNet_0_Sequential_50_BasicBlock_60_BatchNorm2d_65",
+            "to": "ResNet_0_AdaptiveAvgPool2d_66"
+        },
+        {
+            "from": "ResNet_0_AdaptiveAvgPool2d_66",
+            "to": "ResNet_0_Linear_67"
+        }
+    ]
+}

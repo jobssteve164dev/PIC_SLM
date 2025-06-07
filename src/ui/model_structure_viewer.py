@@ -2,7 +2,7 @@ from PyQt5.QtWidgets import QWidget, QFileDialog, QMessageBox
 from PyQt5.QtCore import Qt
 import os
 import traceback
-from .model_loader import ModelLoader
+from .components.model_structure_viewer.model_loader import ModelLoader
 from .components.model_structure_viewer.visualization_controller import VisualizationController
 from .components.model_structure_viewer.ui_components import UIComponents
 
