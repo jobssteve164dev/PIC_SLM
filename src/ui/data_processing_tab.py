@@ -299,6 +299,60 @@ class DataProcessingTab(BaseTab):
         balance_info.setStyleSheet("color: gray; font-size: 9pt;")
         options_layout.addWidget(balance_info, 10, 0, 1, 3)
         
+        # 添加采样平衡选项
+        self.use_sampling_check = QCheckBox("启用智能采样平衡")
+        self.use_sampling_check.setChecked(False)
+        self.use_sampling_check.stateChanged.connect(self.on_sampling_changed)
+        options_layout.addWidget(self.use_sampling_check, 11, 0, 1, 3)
+        sampling_info = QLabel("(自动分析类别分布，使用过采样/欠采样方法平衡样本数量)")
+        sampling_info.setWordWrap(True)
+        sampling_info.setStyleSheet("color: gray; font-size: 9pt;")
+        options_layout.addWidget(sampling_info, 12, 0, 1, 3)
+        
+        # 采样策略选择
+        options_layout.addWidget(QLabel("采样策略:"), 13, 0)
+        self.sampling_strategy_combo = QComboBox()
+        self.sampling_strategy_combo.addItems([
+            "auto - 自动选择",
+            "oversample - 过采样",
+            "undersample - 欠采样", 
+            "median - 中位数采样",
+            "custom - 自定义"
+        ])
+        self.sampling_strategy_combo.setEnabled(False)
+        options_layout.addWidget(self.sampling_strategy_combo, 13, 1, 1, 2)
+        
+        # 过采样方法选择
+        options_layout.addWidget(QLabel("过采样方法:"), 14, 0)
+        self.oversample_method_combo = QComboBox()
+        self.oversample_method_combo.addItems([
+            "augmentation - 数据增强",
+            "duplication - 重复采样"
+        ])
+        self.oversample_method_combo.setEnabled(False)
+        options_layout.addWidget(self.oversample_method_combo, 14, 1, 1, 2)
+        
+        # 欠采样方法选择
+        options_layout.addWidget(QLabel("欠采样方法:"), 15, 0)
+        self.undersample_method_combo = QComboBox()
+        self.undersample_method_combo.addItems([
+            "random - 随机采样",
+            "cluster - 聚类采样"
+        ])
+        self.undersample_method_combo.setEnabled(False)
+        options_layout.addWidget(self.undersample_method_combo, 15, 1, 1, 2)
+        
+        # 自定义目标样本数（仅在custom策略时启用）
+        options_layout.addWidget(QLabel("目标样本数:"), 16, 0)
+        self.target_samples_spin = QSpinBox()
+        self.target_samples_spin.setRange(10, 10000)
+        self.target_samples_spin.setValue(100)
+        self.target_samples_spin.setEnabled(False)
+        options_layout.addWidget(self.target_samples_spin, 16, 1)
+        target_info = QLabel("(仅在自定义策略时生效)")
+        target_info.setStyleSheet("color: gray; font-size: 9pt;")
+        options_layout.addWidget(target_info, 16, 2)
+        
         options_group.setLayout(options_layout)
         main_layout.addWidget(options_group)
         
@@ -510,6 +564,38 @@ class DataProcessingTab(BaseTab):
         for button in self.findChildren(QPushButton):
             if button.text() in ["添加类别", "删除类别", "加载默认类别"]:
                 button.setEnabled(state == Qt.Checked)
+                
+    def on_sampling_changed(self, state):
+        """当采样选项状态改变时调用"""
+        is_enabled = state == 2  # Qt.Checked
+        
+        # 启用/禁用采样相关控件
+        self.sampling_strategy_combo.setEnabled(is_enabled)
+        self.oversample_method_combo.setEnabled(is_enabled)
+        self.undersample_method_combo.setEnabled(is_enabled)
+        
+        # 检查是否为自定义策略
+        if is_enabled:
+            self.on_sampling_strategy_changed()
+            
+        # 如果启用采样，禁用传统类别平衡
+        if is_enabled:
+            self.balance_classes_check.setChecked(False)
+            self.balance_classes_check.setEnabled(False)
+        else:
+            self.balance_classes_check.setEnabled(True)
+            self.target_samples_spin.setEnabled(False)
+            
+        # 连接策略变化信号
+        if not hasattr(self, '_strategy_connected'):
+            self.sampling_strategy_combo.currentTextChanged.connect(self.on_sampling_strategy_changed)
+            self._strategy_connected = True
+            
+    def on_sampling_strategy_changed(self):
+        """当采样策略改变时调用"""
+        strategy = self.sampling_strategy_combo.currentText()
+        is_custom = strategy.startswith("custom")
+        self.target_samples_spin.setEnabled(is_custom and self.use_sampling_check.isChecked())
     
     def preprocess_images(self):
         """开始预处理图像"""
@@ -561,7 +647,13 @@ class DataProcessingTab(BaseTab):
             'augmentation_intensity': self.aug_intensity.value(),
             'balance_classes': self.balance_classes_check.isChecked() and self.check_class_folders.isChecked(),  # 只在启用类别文件夹检查时才启用类别平衡
             'class_names': self.defect_classes if self.check_class_folders.isChecked() else [],  # 只在启用类别文件夹检查时才传递类别名称
-            'check_class_folders': self.check_class_folders.isChecked()  # 添加类别文件夹检查状态
+            'check_class_folders': self.check_class_folders.isChecked(),  # 添加类别文件夹检查状态
+            # 采样相关参数
+            'use_sampling': self.use_sampling_check.isChecked() and self.check_class_folders.isChecked(),
+            'sampling_strategy': self.sampling_strategy_combo.currentText().split(' - ')[0] if self.use_sampling_check.isChecked() else 'auto',
+            'oversample_method': self.oversample_method_combo.currentText().split(' - ')[0] if self.use_sampling_check.isChecked() else 'augmentation',
+            'undersample_method': self.undersample_method_combo.currentText().split(' - ')[0] if self.use_sampling_check.isChecked() else 'random',
+            'target_samples_per_class': self.target_samples_spin.value() if self.use_sampling_check.isChecked() else 100
         }
         
         # 发出预处理开始信号

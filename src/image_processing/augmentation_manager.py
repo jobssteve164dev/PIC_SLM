@@ -8,6 +8,7 @@ import albumentations as A
 from PIL import Image, ImageEnhance
 from typing import Dict, List, Tuple
 import os
+import shutil
 
 
 class AugmentationManager:
@@ -340,4 +341,73 @@ class AugmentationManager:
             A.Affine(scale=(0.9, 1.1), translate_percent=(0.1, 0.1), rotate=(-45, 45), p=0.5),
             A.HueSaturationValue(p=0.3),
             A.RandomGamma(p=0.3),
-        ]) 
+        ])
+        
+    def apply_single_augmentation_to_image(self, image_path: str, target_dir: str, 
+                                         file_name: str, img_format: str, params: Dict) -> str:
+        """
+        对单张图片应用随机增强，用于过采样
+        
+        Args:
+            image_path: 输入图片路径
+            target_dir: 输出目录
+            file_name: 输出文件名（不含扩展名）
+            img_format: 输出格式
+            params: 增强参数
+            
+        Returns:
+            str: 生成的增强图片路径
+        """
+        try:
+            # 读取图片
+            image = np.array(Image.open(image_path))
+            
+            # 选择随机增强
+            augmentation = self._get_random_single_augmentation(params)
+            
+            # 应用增强
+            augmented = augmentation(image=image)['image']
+            
+            # 保存增强后的图片
+            output_path = os.path.join(target_dir, f"{file_name}.{img_format}")
+            Image.fromarray(augmented).save(output_path)
+            
+            return output_path
+            
+        except Exception as e:
+            # 如果增强失败，直接复制原图
+            output_path = os.path.join(target_dir, f"{file_name}.{img_format}")
+            shutil.copy2(image_path, output_path)
+            return output_path
+            
+    def _get_random_single_augmentation(self, params: Dict) -> A.Compose:
+        """获取随机单个增强操作"""
+        augmentations = []
+        
+        # 根据参数添加可能的增强
+        if params.get('flip_horizontal', False):
+            augmentations.append(A.HorizontalFlip(p=1.0))
+        if params.get('flip_vertical', False):
+            augmentations.append(A.VerticalFlip(p=1.0))
+        if params.get('rotate', False):
+            augmentations.append(A.RandomRotate90(p=1.0))
+        if params.get('brightness', False):
+            augmentations.append(A.RandomBrightnessContrast(brightness_limit=0.2, contrast_limit=0, p=1.0))
+        if params.get('contrast', False):
+            augmentations.append(A.RandomBrightnessContrast(brightness_limit=0, contrast_limit=0.2, p=1.0))
+        if params.get('noise', False):
+            augmentations.append(A.GaussNoise(var_limit=(10, 50), p=1.0))
+        if params.get('blur', False):
+            augmentations.append(A.GaussianBlur(blur_limit=3, p=1.0))
+        if params.get('hue', False):
+            augmentations.append(A.HueSaturationValue(hue_shift_limit=20, sat_shift_limit=30, val_shift_limit=20, p=1.0))
+            
+        # 如果没有启用任何增强，使用默认增强
+        if not augmentations:
+            augmentations = [A.HorizontalFlip(p=1.0)]
+            
+        # 随机选择一个增强
+        import random
+        selected_aug = random.choice(augmentations)
+        
+        return A.Compose([selected_aug]) 

@@ -9,6 +9,7 @@ from .image_transformer import ImageTransformer
 from .augmentation_manager import AugmentationManager
 from .dataset_creator import DatasetCreator
 from .class_balancer import ClassBalancer
+from .sampling_manager import SamplingManager
 from .file_manager import FileManager
 
 
@@ -26,6 +27,7 @@ class ImagePreprocessor(BaseImageProcessor):
         self.augmentation_manager = AugmentationManager()
         self.dataset_creator = DatasetCreator(self.augmentation_manager)
         self.class_balancer = ClassBalancer(self.image_transformer, self.augmentation_manager)
+        self.sampling_manager = SamplingManager(self.image_transformer, self.augmentation_manager)
         self.file_manager = FileManager()
 
     def preprocess_images(self, params: Dict) -> None:
@@ -62,12 +64,16 @@ class ImagePreprocessor(BaseImageProcessor):
             # 用于调试的打印
             self._log_parameters(params)
             
-            # 检查是否要使用类别平衡处理
+            # 检查处理模式
             use_class_balance = params.get('balance_classes', False)
+            use_sampling = params.get('use_sampling', False)
             class_names = params.get('class_names', [])
             
             # 根据处理模式选择不同的处理方式
-            if use_class_balance and class_names:
+            if use_sampling and class_names:
+                self.status_updated.emit('使用采样平衡预处理模式')
+                self._preprocess_with_sampling(params)
+            elif use_class_balance and class_names:
                 self.status_updated.emit('使用类别平衡预处理模式')
                 self._preprocess_with_class_balance(params)
             else:
@@ -105,6 +111,25 @@ class ImagePreprocessor(BaseImageProcessor):
         self.status_updated.emit(f"模糊: {params.get('blur')}")
         self.status_updated.emit(f"色相: {params.get('hue')}")
         self.status_updated.emit(f"类别平衡: {params.get('balance_classes', False)}")
+
+    def _preprocess_with_sampling(self, params: Dict) -> None:
+        """使用采样平衡模式预处理"""
+        sampling_results = self.sampling_manager.balance_dataset_with_sampling(
+            params,
+            self.file_manager.get_image_files,
+            progress_callback=self.progress_updated.emit,
+            status_callback=self.status_updated.emit,
+            stop_check=lambda: self._stop_preprocessing
+        )
+        
+        # 输出采样结果统计
+        if sampling_results:
+            self.status_updated.emit("\n=== 采样结果统计 ===")
+            for class_name in sampling_results['original_distribution']:
+                original = sampling_results['original_distribution'][class_name]
+                final = sampling_results['final_distribution'][class_name]
+                method = sampling_results['sampling_methods'][class_name]
+                self.status_updated.emit(f"{class_name}: {original} -> {final} ({method})")
 
     def _preprocess_with_class_balance(self, params: Dict) -> None:
         """使用类别平衡模式预处理"""
