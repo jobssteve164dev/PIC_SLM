@@ -12,6 +12,7 @@ from typing import Dict, List, Tuple, Callable, Optional
 from sklearn.model_selection import train_test_split
 from .image_transformer import ImageTransformer
 from .augmentation_manager import AugmentationManager
+from .advanced_sampling import AdvancedSamplingManager
 
 
 class SamplingManager:
@@ -21,6 +22,7 @@ class SamplingManager:
                  augmentation_manager: AugmentationManager):
         self.image_transformer = image_transformer
         self.augmentation_manager = augmentation_manager
+        self.advanced_sampling = AdvancedSamplingManager()
         
     def balance_dataset_with_sampling(self, params: Dict, 
                                     get_image_files_func: Callable[[str], List[str]],
@@ -295,8 +297,20 @@ class SamplingManager:
             # 随机采样
             selected_files = random.sample(original_files, target_samples)
         elif undersample_method == 'cluster':
-            # 聚类采样（简化版本，这里使用均匀采样模拟）
-            selected_files = self._cluster_based_sampling(original_files, target_samples)
+            # 真正的聚类采样
+            selected_files = self.advanced_sampling.cluster_based_sampling(
+                original_files, stats['folder'], target_samples, status_callback
+            )
+        elif undersample_method == 'diversity':
+            # 多样性采样
+            selected_files = self.advanced_sampling.diversity_based_sampling(
+                original_files, stats['folder'], target_samples, status_callback
+            )
+        elif undersample_method == 'quality':
+            # 质量采样
+            selected_files = self.advanced_sampling.quality_based_sampling(
+                original_files, stats['folder'], target_samples, status_callback
+            )
         else:
             # 默认随机采样
             selected_files = random.sample(original_files, target_samples)

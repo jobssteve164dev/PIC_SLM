@@ -337,7 +337,9 @@ class DataProcessingTab(BaseTab):
         self.undersample_method_combo = QComboBox()
         self.undersample_method_combo.addItems([
             "random - 随机采样",
-            "cluster - 聚类采样"
+            "cluster - 聚类采样（基于K-means）",
+            "diversity - 多样性采样（最大化差异）",
+            "quality - 质量采样（选择高质量图像）"
         ])
         self.undersample_method_combo.setEnabled(False)
         options_layout.addWidget(self.undersample_method_combo, 15, 1, 1, 2)
