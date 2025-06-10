@@ -7,6 +7,7 @@
 - class_weight_widget: 类别权重配置组件
 - model_config_widget: 模型配置组件
 - weight_strategy: 权重策略枚举
+- config_profile_selector: 配置文件选择器组件
 """
 
 from .config_manager import ConfigManager
@@ -14,11 +15,13 @@ from .folder_config_widget import FolderConfigWidget
 from .class_weight_widget import ClassWeightWidget
 from .model_config_widget import ModelConfigWidget
 from .weight_strategy import WeightStrategy
+from .config_profile_selector import ConfigProfileSelector
 
 __all__ = [
     'ConfigManager',
     'FolderConfigWidget', 
     'ClassWeightWidget',
     'ModelConfigWidget',
-    'WeightStrategy'
+    'WeightStrategy',
+    'ConfigProfileSelector'
 ] 

@@ -10,7 +10,8 @@ import os
 import time
 from .base_tab import BaseTab
 from .components.settings import (ConfigManager, FolderConfigWidget, 
-                                ClassWeightWidget, ModelConfigWidget, WeightStrategy)
+                                ClassWeightWidget, ModelConfigWidget, WeightStrategy,
+                                ConfigProfileSelector)
 
 
 class SettingsTab(BaseTab):
@@ -52,6 +53,10 @@ class SettingsTab(BaseTab):
         title_label.setFont(QFont('微软雅黑', 14, QFont.Bold))
         title_label.setAlignment(Qt.AlignCenter)
         main_layout.addWidget(title_label)
+        
+        # 添加配置文件选择器组件
+        self.config_profile_selector = ConfigProfileSelector()
+        main_layout.addWidget(self.config_profile_selector)
         
         # 创建设置选项卡
         self.settings_tabs = QTabWidget()
@@ -128,6 +133,10 @@ class SettingsTab(BaseTab):
         self.class_weight_widget.classes_changed.connect(self.on_classes_changed)
         self.class_weight_widget.weights_changed.connect(self.on_weights_changed)
         self.class_weight_widget.strategy_changed.connect(self.on_strategy_changed)
+        
+        # 连接配置文件选择器信号
+        self.config_profile_selector.profile_changed.connect(self.on_profile_changed)
+        self.config_profile_selector.profile_loaded.connect(self.on_profile_loaded)
     
     def on_folder_changed(self, folder_type: str, folder_path: str):
         """处理文件夹变化"""
@@ -149,11 +158,43 @@ class SettingsTab(BaseTab):
         """处理策略变化"""
         print(f"策略变化: {strategy.value}")
     
+    def on_profile_changed(self, profile_name: str, config_data: dict):
+        """处理配置文件改变"""
+        print(f"配置文件改变: {profile_name}")
+        # 这里可以添加预览逻辑，但不自动应用
+    
+    def on_profile_loaded(self, config_data: dict):
+        """处理配置文件加载"""
+        try:
+            print(f"应用配置文件数据: {config_data}")
+            
+            # 提取配置数据
+            if 'config' in config_data:
+                config = config_data['config']
+                
+                # 更新当前配置
+                self.config = config
+                
+                # 应用配置到UI组件
+                self._apply_config_to_ui()
+                
+                print("配置文件应用成功")
+            else:
+                print("配置文件格式不正确，缺少config字段")
+                
+        except Exception as e:
+            print(f"应用配置文件失败: {str(e)}")
+            import traceback
+            traceback.print_exc()
+    
     def load_current_settings(self):
         """加载当前设置"""
         try:
+            print("SettingsTab.load_current_settings: 开始加载配置...")
             self.config = self.config_manager.load_config()
+            print(f"SettingsTab.load_current_settings: 已加载配置 = {self.config}")
             self._apply_config_to_ui()
+            print("SettingsTab.load_current_settings: 配置加载完成")
         except Exception as e:
             print(f"SettingsTab: 加载配置失败: {str(e)}")
             import traceback
@@ -162,21 +203,30 @@ class SettingsTab(BaseTab):
     def _apply_config_to_ui(self):
         """将配置应用到UI组件"""
         if not self.config:
+            print("SettingsTab._apply_config_to_ui: 配置为空，跳过应用")
             return
         
+        print(f"SettingsTab._apply_config_to_ui: 开始应用配置 = {self.config}")
+        
         # 应用文件夹配置
+        print(f"SettingsTab._apply_config_to_ui: 应用文件夹配置...")
+        print(f"  源文件夹: {self.config.get('default_source_folder', 'NOT_SET')}")
+        print(f"  输出文件夹: {self.config.get('default_output_folder', 'NOT_SET')}")
         self.folder_config_widget.set_folder_config(self.config)
         
         # 应用模型配置
+        print(f"SettingsTab._apply_config_to_ui: 应用模型配置...")
         self.model_config_widget.set_model_config(self.config)
         
         # 应用类别权重配置
+        print(f"SettingsTab._apply_config_to_ui: 应用类别权重配置...")
         classes = self.config.get('default_classes', [])
         weights = self.config.get('class_weights', {})
         strategy_value = self.config.get('weight_strategy', 'balanced')
         strategy = WeightStrategy.from_value(strategy_value)
         
         self.class_weight_widget.set_classes_config(classes, weights, strategy)
+        print("SettingsTab._apply_config_to_ui: 配置应用完成")
     
     def _collect_current_config(self) -> dict:
         """收集当前所有组件的配置"""
@@ -212,6 +262,7 @@ class SettingsTab(BaseTab):
         try:
             # 收集当前配置
             config = self._collect_current_config()
+            print(f"SettingsTab.save_settings: 收集到的配置 = {config}")
             
             # 验证配置
             warnings = self.config_manager.validate_config(config)
@@ -228,10 +279,13 @@ class SettingsTab(BaseTab):
             
             # 保存配置
             success = self.config_manager.save_config(config)
+            print(f"SettingsTab.save_settings: 配置保存结果 = {success}")
             
             if success:
                 self.config = config
+                print(f"SettingsTab.save_settings: 准备发送settings_saved信号，配置内容 = {config}")
                 self.settings_saved.emit(config)
+                print("SettingsTab.save_settings: settings_saved信号已发送")
                 QMessageBox.information(self, "成功", "设置已保存")
             else:
                 QMessageBox.critical(self, "错误", "保存设置失败")
@@ -355,11 +409,15 @@ class SettingsTab(BaseTab):
         # 调用基类方法
         super().on_tab_changed(index)
         
-        # 添加特殊处理：当切换到设置标签页时，尝试激活完全重建布局
+        # 添加特殊处理：当切换到设置标签页时，重新加载配置并修复布局
         if self.main_window and hasattr(self.main_window, 'tabs'):
             current_widget = self.main_window.tabs.widget(index)
             if current_widget == self:
-                print("切换到设置标签页，启动布局修复机制")
+                print("切换到设置标签页，重新加载配置并启动布局修复机制")
+                
+                # 强制重新加载配置以确保显示最新的设置
+                self.load_current_settings()
+                
                 # 使用定时器延迟启动我们的特殊布局修复
                 self._rebuild_timer.start(250)
                 

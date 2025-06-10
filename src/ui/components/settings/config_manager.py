@@ -5,32 +5,38 @@
 import os
 import json
 import time
+import sys
 from typing import Dict, List, Any, Optional, Tuple
 from PyQt5.QtWidgets import QMessageBox
 from .weight_strategy import WeightStrategy
+
+# 导入统一的配置路径工具
+sys.path.append(os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))), 'src'))
+from utils.config_path import get_config_file_path
 
 
 class ConfigManager:
     """配置管理器"""
     
     def __init__(self):
-        self.config_file_path = self._get_config_file_path()
+        # 使用统一的配置路径工具，确保和其他组件一致
+        self.config_file_path = get_config_file_path()
     
     def _get_config_file_path(self) -> str:
-        """获取配置文件路径"""
-        return os.path.join(
-            os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))), 
-            'config.json'
-        )
+        """获取配置文件路径（向后兼容）"""
+        return self.config_file_path
     
     def load_config(self) -> Dict[str, Any]:
         """加载配置文件"""
         try:
             print(f"ConfigManager: 尝试从以下路径加载配置: {self.config_file_path}")
+            print(f"ConfigManager: 配置文件路径存在: {os.path.exists(self.config_file_path)}")
             if os.path.exists(self.config_file_path):
                 with open(self.config_file_path, 'r', encoding='utf-8') as f:
                     config = json.load(f)
-                    print(f"ConfigManager: 已加载配置: {config}")
+                    print(f"ConfigManager: 已加载配置:")
+                    print(f"  default_source_folder: {config.get('default_source_folder', 'NOT_SET')}")
+                    print(f"  default_output_folder: {config.get('default_output_folder', 'NOT_SET')}")
                     return config
             else:
                 print(f"ConfigManager: 配置文件不存在: {self.config_file_path}")

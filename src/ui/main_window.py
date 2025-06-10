@@ -6,6 +6,10 @@ import os
 import sys
 import json
 
+# 导入统一的配置路径工具
+sys.path.append(os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), 'src'))
+from utils.config_path import get_config_file_path
+
 from .data_processing_tab import DataProcessingTab
 from .annotation_tab import AnnotationTab
 from .training_tab import TrainingTab
@@ -52,6 +56,9 @@ class MainWindow(QMainWindow):
         
         # 加载配置
         self.load_config()
+        
+        # 确保所有tab都已收到配置信息，使用定时器延迟一点再次强制应用配置
+        QTimer.singleShot(100, self._ensure_all_tabs_configured)
 
     def init_ui(self):
         """初始化UI"""
@@ -298,8 +305,8 @@ class MainWindow(QMainWindow):
     def load_config(self):
         """加载配置"""
         try:
-            # 获取配置文件路径（修改为项目根目录）
-            config_file = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), 'config.json')
+            # 获取配置文件路径（使用统一工具）
+            config_file = get_config_file_path()
             
             # 如果配置文件存在，则加载配置
             if os.path.exists(config_file):
@@ -319,6 +326,8 @@ class MainWindow(QMainWindow):
     def apply_config(self, config):
         """应用配置"""
         print(f"MainWindow.apply_config被调用，配置内容: {config}")
+        print(f"MainWindow.apply_config: 源文件夹配置 = {config.get('default_source_folder', 'NOT_SET')}")
+        print(f"MainWindow.apply_config: 输出文件夹配置 = {config.get('default_output_folder', 'NOT_SET')}")
         # 保存配置到实例变量中，以便其他标签页可以访问
         self.config = config
         
@@ -327,43 +336,30 @@ class MainWindow(QMainWindow):
         # 数据处理标签页
         if hasattr(self, 'data_processing_tab'):
             if 'default_source_folder' in config and config['default_source_folder']:
+                # 设置UI输入框
                 if hasattr(self.data_processing_tab, 'source_path_edit'):
                     self.data_processing_tab.source_path_edit.setText(config['default_source_folder'])
-                if hasattr(self.data_processing_tab, 'source_folder'):
-                    self.data_processing_tab.source_folder = config['default_source_folder']
+                # 设置实例变量 - 这是关键的修复点
+                self.data_processing_tab.source_folder = config['default_source_folder']
+                print(f"MainWindow: 设置源文件夹路径: {config['default_source_folder']}")
             
             if 'default_output_folder' in config and config['default_output_folder']:
+                # 设置UI输入框
                 if hasattr(self.data_processing_tab, 'output_path_edit'):
                     self.data_processing_tab.output_path_edit.setText(config['default_output_folder'])
-                if hasattr(self.data_processing_tab, 'output_folder'):
-                    self.data_processing_tab.output_folder = config['default_output_folder']
+                # 设置实例变量 - 这是关键的修复点
+                self.data_processing_tab.output_folder = config['default_output_folder']
+                print(f"MainWindow: 设置输出文件夹路径: {config['default_output_folder']}")
             
             # 在设置了source_folder和output_folder后，检查是否可以开始预处理
             if hasattr(self.data_processing_tab, 'check_preprocess_ready'):
                 self.data_processing_tab.check_preprocess_ready()
                 print("MainWindow: 已调用data_processing_tab.check_preprocess_ready()方法")
             
-            # 添加默认类别设置应用
-            if 'default_classes' in config and config['default_classes']:
-                print(f"MainWindow: 向数据处理标签页应用默认类别: {config['default_classes']}")
-                if hasattr(self.data_processing_tab, 'defect_classes'):
-                    self.data_processing_tab.defect_classes = config['default_classes'].copy()
-                # 更新类别列表
-                if hasattr(self.data_processing_tab, 'class_list'):
-                    self.data_processing_tab.class_list.clear()
-                    for class_name in config['default_classes']:
-                        self.data_processing_tab.class_list.addItem(class_name)
-                    print(f"MainWindow: 数据处理标签页的类别列表已更新，现在有 {self.data_processing_tab.class_list.count()} 个类别")
-                elif hasattr(self.data_processing_tab, 'defect_class_list'):
-                    self.data_processing_tab.defect_class_list.clear()
-                    for class_name in config['default_classes']:
-                        self.data_processing_tab.defect_class_list.addItem(class_name)
-                    print(f"MainWindow: 数据处理标签页的类别列表已更新，现在有 {self.data_processing_tab.defect_class_list.count()} 个类别")
-                
-                # 如果标签页有apply_config方法，也调用它
-                if hasattr(self.data_processing_tab, 'apply_config'):
-                    self.data_processing_tab.apply_config(config)
-                    print("MainWindow: 已调用data_processing_tab.apply_config方法")
+            # 如果标签页有apply_config方法，调用它来处理所有配置
+            if hasattr(self.data_processing_tab, 'apply_config'):
+                self.data_processing_tab.apply_config(config)
+                print("MainWindow: 已调用data_processing_tab.apply_config方法")
         
         # 标注标签页
         if hasattr(self, 'annotation_tab'):
@@ -491,6 +487,49 @@ class MainWindow(QMainWindow):
         # 恢复原来的大小
         QTimer.singleShot(50, lambda: self.resize(current_size))
         
+    def _ensure_all_tabs_configured(self):
+        """确保所有tab都正确配置"""
+        print("MainWindow._ensure_all_tabs_configured: 开始强制确保所有tab配置正确...")
+        
+        if hasattr(self, 'config') and self.config:
+            print(f"MainWindow._ensure_all_tabs_configured: 使用已加载的配置")
+            
+            # 强制重新应用配置到数据处理tab
+            if hasattr(self, 'data_processing_tab'):
+                print("MainWindow._ensure_all_tabs_configured: 强制配置数据处理tab...")
+                if hasattr(self.data_processing_tab, 'apply_config'):
+                    self.data_processing_tab.apply_config(self.config)
+                else:
+                    # 手动设置关键配置
+                    if 'default_source_folder' in self.config and self.config['default_source_folder']:
+                        self.data_processing_tab.source_folder = self.config['default_source_folder']
+                        if hasattr(self.data_processing_tab, 'source_path_edit'):
+                            self.data_processing_tab.source_path_edit.setText(self.config['default_source_folder'])
+                    
+                    if 'default_output_folder' in self.config and self.config['default_output_folder']:
+                        self.data_processing_tab.output_folder = self.config['default_output_folder']
+                        if hasattr(self.data_processing_tab, 'output_path_edit'):
+                            self.data_processing_tab.output_path_edit.setText(self.config['default_output_folder'])
+                    
+                    # 检查预处理准备状态
+                    if hasattr(self.data_processing_tab, 'check_preprocess_ready'):
+                        self.data_processing_tab.check_preprocess_ready()
+                
+                print(f"MainWindow._ensure_all_tabs_configured: 数据处理tab配置完成")
+                print(f"  源文件夹: '{getattr(self.data_processing_tab, 'source_folder', 'NOT_SET')}'")
+                print(f"  输出文件夹: '{getattr(self.data_processing_tab, 'output_folder', 'NOT_SET')}'")
+                print(f"  预处理按钮状态: {getattr(self.data_processing_tab, 'preprocess_btn', None) and self.data_processing_tab.preprocess_btn.isEnabled()}")
+            
+            # 同样确保其他tab的配置
+            for tab_name in ['annotation_tab', 'training_tab', 'prediction_tab', 'evaluation_tab', 'dataset_evaluation_tab']:
+                if hasattr(self, tab_name):
+                    tab = getattr(self, tab_name)
+                    if hasattr(tab, 'apply_config'):
+                        print(f"MainWindow._ensure_all_tabs_configured: 强制配置 {tab_name}...")
+                        tab.apply_config(self.config)
+        else:
+            print("MainWindow._ensure_all_tabs_configured: 警告 - 没有可用的配置")
+
     def showEvent(self, event):
         """窗口显示事件，确保所有标签页布局正确"""
         super().showEvent(event)

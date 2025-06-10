@@ -28,5 +28,7 @@
         "balanced",
         "balanced (平衡权重)"
     ],
-    "use_class_weights": true
+    "use_class_weights": true,
+    "version": "2.0",
+    "export_time": "2025-06-11 07:08:06"
 }

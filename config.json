@@ -24,6 +24,6 @@
         "Spur": 1.0,
         "Spurious_copper": 1.0
     },
-    "weight_strategy": "inverse",
+    "weight_strategy": "balanced",
     "use_class_weights": true
 }

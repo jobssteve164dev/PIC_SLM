@@ -79,6 +79,8 @@ class FolderConfigWidget(QWidget):
     
     def set_folder_config(self, config: Dict[str, Any]):
         """设置文件夹配置"""
+        print(f"FolderConfigWidget.set_folder_config: 收到配置 = {config}")
+        
         mapping = {
             'source': 'default_source_folder',
             'output': 'default_output_folder'
@@ -86,9 +88,13 @@ class FolderConfigWidget(QWidget):
         
         for key, config_key in mapping.items():
             value = config.get(config_key, '')
+            print(f"FolderConfigWidget.set_folder_config: 设置 {key} = {value}")
             if key in self.folder_edits:
                 self.folder_edits[key].setText(value)
                 self.folder_configs[key] = value
+                print(f"FolderConfigWidget.set_folder_config: {key} 输入框文本已设置为: '{self.folder_edits[key].text()}'")
+            else:
+                print(f"FolderConfigWidget.set_folder_config: 警告 - 找不到 {key} 对应的输入框")
     
     def clear_config(self):
         """清空配置"""

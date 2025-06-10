@@ -10,6 +10,24 @@ class WeightConfigManager:
     def __init__(self):
         self.config_loader = ConfigLoader()
     
+    def _load_config_directly(self):
+        """直接从文件加载配置，不使用缓存"""
+        try:
+            config_path = self.config_loader.config_path
+            print(f"WeightConfigManager: 直接读取配置文件: {config_path}")
+            
+            if os.path.exists(config_path):
+                with open(config_path, 'r', encoding='utf-8') as f:
+                    config = json.load(f)
+                print(f"WeightConfigManager: 成功读取配置，weight_strategy = {config.get('weight_strategy', 'NOT_FOUND')}")
+                return config
+            else:
+                print(f"WeightConfigManager: 配置文件不存在: {config_path}")
+                return {}
+        except Exception as e:
+            print(f"WeightConfigManager: 直接读取配置文件失败: {str(e)}")
+            return {}
+    
     def load_weight_config(self):
         """加载权重配置信息"""
         try:
@@ -21,13 +39,25 @@ class WeightConfigManager:
                 'found_sources': []
             }
             
-            # 使用与主窗口prepare_training_config相同的配置加载逻辑
-            config = self.config_loader.get_config()
+            # 直接读取配置文件，避免使用缓存的配置
+            config = self._load_config_directly()
             
             if config:
                 # 获取权重策略和启用状态 - 与主窗口逻辑一致
                 use_class_weights = config.get('use_class_weights', True)
-                weight_strategy = config.get('weight_strategy', 'balanced')
+                
+                # 处理weight_strategy字段的不同格式
+                weight_strategy_raw = config.get('weight_strategy', 'balanced')
+                if isinstance(weight_strategy_raw, list):
+                    # 如果是数组格式，取第一个非显示名的值
+                    weight_strategy = weight_strategy_raw[0] if weight_strategy_raw else 'balanced'
+                elif isinstance(weight_strategy_raw, str):
+                    weight_strategy = weight_strategy_raw
+                else:
+                    weight_strategy = 'balanced'
+                
+                print(f"WeightConfigManager: 原始weight_strategy = {weight_strategy_raw}")
+                print(f"WeightConfigManager: 解析后weight_strategy = {weight_strategy}")
                 
                 # 检查各种权重配置源 - 按照模型训练器中的优先级顺序
                 sources_found = []
@@ -155,6 +185,8 @@ class WeightConfigDisplayWidget(QWidget):
         super().__init__(parent)
         self.weight_manager = WeightConfigManager()
         self.init_ui()
+        # 初始化时自动加载权重配置
+        self.refresh_weight_config()
     
     def init_ui(self):
         """初始化UI"""
