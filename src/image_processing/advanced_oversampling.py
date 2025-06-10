@@ -206,10 +206,10 @@ class AdvancedOversamplingManager:
             if status_callback and (i + 1) % 10 == 0:
                 status_callback(f"智能增强进度: {i + 1}/{needed_samples}")
                 
-                 if status_callback:
-             status_callback(f"智能增强过采样完成，生成了 {len(additional_files)} 个样本")
-             
-         return additional_files
+        if status_callback:
+            status_callback(f"智能增强过采样完成，生成了 {len(additional_files)} 个样本")
+            
+        return additional_files
         
     def _generate_mixup_sample(self, file1: str, file2: str, source_folder: str,
                               output_folder: str, index: int, params: Dict, class_name: str) -> Optional[str]:
