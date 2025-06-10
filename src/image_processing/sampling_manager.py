@@ -13,6 +13,7 @@ from sklearn.model_selection import train_test_split
 from .image_transformer import ImageTransformer
 from .augmentation_manager import AugmentationManager
 from .advanced_sampling import AdvancedSamplingManager
+from .advanced_oversampling import AdvancedOversamplingManager
 
 
 class SamplingManager:
@@ -23,6 +24,7 @@ class SamplingManager:
         self.image_transformer = image_transformer
         self.augmentation_manager = augmentation_manager
         self.advanced_sampling = AdvancedSamplingManager()
+        self.advanced_oversampling = AdvancedOversamplingManager(image_transformer, augmentation_manager)
         
     def balance_dataset_with_sampling(self, params: Dict, 
                                     get_image_files_func: Callable[[str], List[str]],
@@ -273,6 +275,46 @@ class SamplingManager:
         elif oversample_method == 'duplication':
             # 使用重复采样
             additional_files = self._generate_duplicated_samples(
+                original_files, stats['folder'], output_folder,
+                needed_samples, params, class_name, status_callback
+            )
+            sampled_files.extend(additional_files)
+            
+        elif oversample_method == 'mixup':
+            # Mixup过采样
+            additional_files = self.advanced_oversampling.mixup_oversampling(
+                original_files, stats['folder'], output_folder,
+                needed_samples, params, class_name, status_callback
+            )
+            sampled_files.extend(additional_files)
+            
+        elif oversample_method == 'cutmix':
+            # CutMix过采样
+            additional_files = self.advanced_oversampling.cutmix_oversampling(
+                original_files, stats['folder'], output_folder,
+                needed_samples, params, class_name, status_callback
+            )
+            sampled_files.extend(additional_files)
+            
+        elif oversample_method == 'interpolation':
+            # 特征插值过采样
+            additional_files = self.advanced_oversampling.feature_interpolation_oversampling(
+                original_files, stats['folder'], output_folder,
+                needed_samples, params, class_name, status_callback
+            )
+            sampled_files.extend(additional_files)
+            
+        elif oversample_method == 'adaptive':
+            # 自适应过采样
+            additional_files = self.advanced_oversampling.adaptive_oversampling(
+                original_files, stats['folder'], output_folder,
+                needed_samples, params, class_name, status_callback
+            )
+            sampled_files.extend(additional_files)
+            
+        elif oversample_method == 'smart':
+            # 智能增强过采样
+            additional_files = self.advanced_oversampling.smart_augmentation_oversampling(
                 original_files, stats['folder'], output_folder,
                 needed_samples, params, class_name, status_callback
             )

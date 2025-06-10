@@ -326,8 +326,13 @@ class DataProcessingTab(BaseTab):
         options_layout.addWidget(QLabel("过采样方法:"), 14, 0)
         self.oversample_method_combo = QComboBox()
         self.oversample_method_combo.addItems([
-            "augmentation - 数据增强",
-            "duplication - 重复采样"
+            "augmentation - 传统数据增强",
+            "duplication - 重复采样",
+            "mixup - Mixup混合采样",
+            "cutmix - CutMix裁剪混合",
+            "interpolation - 特征插值采样",
+            "adaptive - 自适应采样",
+            "smart - 智能增强采样"
         ])
         self.oversample_method_combo.setEnabled(False)
         options_layout.addWidget(self.oversample_method_combo, 14, 1, 1, 2)
