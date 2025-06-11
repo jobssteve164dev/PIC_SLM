@@ -299,14 +299,10 @@ def main():
         MainWindow.closeEvent = closeEvent
     
     # 连接信号和槽
-    # 图片预处理信号
-    worker.image_preprocessor.progress_updated.connect(window.update_progress)
-    worker.image_preprocessor.status_updated.connect(window.update_status)
-    worker.image_preprocessor.preprocessing_error.connect(lambda msg: QMessageBox.critical(window, '错误', msg))
-    worker.image_preprocessor.preprocessing_finished.connect(window.preprocessing_finished)
-    window.image_preprocessing_started.connect(worker.image_preprocessor.preprocess_images)
-    # 添加创建类别文件夹信号连接
-    window.create_class_folders_signal.connect(worker.image_preprocessor.create_class_folders)
+    # 图片预处理信号现在由独立线程处理，不需要Worker中的image_preprocessor连接
+    # 创建类别文件夹仍然使用同步方式
+    if hasattr(worker, 'image_preprocessor'):
+        window.create_class_folders_signal.connect(worker.image_preprocessor.create_class_folders)
     
     # 标注工具信号
     worker.annotation_tool.status_updated.connect(window.update_status)

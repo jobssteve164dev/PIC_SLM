@@ -14,7 +14,9 @@ from .components.training import (
     ModelDownloadDialog,
     ClassificationTrainingWidget,
     DetectionTrainingWidget,
-    TrainingControlWidget
+    TrainingControlWidget,
+    TrainingConfigSelector,
+    ConfigApplier
 )
 import json
 import subprocess
@@ -135,6 +137,11 @@ class TrainingTab(BaseTab):
         task_group.setLayout(task_layout)
         main_layout.addWidget(task_group)
         
+        # 添加训练配置选择器组件
+        self.config_selector = TrainingConfigSelector(self)
+        self.config_selector.config_applied.connect(self.on_config_applied)
+        main_layout.addWidget(self.config_selector)
+        
         # 创建堆叠部件用于切换不同的训练界面
         self.stacked_widget = QStackedWidget()
         
@@ -195,6 +202,26 @@ class TrainingTab(BaseTab):
         """参数改变时调用"""
         # 可以在这里添加参数验证逻辑
         pass
+    
+    def on_config_applied(self, config):
+        """当配置选择器应用配置时调用"""
+        try:
+            # 使用ConfigApplier应用配置到训练标签页
+            success = ConfigApplier.apply_to_training_tab(config, self)
+            
+            if success:
+                # 重新检查训练准备状态
+                self.check_training_ready()
+                # 刷新权重配置显示
+                self.refresh_weight_config()
+                print("训练配置已成功应用到界面")
+            else:
+                print("应用训练配置失败")
+                
+        except Exception as e:
+            print(f"应用配置时出错: {str(e)}")
+            import traceback
+            traceback.print_exc()
     
     def check_training_ready(self):
         """检查是否可以开始训练"""

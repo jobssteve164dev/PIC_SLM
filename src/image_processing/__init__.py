@@ -4,5 +4,6 @@
 """
 
 from .main_processor import ImagePreprocessor
+from .preprocessing_thread import PreprocessingThread, PreprocessingWorker
 
-__all__ = ['ImagePreprocessor'] 
+__all__ = ['ImagePreprocessor', 'PreprocessingThread', 'PreprocessingWorker'] 

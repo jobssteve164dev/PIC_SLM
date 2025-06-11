@@ -7,6 +7,8 @@ from PyQt5.QtCore import Qt, pyqtSignal, QPoint, QTimer
 from PyQt5.QtGui import QFont, QIcon
 import os
 import sys
+import subprocess
+import platform
 from .base_tab import BaseTab
 import json
 
@@ -168,9 +170,16 @@ class DataProcessingTab(BaseTab):
         output_btn = QPushButton("浏览...")
         output_btn.clicked.connect(self.select_output_folder)
         
+        # 添加打开输出文件夹按钮
+        self.open_output_btn = QPushButton("打开文件夹")
+        self.open_output_btn.clicked.connect(self.open_output_folder)
+        self.open_output_btn.setEnabled(False)  # 初始状态禁用
+        self.open_output_btn.setToolTip("打开输出文件夹查看预处理结果")
+        
         output_layout.addWidget(QLabel("输出文件夹:"), 0, 0)
         output_layout.addWidget(self.output_path_edit, 0, 1)
         output_layout.addWidget(output_btn, 0, 2)
+        output_layout.addWidget(self.open_output_btn, 0, 3)
         
         output_group.setLayout(output_layout)
         main_layout.addWidget(output_group)
@@ -388,15 +397,26 @@ class DataProcessingTab(BaseTab):
         main_layout.addWidget(options_group)
         
         # 创建预处理按钮
+        button_layout = QHBoxLayout()
+        
         self.preprocess_btn = QPushButton("开始预处理")
         self.preprocess_btn.clicked.connect(self.preprocess_images)
         self.preprocess_btn.setEnabled(False)
         self.preprocess_btn.setMinimumWidth(200)  # 设置最小宽度
         self.preprocess_btn.setMinimumHeight(40)  # 设置最小高度
-        main_layout.addWidget(self.preprocess_btn)
         
-        # 添加弹性空间
-        main_layout.addStretch()
+        # 添加停止预处理按钮
+        self.stop_preprocess_btn = QPushButton("停止预处理")
+        self.stop_preprocess_btn.clicked.connect(self.stop_preprocessing)
+        self.stop_preprocess_btn.setEnabled(False)
+        self.stop_preprocess_btn.setMinimumWidth(120)
+        self.stop_preprocess_btn.setMinimumHeight(40)
+        
+        button_layout.addWidget(self.preprocess_btn)
+        button_layout.addWidget(self.stop_preprocess_btn)
+        button_layout.addStretch()  # 添加弹性空间
+        
+        main_layout.addLayout(button_layout)
     
     def select_source_folder(self):
         """选择源图片文件夹"""
@@ -416,6 +436,8 @@ class DataProcessingTab(BaseTab):
             self.output_folder = folder
             self.output_path_edit.setText(folder)
             print(f"设置输出文件夹路径: {self.output_folder}")
+            # 启用打开文件夹按钮
+            self.open_output_btn.setEnabled(True)
             self.check_preprocess_ready()
     
     def check_preprocess_ready(self):
@@ -691,6 +713,7 @@ class DataProcessingTab(BaseTab):
         self.image_preprocessing_started.emit(params)
         self.update_status("开始图像预处理...")
         self.preprocess_btn.setEnabled(False)
+        self.stop_preprocess_btn.setEnabled(True)  # 启用停止按钮
         
         # 添加安全定时器，确保即使信号连接有问题，按钮也会在一定时间后重新启用
         QTimer.singleShot(120000, self._ensure_button_enabled)  # 2分钟后强制重新启用按钮
@@ -724,6 +747,15 @@ class DataProcessingTab(BaseTab):
                 print("警告: 源文件夹或输出文件夹为空，无法启用预处理按钮")
         else:
             print("错误: 找不到预处理按钮对象")
+        
+        # 禁用停止按钮
+        if hasattr(self, 'stop_preprocess_btn'):
+            self.stop_preprocess_btn.setEnabled(False)
+        
+        # 确保打开文件夹按钮可用（如果输出文件夹存在）
+        if hasattr(self, 'open_output_btn') and self.output_folder and os.path.exists(self.output_folder):
+            self.open_output_btn.setEnabled(True)
+        
         self.update_status("预处理完成，可以再次开始新的预处理。")
         # 注意：弹窗提示已移至MainWindow.preprocessing_finished方法中
     
@@ -743,6 +775,9 @@ class DataProcessingTab(BaseTab):
                 self.output_folder = config['default_output_folder']
                 if hasattr(self, 'output_path_edit'):
                     self.output_path_edit.setText(config['default_output_folder'])
+                # 如果输出文件夹存在，启用打开文件夹按钮
+                if hasattr(self, 'open_output_btn') and os.path.exists(config['default_output_folder']):
+                    self.open_output_btn.setEnabled(True)
             
             # 应用类别配置
             if 'default_classes' in config and config['default_classes']:
@@ -765,3 +800,41 @@ class DataProcessingTab(BaseTab):
             # 配置应用完成后，检查预处理准备状态
             print("DataProcessingTab: 配置应用完成，检查预处理准备状态...")
             self.check_preprocess_ready() 
+
+    def stop_preprocessing(self):
+        """停止预处理"""
+        print("DataProcessingTab: 停止预处理")
+        self.update_status("正在停止预处理...")
+        self.preprocess_btn.setEnabled(False)
+        self.stop_preprocess_btn.setEnabled(False)
+        
+        # 通知主窗口停止预处理线程
+        if hasattr(self.main_window, 'preprocessing_thread') and self.main_window.preprocessing_thread:
+            self.main_window.preprocessing_thread.stop_preprocessing()
+            print("已发送停止预处理信号到线程")
+    
+    def open_output_folder(self):
+        """打开输出文件夹"""
+        if not self.output_folder or not os.path.exists(self.output_folder):
+            QMessageBox.warning(self, "警告", "输出文件夹不存在或未设置！")
+            return
+            
+        try:
+            system = platform.system()
+            if system == "Windows":
+                # Windows系统使用explorer
+                os.startfile(self.output_folder)
+            elif system == "Darwin":
+                # macOS系统使用open
+                subprocess.run(["open", self.output_folder])
+            else:
+                # Linux系统使用xdg-open
+                subprocess.run(["xdg-open", self.output_folder])
+            print(f"已打开输出文件夹: {self.output_folder}")
+            self.update_status(f"已打开文件夹: {self.output_folder}")
+        except Exception as e:
+            error_msg = f"无法打开文件夹: {str(e)}"
+            print(error_msg)
+            QMessageBox.critical(self, "错误", error_msg)
+    
+ 

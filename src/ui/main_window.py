@@ -5,6 +5,7 @@ from PyQt5.QtGui import QFont
 import os
 import sys
 import json
+from typing import Dict
 
 # 导入统一的配置路径工具
 sys.path.append(os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), 'src'))
@@ -18,6 +19,10 @@ from .settings_tab import SettingsTab
 from .evaluation_tab import EvaluationTab
 from .about_tab import AboutTab
 from .dataset_evaluation_tab import DatasetEvaluationTab  # 导入新的数据集评估标签页
+from .base_tab import BaseTab
+
+# 导入预处理线程
+from ..image_processing.preprocessing_thread import PreprocessingThread
 
 class MainWindow(QMainWindow):
     """主窗口类，负责组织和管理所有标签页"""
@@ -50,6 +55,12 @@ class MainWindow(QMainWindow):
         # 设置窗口标题和大小
         self.setWindowTitle('图片模型训练系统 - AGPL-3.0许可')
         self.setGeometry(100, 100, 1200, 800)
+        
+        # 初始化配置
+        self.config = {}
+        
+        # 初始化预处理线程
+        self.preprocessing_thread = None
         
         # 初始化UI
         self.init_ui()
@@ -179,87 +190,129 @@ class MainWindow(QMainWindow):
                 self.progress_bar.hide()
 
     def preprocessing_finished(self):
-        """处理图像预处理完成后的操作"""
-        self.update_status("预处理完成！")
-        print("========= 预处理完成，准备启用按钮 =========")
+        """预处理完成时的处理"""
+        print("MainWindow.preprocessing_finished被调用")
         
-        # 直接强制启用按钮
-        if hasattr(self, 'data_processing_tab') and self.data_processing_tab:
-            if hasattr(self.data_processing_tab, 'preprocess_btn'):
-                # 直接设置按钮启用状态
-                self.data_processing_tab.preprocess_btn.setEnabled(True)
-                print(f"已直接设置按钮启用状态: {self.data_processing_tab.preprocess_btn.isEnabled()}")
-                
-                # 直接调用按钮的show方法和raise方法
-                self.data_processing_tab.preprocess_btn.show()
-                self.data_processing_tab.preprocess_btn.raise_()
-                
-                # 强制刷新按钮和所有父容器
-                self.data_processing_tab.preprocess_btn.update()
-                self.data_processing_tab.update()
-                self.tabs.update()
-                self.update()
-                
-                # 处理所有待处理的事件
-                QApplication.processEvents()
-            else:
-                print("错误: 无法找到预处理按钮对象")
-        else:
-            print("错误: 无法找到数据处理标签页")
-        
-        # 使用定时器在100毫秒后再次尝试启用按钮
-        QTimer.singleShot(100, self._try_enable_button_again)
-        
-        # 使用定时器在200毫秒后显示弹窗
-        QTimer.singleShot(200, lambda: QMessageBox.information(self, "处理完成", "图像预处理已完成！"))
-            
-    def _try_enable_button_again(self):
-        """再次尝试启用按钮"""
-        if hasattr(self, 'data_processing_tab') and self.data_processing_tab:
-            print("尝试再次启用按钮...")
-            # 再次强制调用enable_preprocess_button方法
+        # 重新启用预处理按钮
+        if hasattr(self.data_processing_tab, 'enable_preprocess_button'):
+            print("调用data_processing_tab.enable_preprocess_button")
             self.data_processing_tab.enable_preprocess_button()
-            
-            # 直接设置按钮状态
-            if hasattr(self.data_processing_tab, 'preprocess_btn'):
+        
+        # 强制设置UI状态
+        if hasattr(self.data_processing_tab, 'preprocess_btn'):
+            # 确保源文件夹和输出文件夹已设置
+            if (hasattr(self.data_processing_tab, 'source_folder') and 
+                hasattr(self.data_processing_tab, 'output_folder') and
+                self.data_processing_tab.source_folder and 
+                self.data_processing_tab.output_folder):
+                # 重新启用按钮
                 self.data_processing_tab.preprocess_btn.setEnabled(True)
-                self.data_processing_tab.preprocess_btn.setDisabled(False)  # 尝试另一种方式启用
-                print(f"再次尝试后按钮状态: {self.data_processing_tab.preprocess_btn.isEnabled()}")
-                
-                # 触发重新检查预处理准备状态
-                if hasattr(self.data_processing_tab, 'check_preprocess_ready'):
-                    self.data_processing_tab.check_preprocess_ready()
-                
-                # 完全重建按钮（极端方法）
-                try:
+                # 强制更新UI
+                self.data_processing_tab.update()
+                self.data_processing_tab.repaint()
+                print("MainWindow: 预处理按钮已重新启用")
+            else:
+                print("MainWindow: 源文件夹或输出文件夹未设置，不启用预处理按钮")
+        
+        # 设置一个延迟定时器，确保按钮状态得到更新
+        QTimer.singleShot(500, self._try_enable_button_again)
+        
+        # 清理线程资源
+        if self.preprocessing_thread:
+            self.preprocessing_thread.quit()
+            self.preprocessing_thread.wait()
+            self.preprocessing_thread = None
+            print("MainWindow: 预处理线程已清理")
+        
+        # 显示完成提示
+        self.update_status("图片预处理完成！")
+        QMessageBox.information(self, "完成", "图片预处理已完成！")
+
+    def _try_enable_button_again(self):
+        """尝试再次启用按钮的定时器方法"""
+        try:
+            print("MainWindow._try_enable_button_again被调用")
+            if hasattr(self.data_processing_tab, 'preprocess_btn'):
+                if (hasattr(self.data_processing_tab, 'source_folder') and 
+                    hasattr(self.data_processing_tab, 'output_folder') and
+                    self.data_processing_tab.source_folder and 
+                    self.data_processing_tab.output_folder):
+                    
+                    # 多次尝试启用按钮，确保成功
+                    for i in range(3):
+                        self.data_processing_tab.preprocess_btn.setEnabled(True)
+                        self.data_processing_tab.preprocess_btn.update()
+                        self.data_processing_tab.preprocess_btn.repaint()
+                        QApplication.processEvents()
+                        print(f"MainWindow: 第{i+1}次尝试启用预处理按钮")
+                    
+                    # 检查预处理按钮是否存在并且是可用的
                     if hasattr(self.data_processing_tab, 'preprocess_btn'):
-                        # 保存原始按钮的父容器和布局位置
-                        parent_layout = self.data_processing_tab.preprocess_btn.parent().layout()
-                        if parent_layout:
-                            index = parent_layout.indexOf(self.data_processing_tab.preprocess_btn)
-                            # 创建新按钮
-                            new_btn = QPushButton("开始预处理")
-                            new_btn.clicked.connect(self.data_processing_tab.preprocess_images)
-                            new_btn.setEnabled(True)
-                            new_btn.setMinimumWidth(200)
-                            new_btn.setMinimumHeight(40)
-                            # 替换旧按钮
-                            if index >= 0:
-                                self.data_processing_tab.preprocess_btn.setParent(None)
-                                parent_layout.insertWidget(index, new_btn)
-                                self.data_processing_tab.preprocess_btn = new_btn
-                                print("已重建预处理按钮")
-                except Exception as e:
-                    print(f"尝试重建按钮时出错: {str(e)}")
-                
-            # 全局刷新UI
-            self.update()
-            QApplication.processEvents()
+                        current_state = self.data_processing_tab.preprocess_btn.isEnabled()
+                        print(f"MainWindow: 预处理按钮当前状态: {current_state}")
+                        
+                        # 如果按钮仍然不可用，尝试重建按钮
+                        if not current_state:
+                            print("MainWindow: 按钮状态异常，尝试重建按钮")
+                            try:
+                                # 获取按钮的父布局
+                                parent_layout = self.data_processing_tab.preprocess_btn.parent().layout()
+                                if parent_layout:
+                                    # 移除原按钮
+                                    parent_layout.removeWidget(self.data_processing_tab.preprocess_btn)
+                                    self.data_processing_tab.preprocess_btn.deleteLater()
+                                    
+                                    # 创建新按钮
+                                    new_btn = QPushButton("开始预处理")
+                                    new_btn.clicked.connect(self.data_processing_tab.preprocess_images)
+                                    new_btn.setEnabled(True)
+                                    new_btn.setMinimumWidth(200)
+                                    new_btn.setMinimumHeight(40)
+                                    
+                                    # 添加新按钮到布局
+                                    parent_layout.addWidget(new_btn)
+                                    
+                                    # 更新引用
+                                    self.data_processing_tab.preprocess_btn = new_btn
+                                    print("已重建预处理按钮")
+                            except Exception as e:
+                                print(f"尝试重建按钮时出错: {str(e)}")
+                        
+                    # 全局刷新UI
+                    self.update()
+                    QApplication.processEvents()
+
+        except Exception as e:
+            print(f"MainWindow._try_enable_button_again发生错误: {str(e)}")
 
     def on_image_preprocessing_started(self, params):
         """当图像预处理开始时的处理函数"""
-        self.update_status("开始图像预处理...")
-        self.image_preprocessing_started.emit(params)
+        print("MainWindow: 收到图像预处理开始信号")
+        self.update_status("正在初始化图像预处理线程...")
+        
+        # 创建新的预处理线程
+        self.preprocessing_thread = PreprocessingThread(self)
+        
+        # 连接线程信号
+        self.preprocessing_thread.progress_updated.connect(self.update_progress)
+        self.preprocessing_thread.status_updated.connect(self.update_status)
+        self.preprocessing_thread.preprocessing_finished.connect(self.preprocessing_finished)
+        self.preprocessing_thread.preprocessing_error.connect(self.on_preprocessing_error)
+        
+        # 设置预处理参数并启动线程
+        self.preprocessing_thread.setup_preprocessing(params)
+        self.preprocessing_thread.start()
+        
+        print("MainWindow: 图像预处理线程已启动")
+    
+    def on_preprocessing_error(self, error_msg):
+        """处理预处理错误"""
+        print(f"MainWindow: 预处理错误 - {error_msg}")
+        self.update_status(f"预处理错误: {error_msg}")
+        QMessageBox.critical(self, "预处理错误", error_msg)
+        
+        # 重新启用预处理按钮
+        self.preprocessing_finished()
     
     def on_create_class_folders(self, base_folder, class_names):
         """创建类别文件夹的处理函数"""
