@@ -163,8 +163,14 @@ class ModelAnalysisWorker(QThread):
             """预测函数"""
             batch_predictions = []
             for img in images:
-                # 转换为tensor
+                # 转换为tensor并应用与训练时相同的预处理
                 img_tensor = torch.from_numpy(img.transpose(2, 0, 1)).float() / 255.0
+                
+                # 应用标准化 (假设使用ImageNet预训练模型)
+                mean = torch.tensor([0.485, 0.456, 0.406]).view(3, 1, 1)
+                std = torch.tensor([0.229, 0.224, 0.225]).view(3, 1, 1)
+                img_tensor = (img_tensor - mean) / std
+                
                 img_tensor = img_tensor.unsqueeze(0)
                 
                 with torch.no_grad():
@@ -185,11 +191,11 @@ class ModelAnalysisWorker(QThread):
         explanation = explainer.explain_instance(
             image_array,
             predict_fn,
-            top_labels=len(self.class_names),
-            hide_color=0,
+            top_labels=1,  # 只解释目标类别
+            hide_color=0,  # 隐藏不重要区域的颜色
             num_samples=num_samples,
-            segmentation_fn=SegmentationAlgorithm('quickshift', kernel_size=4,
-                                                max_dist=200, ratio=0.2)
+            segmentation_fn=SegmentationAlgorithm('quickshift', kernel_size=1,
+                                                max_dist=100, ratio=0.1)
         )
         
         self.progress_updated.emit(100)
@@ -888,10 +894,10 @@ class ModelAnalysisWidget(QWidget):
         try:
             # 获取解释图像
             temp, mask = explanation.get_image_and_mask(
-                self.class_combo.currentIndex(), 
-                positive_only=True, 
-                num_features=5, 
-                hide_rest=False
+                self.target_class, 
+                positive_only=False,  # 显示正面和负面影响
+                num_features=10,      # 显示更多特征
+                hide_rest=True        # 隐藏不重要的区域
             )
             
             # 创建图像显示
