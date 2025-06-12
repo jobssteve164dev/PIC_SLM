@@ -38,6 +38,10 @@ ultralytics>=8.0.0  # YOLOv5/v8实现
 torchmetrics>=0.7.0  # 模型评估指标
 torchsummary>=1.5.1  # 模型结构可视化
 
+# 模型解释性分析
+lime>=0.2.0.1  # LIME解释器
+scikit-image>=0.18.0  # LIME依赖的图像处理库
+
 # 可选依赖（建议安装）
 # CUDA支持（如果有NVIDIA显卡）
 --extra-index-url https://download.pytorch.org/whl/cu117

@@ -51,6 +51,9 @@ from .training import (
     WeightConfigManager
 )
 
+# 模型分析组件
+from .model_analysis_widget import ModelAnalysisWidget
+
 __all__ = [
     # 评估组件 (从evaluation子包导入)
     'ModelEvaluationWidget',
@@ -91,5 +94,8 @@ __all__ = [
     'TrainingHelpDialog',
     'LayerConfigWidget',
     'ModelDownloadDialog',
-    'WeightConfigManager'
+    'WeightConfigManager',
+    
+    # 模型分析组件
+    'ModelAnalysisWidget'
 ] 

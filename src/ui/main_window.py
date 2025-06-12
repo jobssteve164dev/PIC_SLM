@@ -19,6 +19,7 @@ from .settings_tab import SettingsTab
 from .evaluation_tab import EvaluationTab
 from .about_tab import AboutTab
 from .dataset_evaluation_tab import DatasetEvaluationTab  # 导入新的数据集评估标签页
+from .model_analysis_tab import ModelAnalysisTab  # 导入新的模型分析标签页
 from .base_tab import BaseTab
 
 # 导入预处理线程
@@ -103,6 +104,7 @@ class MainWindow(QMainWindow):
         self.settings_tab = SettingsTab(self.tabs, self)
         self.about_tab = AboutTab(self.tabs, self)
         self.dataset_evaluation_tab = DatasetEvaluationTab(self.tabs, self)  # 创建数据集评估标签页
+        self.model_analysis_tab = ModelAnalysisTab(self.tabs, self)  # 创建模型分析标签页
         
         # 添加标签页（调整顺序，将模型预测放在模型评估与可视化后面）
         self.tabs.addTab(self.data_processing_tab, "图像预处理")
@@ -110,6 +112,7 @@ class MainWindow(QMainWindow):
         self.tabs.addTab(self.dataset_evaluation_tab, "数据集评估")  # 移动到图像标注后面
         self.tabs.addTab(self.training_tab, "模型训练")
         self.tabs.addTab(self.evaluation_tab, "模型评估与可视化")
+        self.tabs.addTab(self.model_analysis_tab, "模型分析")  # 添加新的模型分析标签页
         self.tabs.addTab(self.prediction_tab, "模型预测")
         self.tabs.addTab(self.settings_tab, "设置")
         self.tabs.addTab(self.about_tab, "关于")
@@ -174,6 +177,9 @@ class MainWindow(QMainWindow):
         
         self.dataset_evaluation_tab.status_updated.connect(self.update_status)  # 连接数据集评估标签页的信号
         self.dataset_evaluation_tab.progress_updated.connect(self.update_progress)
+        
+        self.model_analysis_tab.status_updated.connect(self.update_status)  # 连接模型分析标签页的信号
+        self.model_analysis_tab.progress_updated.connect(self.update_progress)
 
     def update_status(self, message):
         """更新状态栏消息"""
@@ -439,6 +445,13 @@ class MainWindow(QMainWindow):
                 self.dataset_evaluation_tab.apply_config(config)
                 print("MainWindow: 已调用dataset_evaluation_tab.apply_config方法")
         
+        # 模型分析标签页
+        if hasattr(self, 'model_analysis_tab'):
+            # 将配置应用到模型分析界面
+            if hasattr(self.model_analysis_tab, 'apply_config'):
+                self.model_analysis_tab.apply_config(config)
+                print("MainWindow: 已调用model_analysis_tab.apply_config方法")
+        
         # 预测标签页
         if hasattr(self, 'prediction_tab'):
             # 应用默认模型文件
@@ -574,7 +587,7 @@ class MainWindow(QMainWindow):
                 print(f"  预处理按钮状态: {getattr(self.data_processing_tab, 'preprocess_btn', None) and self.data_processing_tab.preprocess_btn.isEnabled()}")
             
             # 同样确保其他tab的配置
-            for tab_name in ['annotation_tab', 'training_tab', 'prediction_tab', 'evaluation_tab', 'dataset_evaluation_tab']:
+            for tab_name in ['annotation_tab', 'training_tab', 'prediction_tab', 'evaluation_tab', 'dataset_evaluation_tab', 'model_analysis_tab']:
                 if hasattr(self, tab_name):
                     tab = getattr(self, tab_name)
                     if hasattr(tab, 'apply_config'):
