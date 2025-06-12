@@ -468,7 +468,9 @@ class ModelAnalysisWidget(QWidget):
         self.feature_scroll = QScrollArea()
         self.feature_label = QLabel("特征可视化结果将在这里显示")
         self.feature_label.setAlignment(Qt.AlignCenter)
+        self.feature_label.setMinimumSize(400, 300)
         self.feature_scroll.setWidget(self.feature_label)
+        self.feature_scroll.setWidgetResizable(True)
         self.results_tabs.addTab(self.feature_scroll, "特征可视化")
         
         # GradCAM结果页
@@ -727,14 +729,23 @@ class ModelAnalysisWidget(QWidget):
         try:
             # 获取label的大小，用于自适应缩放
             label_size = label.size()
-            max_width = max(300, label_size.width() - 20)  # 最小300，减去边距
-            max_height = max(300, label_size.height() - 20)
+            
+            # 确保有合理的最小尺寸，避免label未初始化时的问题
+            if label_size.width() > 50 and label_size.height() > 50:
+                max_width = max(200, label_size.width() - 20)
+                max_height = max(200, label_size.height() - 20)
+            else:
+                # 使用默认尺寸
+                max_width = 300
+                max_height = 300
             
             # 保持比例调整图片大小
             original_width, original_height = image.size
             scale = min(max_width / original_width, max_height / original_height)
-            new_width = int(original_width * scale)
-            new_height = int(original_height * scale)
+            
+            # 确保缩放后的尺寸至少为1像素
+            new_width = max(1, int(original_width * scale))
+            new_height = max(1, int(original_height * scale))
             
             image_resized = image.resize((new_width, new_height), Image.Resampling.LANCZOS)
             
@@ -750,6 +761,8 @@ class ModelAnalysisWidget(QWidget):
             
         except Exception as e:
             self.logger.error(f"显示图片失败: {str(e)}")
+            import traceback
+            traceback.print_exc()
     
     def display_feature_visualization(self, features):
         """显示特征可视化结果"""
@@ -789,15 +802,24 @@ class ModelAnalysisWidget(QWidget):
             q_image = QImage(image_array.data, width, height, bytes_per_line, QImage.Format_RGB888)
             pixmap = QPixmap.fromImage(q_image)
             
-            # 获取label尺寸进行自适应缩放
-            label_size = self.feature_label.size()
-            if label_size.width() > 100:  # 确保label已初始化
-                max_width = label_size.width() - 20
-                max_height = label_size.height() - 20
+            # 获取可用空间进行自适应缩放
+            # 优先使用标签页的尺寸，如果不可用则使用默认值
+            tab_size = self.results_tabs.size()
+            if tab_size.width() > 200 and tab_size.height() > 200:
+                max_width = tab_size.width() - 40  # 减去边距和滚动条
+                max_height = tab_size.height() - 80  # 减去标签页头部和边距
             else:
                 max_width, max_height = 800, 600
             
-            self.feature_label.setPixmap(pixmap.scaled(max_width, max_height, Qt.KeepAspectRatio, Qt.SmoothTransformation))
+            # 确保最小尺寸
+            max_width = max(600, max_width)
+            max_height = max(450, max_height)
+            
+            scaled_pixmap = pixmap.scaled(max_width, max_height, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+            self.feature_label.setPixmap(scaled_pixmap)
+            
+            # 调整label大小以适应图片
+            self.feature_label.resize(scaled_pixmap.size())
             
             plt.close()
             buffer.close()
@@ -842,13 +864,17 @@ class ModelAnalysisWidget(QWidget):
             q_image = QImage(image_array.data, width, height, bytes_per_line, QImage.Format_RGB888)
             pixmap = QPixmap.fromImage(q_image)
             
-            # 获取label尺寸进行自适应缩放
-            label_size = self.gradcam_label.size()
-            if label_size.width() > 100:  # 确保label已初始化
-                max_width = label_size.width() - 20
-                max_height = label_size.height() - 20
+            # 获取可用空间进行自适应缩放
+            tab_size = self.results_tabs.size()
+            if tab_size.width() > 200 and tab_size.height() > 200:
+                max_width = tab_size.width() - 40
+                max_height = tab_size.height() - 80
             else:
                 max_width, max_height = 800, 400
+            
+            # 确保最小尺寸
+            max_width = max(600, max_width)
+            max_height = max(300, max_height)
             
             self.gradcam_label.setPixmap(pixmap.scaled(max_width, max_height, Qt.KeepAspectRatio, Qt.SmoothTransformation))
             
@@ -899,13 +925,17 @@ class ModelAnalysisWidget(QWidget):
             q_image = QImage(image_array.data, width, height, bytes_per_line, QImage.Format_RGB888)
             pixmap = QPixmap.fromImage(q_image)
             
-            # 获取label尺寸进行自适应缩放
-            label_size = self.lime_label.size()
-            if label_size.width() > 100:  # 确保label已初始化
-                max_width = label_size.width() - 20
-                max_height = label_size.height() - 20
+            # 获取可用空间进行自适应缩放
+            tab_size = self.results_tabs.size()
+            if tab_size.width() > 200 and tab_size.height() > 200:
+                max_width = tab_size.width() - 40
+                max_height = tab_size.height() - 80
             else:
                 max_width, max_height = 800, 400
+            
+            # 确保最小尺寸
+            max_width = max(600, max_width)
+            max_height = max(300, max_height)
             
             self.lime_label.setPixmap(pixmap.scaled(max_width, max_height, Qt.KeepAspectRatio, Qt.SmoothTransformation))
             
@@ -945,13 +975,17 @@ class ModelAnalysisWidget(QWidget):
             q_image = QImage(image_array.data, width, height, bytes_per_line, QImage.Format_RGB888)
             pixmap = QPixmap.fromImage(q_image)
             
-            # 获取label尺寸进行自适应缩放
-            label_size = self.sensitivity_label.size()
-            if label_size.width() > 100:  # 确保label已初始化
-                max_width = label_size.width() - 20
-                max_height = label_size.height() - 20
+            # 获取可用空间进行自适应缩放
+            tab_size = self.results_tabs.size()
+            if tab_size.width() > 200 and tab_size.height() > 200:
+                max_width = tab_size.width() - 40
+                max_height = tab_size.height() - 80
             else:
                 max_width, max_height = 800, 480
+            
+            # 确保最小尺寸
+            max_width = max(600, max_width)
+            max_height = max(360, max_height)
             
             self.sensitivity_label.setPixmap(pixmap.scaled(max_width, max_height, Qt.KeepAspectRatio, Qt.SmoothTransformation))
             
