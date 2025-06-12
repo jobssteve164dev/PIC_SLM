@@ -129,20 +129,23 @@ class ModelAnalysisWorker(QThread):
             output[0, self.target_class].backward(retain_graph=True)
             
             # 计算GradCAM
-            grads = gradients['value']
-            acts = activations['value']
+            grads = gradients['value'].detach()
+            acts = activations['value'].detach()
             
             weights = torch.mean(grads, dim=(2, 3))
-            gradcam = torch.zeros(acts.shape[2:])
+            gradcam = torch.zeros(acts.shape[2:], device=acts.device)
             
             for i in range(acts.shape[1]):
                 gradcam += weights[0, i] * acts[0, i]
                 
             gradcam = torch.relu(gradcam)
-            gradcam = gradcam / torch.max(gradcam)
+            # 避免除零错误
+            max_val = torch.max(gradcam)
+            if max_val > 0:
+                gradcam = gradcam / max_val
             
             self.progress_updated.emit(100)
-            return gradcam.cpu().numpy()
+            return gradcam.detach().cpu().numpy()
             
         finally:
             forward_handle.remove()
