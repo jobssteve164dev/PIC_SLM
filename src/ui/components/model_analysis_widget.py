@@ -794,13 +794,11 @@ class ModelAnalysisWidget(QWidget):
             plt.savefig(buffer, format='png', dpi=100, bbox_inches='tight')
             buffer.seek(0)
             
-            image = Image.open(buffer)
-            image_array = np.array(image)
-            height, width, channel = image_array.shape
-            bytes_per_line = channel * width
-            
-            q_image = QImage(image_array.data, width, height, bytes_per_line, QImage.Format_RGB888)
-            pixmap = QPixmap.fromImage(q_image)
+            # 直接从buffer创建QPixmap，避免数据转换问题
+            pixmap = QPixmap()
+            if not pixmap.loadFromData(buffer.getvalue()):
+                self.logger.error("无法加载特征可视化图像数据")
+                return
             
             # 获取可用空间进行自适应缩放
             # 优先使用标签页的尺寸，如果不可用则使用默认值
@@ -856,13 +854,11 @@ class ModelAnalysisWidget(QWidget):
             plt.savefig(buffer, format='png', dpi=100, bbox_inches='tight')
             buffer.seek(0)
             
-            image = Image.open(buffer)
-            image_array = np.array(image)
-            height, width, channel = image_array.shape
-            bytes_per_line = channel * width
-            
-            q_image = QImage(image_array.data, width, height, bytes_per_line, QImage.Format_RGB888)
-            pixmap = QPixmap.fromImage(q_image)
+            # 直接从buffer创建QPixmap，避免数据转换问题
+            pixmap = QPixmap()
+            if not pixmap.loadFromData(buffer.getvalue()):
+                self.logger.error("无法加载GradCAM图像数据")
+                return
             
             # 获取可用空间进行自适应缩放
             tab_size = self.results_tabs.size()
@@ -917,13 +913,11 @@ class ModelAnalysisWidget(QWidget):
             plt.savefig(buffer, format='png', dpi=100, bbox_inches='tight')
             buffer.seek(0)
             
-            image = Image.open(buffer)
-            image_array = np.array(image)
-            height, width, channel = image_array.shape
-            bytes_per_line = channel * width
-            
-            q_image = QImage(image_array.data, width, height, bytes_per_line, QImage.Format_RGB888)
-            pixmap = QPixmap.fromImage(q_image)
+            # 直接从buffer创建QPixmap，避免数据转换问题
+            pixmap = QPixmap()
+            if not pixmap.loadFromData(buffer.getvalue()):
+                self.logger.error("无法加载LIME图像数据")
+                return
             
             # 获取可用空间进行自适应缩放
             tab_size = self.results_tabs.size()
@@ -967,13 +961,11 @@ class ModelAnalysisWidget(QWidget):
             plt.savefig(buffer, format='png', dpi=100, bbox_inches='tight')
             buffer.seek(0)
             
-            image = Image.open(buffer)
-            image_array = np.array(image)
-            height, width, channel = image_array.shape
-            bytes_per_line = channel * width
-            
-            q_image = QImage(image_array.data, width, height, bytes_per_line, QImage.Format_RGB888)
-            pixmap = QPixmap.fromImage(q_image)
+            # 直接从buffer创建QPixmap，避免数据转换问题
+            pixmap = QPixmap()
+            if not pixmap.loadFromData(buffer.getvalue()):
+                self.logger.error("无法加载敏感性分析图像数据")
+                return
             
             # 获取可用空间进行自适应缩放
             tab_size = self.results_tabs.size()
