@@ -892,9 +892,10 @@ class ModelAnalysisWidget(QWidget):
     def display_lime_explanation(self, explanation):
         """显示LIME解释结果"""
         try:
-            # 获取解释图像
+            # 获取解释图像 - 使用当前选择的类别
+            target_class = self.class_combo.currentIndex()
             temp, mask = explanation.get_image_and_mask(
-                self.target_class, 
+                target_class, 
                 positive_only=False,  # 显示正面和负面影响
                 num_features=10,      # 显示更多特征
                 hide_rest=True        # 隐藏不重要的区域
