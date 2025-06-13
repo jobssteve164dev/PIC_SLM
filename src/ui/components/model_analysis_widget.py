@@ -187,11 +187,11 @@ class ModelAnalysisWorker(QThread):
         # 转换图像
         image_array = np.array(self.image)
         
-        # 生成解释
+        # 生成解释 - 确保包含目标类别
         explanation = explainer.explain_instance(
             image_array,
             predict_fn,
-            top_labels=1,  # 只解释目标类别
+            top_labels=5,  # 解释前5个类别，确保包含目标类别
             hide_color=0,  # 隐藏不重要区域的颜色
             num_samples=num_samples,
             segmentation_fn=SegmentationAlgorithm('quickshift', kernel_size=1,
@@ -894,6 +894,20 @@ class ModelAnalysisWidget(QWidget):
         try:
             # 获取解释图像 - 使用当前选择的类别
             target_class = self.class_combo.currentIndex()
+            
+            # 检查目标类别是否在解释结果中
+            available_labels = explanation.available_labels
+            print(f"可用标签: {available_labels}")
+            print(f"目标类别: {target_class}")
+            
+            if target_class not in available_labels:
+                # 如果目标类别不可用，使用第一个可用标签
+                if available_labels:
+                    target_class = available_labels[0]
+                    print(f"使用替代标签: {target_class}")
+                else:
+                    raise ValueError("没有可用的解释标签")
+            
             temp, mask = explanation.get_image_and_mask(
                 target_class, 
                 positive_only=False,  # 显示正面和负面影响
@@ -913,7 +927,9 @@ class ModelAnalysisWidget(QWidget):
             # LIME解释
             plt.subplot(1, 2, 2)
             plt.imshow(temp)
-            plt.title(f'LIME解释 - {self.class_names[self.class_combo.currentIndex()]}')
+            # 使用实际解释的类别名称
+            class_name = self.class_names[target_class] if target_class < len(self.class_names) else f"类别{target_class}"
+            plt.title(f'LIME解释 - {class_name}')
             plt.axis('off')
             
             plt.tight_layout()
