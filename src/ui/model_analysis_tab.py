@@ -1,7 +1,7 @@
 from PyQt5.QtWidgets import QVBoxLayout, QWidget
 from PyQt5.QtCore import pyqtSignal
 from .base_tab import BaseTab
-from .components.model_analysis_widget import ModelAnalysisWidget
+from .model_analysis_widget import ModelAnalysisWidget
 
 
 class ModelAnalysisTab(BaseTab):

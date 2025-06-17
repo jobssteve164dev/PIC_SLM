@@ -66,46 +66,22 @@ class EvaluationTab(BaseTab):
         self.tb_btn.clicked.connect(lambda: self.switch_view(1))
         switch_layout.addWidget(self.tb_btn)
         
-        # 特征可视化按钮
-        self.feature_viz_btn = QPushButton("特征可视化")
-        self.feature_viz_btn.setCheckable(True)
-        self.feature_viz_btn.clicked.connect(lambda: self.switch_view(2))
-        switch_layout.addWidget(self.feature_viz_btn)
-        
-        # Grad-CAM按钮
-        self.gradcam_btn = QPushButton("Grad-CAM可视化")
-        self.gradcam_btn.setCheckable(True)
-        self.gradcam_btn.clicked.connect(lambda: self.switch_view(3))
-        switch_layout.addWidget(self.gradcam_btn)
-        
-        # 敏感性分析按钮
-        self.sensitivity_btn = QPushButton("敏感性分析")
-        self.sensitivity_btn.setCheckable(True)
-        self.sensitivity_btn.clicked.connect(lambda: self.switch_view(4))
-        switch_layout.addWidget(self.sensitivity_btn)
-        
-        # LIME解释按钮
-        self.lime_btn = QPushButton("LIME解释")
-        self.lime_btn.setCheckable(True)
-        self.lime_btn.clicked.connect(lambda: self.switch_view(5))
-        switch_layout.addWidget(self.lime_btn)
-        
         # 训练参数对比按钮
         self.params_compare_btn = QPushButton("训练参数对比")
         self.params_compare_btn.setCheckable(True)
-        self.params_compare_btn.clicked.connect(lambda: self.switch_view(6))
+        self.params_compare_btn.clicked.connect(lambda: self.switch_view(2))
         switch_layout.addWidget(self.params_compare_btn)
         
         # 模型评估按钮
         self.eval_btn = QPushButton("模型评估")
         self.eval_btn.setCheckable(True)
-        self.eval_btn.clicked.connect(lambda: self.switch_view(7))
+        self.eval_btn.clicked.connect(lambda: self.switch_view(3))
         switch_layout.addWidget(self.eval_btn)
         
         # 模型结构可视化按钮
         self.model_structure_btn = QPushButton("模型结构")
         self.model_structure_btn.setCheckable(True)
-        self.model_structure_btn.clicked.connect(lambda: self.switch_view(8))
+        self.model_structure_btn.clicked.connect(lambda: self.switch_view(4))
         switch_layout.addWidget(self.model_structure_btn)
         
         main_layout.addLayout(switch_layout)
@@ -133,16 +109,6 @@ class EvaluationTab(BaseTab):
             self.tensorboard_widget.status_updated.connect(self.update_status)
             self.stacked_widget.addWidget(self.tensorboard_widget)
             
-            # 创建可视化容器组件
-            self.visualization_container = VisualizationContainerWidget()
-            self.visualization_container.status_updated.connect(self.update_status)
-            
-            # 添加各个可视化组件到堆叠小部件
-            self.stacked_widget.addWidget(self.visualization_container.get_feature_visualization_widget())
-            self.stacked_widget.addWidget(self.visualization_container.get_gradcam_widget())
-            self.stacked_widget.addWidget(self.visualization_container.get_sensitivity_widget())
-            self.stacked_widget.addWidget(self.visualization_container.get_lime_widget())
-            
             # 创建训练参数对比组件
             self.params_compare_widget = ParamsComparisonWidget(main_window=self.main_window)
             self.params_compare_widget.status_updated.connect(self.update_status)
@@ -153,6 +119,9 @@ class EvaluationTab(BaseTab):
             self.model_eval_widget.status_updated.connect(self.update_status)
             self.stacked_widget.addWidget(self.model_eval_widget)
             
+            # 创建可视化容器组件（仅用于模型结构可视化）
+            self.visualization_container = VisualizationContainerWidget()
+            self.visualization_container.status_updated.connect(self.update_status)
             # 添加模型结构可视化组件
             self.stacked_widget.addWidget(self.visualization_container.get_model_structure_widget())
             
@@ -166,9 +135,8 @@ class EvaluationTab(BaseTab):
         """切换视图"""
         # 取消所有按钮的选中状态
         buttons = [
-            self.training_curve_btn, self.tb_btn, self.feature_viz_btn,
-            self.gradcam_btn, self.sensitivity_btn, self.lime_btn,
-            self.params_compare_btn, self.eval_btn, self.model_structure_btn
+            self.training_curve_btn, self.tb_btn, self.params_compare_btn,
+            self.eval_btn, self.model_structure_btn
         ]
         
         for btn in buttons:
@@ -182,7 +150,7 @@ class EvaluationTab(BaseTab):
         self.stacked_widget.setCurrentIndex(index)
         
         # 当切换到参数对比页面时，刷新参数列表
-        if index == 6 and self.params_compare_widget:
+        if index == 2 and self.params_compare_widget:
             # 触发显示事件来刷新参数列表
             if hasattr(self.params_compare_widget, 'showEvent'):
                 from PyQt5.QtGui import QShowEvent
@@ -205,7 +173,7 @@ class EvaluationTab(BaseTab):
         return False
     
     def set_model(self, model, class_names=None):
-        """设置模型，用于各种可视化组件（兼容原有接口）"""
+        """设置模型，用于模型结构可视化组件"""
         if self.visualization_container:
             self.visualization_container.set_model(model, class_names)
     
@@ -235,7 +203,7 @@ class EvaluationTab(BaseTab):
     
     def go_to_params_compare_tab(self):
         """切换到训练参数对比视图（兼容原有接口）"""
-        self.switch_view(6)
+        self.switch_view(2)
     
     def select_models_dir(self):
         """选择模型目录（兼容原有接口）"""
@@ -300,7 +268,7 @@ class EvaluationTab(BaseTab):
         current_index = self.stacked_widget.currentIndex()
         
         # 如果当前是参数对比页面，刷新参数列表
-        if current_index == 6 and self.params_compare_widget:
+        if current_index == 2 and self.params_compare_widget:
             self.params_compare_widget.showEvent(event)
     
     def closeEvent(self, event):
@@ -380,35 +348,7 @@ class EvaluationTab(BaseTab):
             return self.params_compare_widget.model_configs
         return []
     
-    # 可视化组件的访问器
-    @property
-    def feature_viz_widget(self):
-        """获取特征可视化组件"""
-        if self.visualization_container:
-            return self.visualization_container.get_feature_visualization_widget()
-        return None
-    
-    @property
-    def gradcam_widget(self):
-        """获取GradCAM组件"""
-        if self.visualization_container:
-            return self.visualization_container.get_gradcam_widget()
-        return None
-    
-    @property
-    def sensitivity_widget(self):
-        """获取敏感性分析组件"""
-        if self.visualization_container:
-            return self.visualization_container.get_sensitivity_widget()
-        return None
-    
-    @property
-    def lime_widget(self):
-        """获取LIME组件"""
-        if self.visualization_container:
-            return self.visualization_container.get_lime_widget()
-        return None
-    
+    # 可视化组件的访问器 - 只保留模型结构组件
     @property
     def model_structure_widget(self):
         """获取模型结构组件"""
