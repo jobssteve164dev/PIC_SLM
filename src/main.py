@@ -370,9 +370,9 @@ def main():
             worker.predictor.batch_prediction_finished.connect(
                 lambda results: window.prediction_tab.batch_prediction_finished(results)
             )
-            # 修复：直接连接到主窗口的批量预测处理器，而不是直接连接到predictor方法
-            window.prediction_tab.batch_prediction_started.connect(window.on_batch_prediction_started)
-            window.prediction_tab.batch_prediction_stopped.connect(window.on_batch_prediction_stopped)
+            # 注释掉重复的信号连接，这些已经在main_window.py的connect_signals中连接了
+            # window.prediction_tab.batch_prediction_started.connect(window.on_batch_prediction_started)
+            # window.prediction_tab.batch_prediction_stopped.connect(window.on_batch_prediction_stopped)
         # 保留对batch_prediction_tab的支持，以便向后兼容
         elif hasattr(window, 'batch_prediction_tab'):
             worker.predictor.batch_prediction_progress.connect(window.batch_prediction_tab.update_prediction_progress)
