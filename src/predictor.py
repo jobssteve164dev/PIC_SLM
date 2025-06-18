@@ -324,6 +324,16 @@ class Predictor(QObject):
             print(f"⚙️ 文件操作模式: {copy_mode}")
             print(f"⚙️ 创建子文件夹: {create_subfolders}")
             
+            # 添加置信度阈值验证调试
+            print(f"🔍 置信度阈值验证:")
+            print(f"   原始参数值: {params.get('confidence_threshold')}")
+            print(f"   使用的阈值: {confidence_threshold}%")
+            print(f"   阈值类型: {type(confidence_threshold)}")
+            if confidence_threshold != 50.0:
+                print(f"   ✅ 使用自定义阈值: {confidence_threshold}%")
+            else:
+                print(f"   ⚠️ 使用默认阈值: 50.0%")
+            
             # 重置停止标志
             self._stop_batch_processing = False
             
@@ -391,7 +401,13 @@ class Predictor(QObject):
                     results['processed'] += 1
                     
                     # 如果置信度高于阈值，则分类图片
+                    print(f"🔍 置信度比较: {image_file}")
+                    print(f"   预测置信度: {probability:.2f}%")
+                    print(f"   设定阈值: {confidence_threshold}%")
+                    print(f"   比较结果: {probability:.2f}% {'≥' if probability >= confidence_threshold else '<'} {confidence_threshold}%")
+                    
                     if probability >= confidence_threshold:
+                        print(f"   ✅ 置信度达标，将分类到: {class_name}")
                         # 确定目标路径
                         if create_subfolders:
                             target_path = os.path.join(target_folder, class_name, image_file)
@@ -409,11 +425,13 @@ class Predictor(QObject):
                                 
                             results['classified'] += 1
                             results['class_counts'][class_name] += 1
+                            print(f"   ✅ 文件已{('复制' if copy_mode == 'copy' else '移动')}到: {target_path}")
                         except Exception as e:
                             print(f"❌ 处理文件 {image_file} 时出错: {str(e)}")
                             self.batch_prediction_status.emit(f'处理文件 {image_file} 时出错: {str(e)}')
                     else:
                         results['unclassified'] += 1
+                        print(f"   ❌ 置信度不达标，未分类")
                         print(f"⚠️ 图片 {image_file} 置信度过低 ({probability:.2f}% < {confidence_threshold}%)，未分类")
                 else:
                     print(f"❌ 图片 {image_file} 预测失败")
