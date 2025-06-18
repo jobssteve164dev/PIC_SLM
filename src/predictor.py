@@ -255,9 +255,31 @@ class Predictor(QObject):
             if self.model is None:
                 self.prediction_error.emit('请先加载模型')
                 return
+            
+            if self.class_names is None or len(self.class_names) == 0:
+                self.prediction_error.emit('类别信息未加载，请先加载模型')
+                return
                 
             source_folder = params.get('source_folder')
             target_folder = params.get('target_folder')
+            
+            # 验证必要参数
+            if not source_folder:
+                self.prediction_error.emit('源文件夹路径不能为空')
+                return
+            
+            if not target_folder:
+                self.prediction_error.emit('目标文件夹路径不能为空')
+                return
+            
+            if not os.path.exists(source_folder):
+                self.prediction_error.emit(f'源文件夹不存在: {source_folder}')
+                return
+            
+            if not os.path.isdir(source_folder):
+                self.prediction_error.emit(f'源路径不是文件夹: {source_folder}')
+                return
+            
             confidence_threshold = params.get('confidence_threshold', 50.0)  # 默认50%
             copy_mode = params.get('copy_mode', 'copy')
             create_subfolders = params.get('create_subfolders', True)

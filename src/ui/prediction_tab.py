@@ -264,6 +264,18 @@ class PredictionTab(BaseTab):
         options_layout.addWidget(QLabel("批处理大小:"), 0, 2)
         options_layout.addWidget(self.batch_size_spin, 0, 3)
         
+        # 文件操作模式
+        options_layout.addWidget(QLabel("文件操作:"), 1, 0)
+        self.copy_mode_combo = QComboBox()
+        self.copy_mode_combo.addItems(["复制", "移动"])
+        self.copy_mode_combo.setCurrentIndex(0)  # 默认复制
+        options_layout.addWidget(self.copy_mode_combo, 1, 1)
+        
+        # 创建子文件夹选项
+        self.create_subfolders_check = QCheckBox("为每个类别创建子文件夹")
+        self.create_subfolders_check.setChecked(True)
+        options_layout.addWidget(self.create_subfolders_check, 1, 2, 1, 2)
+        
         # 保存选项
         self.save_images_check = QCheckBox("保存预测图像")
         self.save_images_check.setChecked(True)
@@ -271,8 +283,8 @@ class PredictionTab(BaseTab):
         self.save_csv_check = QCheckBox("保存CSV结果")
         self.save_csv_check.setChecked(True)
         
-        options_layout.addWidget(self.save_images_check, 1, 0, 1, 2)
-        options_layout.addWidget(self.save_csv_check, 1, 2, 1, 2)
+        options_layout.addWidget(self.save_images_check, 2, 0, 1, 2)
+        options_layout.addWidget(self.save_csv_check, 2, 2, 1, 2)
         
         options_group.setLayout(options_layout)
         layout.addWidget(options_group)
@@ -498,10 +510,13 @@ class PredictionTab(BaseTab):
     
     def check_batch_ready(self):
         """检查批量预测是否准备就绪"""
+        # 检查模型是否已加载（通过检查加载模型按钮是否被禁用来判断）
+        model_loaded = not self.load_model_btn.isEnabled()
+        
         is_ready = bool(self.model_file and os.path.exists(self.model_file) and
                    self.class_info_file and os.path.exists(self.class_info_file) and
                    self.input_folder and os.path.exists(self.input_folder) and
-                   self.output_folder)
+                   self.output_folder and model_loaded)
         self.start_batch_btn.setEnabled(is_ready)
         return is_ready
     
@@ -511,16 +526,13 @@ class PredictionTab(BaseTab):
             QMessageBox.warning(self, "警告", "请确保所有必要的文件和文件夹都已选择。")
             return
         
-        # 准备参数
+        # 准备参数，匹配predictor.batch_predict的参数格式
         params = {
-            'model_file': self.model_file,
-            'class_info_file': self.class_info_file,
-            'input_folder': self.input_folder,
-            'output_folder': self.output_folder,
-            'threshold': self.threshold_spin.value(),
-            'batch_size': self.batch_size_spin.value(),
-            'save_images': self.save_images_check.isChecked(),
-            'save_csv': self.save_csv_check.isChecked()
+            'source_folder': self.input_folder,
+            'target_folder': self.output_folder,
+            'confidence_threshold': self.threshold_spin.value() * 100,  # 转换为百分比
+            'copy_mode': 'copy' if self.copy_mode_combo.currentText() == '复制' else 'move',
+            'create_subfolders': self.create_subfolders_check.isChecked()
         }
         
         # 更新UI状态
@@ -542,13 +554,38 @@ class PredictionTab(BaseTab):
         self.batch_progress_bar.setValue(value)
         self.update_progress(value)
     
-    def batch_prediction_finished(self):
+    def batch_prediction_finished(self, results=None):
         """批量预测完成"""
         self.start_batch_btn.setEnabled(True)
         self.stop_batch_btn.setEnabled(False)
         self.batch_progress_bar.setValue(100)
         self.update_status("批量预测完成")
         self.update_progress(100)
+        
+        # 显示预测结果统计
+        if results and isinstance(results, dict):
+            total = results.get('total', 0)
+            processed = results.get('processed', 0)
+            classified = results.get('classified', 0)
+            unclassified = results.get('unclassified', 0)
+            class_counts = results.get('class_counts', {})
+            
+            # 构建结果消息
+            result_msg = f"批量预测完成！\n\n"
+            result_msg += f"总图片数: {total}\n"
+            result_msg += f"已处理: {processed}\n"
+            result_msg += f"已分类: {classified}\n"
+            result_msg += f"未分类: {unclassified}\n\n"
+            
+            if class_counts:
+                result_msg += "各类别统计:\n"
+                for class_name, count in class_counts.items():
+                    if count > 0:
+                        result_msg += f"  {class_name}: {count} 张\n"
+            
+            QMessageBox.information(self, "批量预测完成", result_msg)
+        else:
+            QMessageBox.information(self, "批量预测完成", "批量预测已完成！")
     
     def update_top_k(self, value):
         """更新要显示的类别数量"""

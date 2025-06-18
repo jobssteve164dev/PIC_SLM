@@ -366,9 +366,13 @@ def main():
         if hasattr(window, 'prediction_tab') and hasattr(window.prediction_tab, 'update_batch_progress'):
             worker.predictor.batch_prediction_progress.connect(window.prediction_tab.update_batch_progress)
             worker.predictor.batch_prediction_status.connect(window.prediction_tab.update_status)
-            worker.predictor.batch_prediction_finished.connect(window.prediction_tab.batch_prediction_finished)
-            window.prediction_tab.batch_prediction_started.connect(worker.predictor.batch_predict)
-            window.prediction_tab.batch_prediction_stopped.connect(worker.predictor.stop_batch_processing)
+            # 修复：确保结果能正确传递
+            worker.predictor.batch_prediction_finished.connect(
+                lambda results: window.prediction_tab.batch_prediction_finished(results)
+            )
+            # 修复：直接连接到主窗口的批量预测处理器，而不是直接连接到predictor方法
+            window.prediction_tab.batch_prediction_started.connect(window.on_batch_prediction_started)
+            window.prediction_tab.batch_prediction_stopped.connect(window.on_batch_prediction_stopped)
         # 保留对batch_prediction_tab的支持，以便向后兼容
         elif hasattr(window, 'batch_prediction_tab'):
             worker.predictor.batch_prediction_progress.connect(window.batch_prediction_tab.update_prediction_progress)

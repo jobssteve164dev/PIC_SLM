@@ -353,13 +353,34 @@ class MainWindow(QMainWindow):
 
     def on_batch_prediction_started(self, params):
         """批量预测开始时调用"""
-        # 这里可以添加实际的批量预测逻辑
-        pass
+        try:
+            # 准备批量预测参数，匹配predictor.batch_predict的参数格式
+            batch_params = {
+                'source_folder': params.get('input_folder'),
+                'target_folder': params.get('output_folder'),
+                'confidence_threshold': params.get('threshold', 0.5) * 100,  # 转换为百分比
+                'copy_mode': 'copy',  # 默认复制模式
+                'create_subfolders': True  # 创建子文件夹
+            }
+            
+            self.update_status("开始批量预测...")
+            # 调用predictor的批量预测方法
+            self.worker.predictor.batch_predict(batch_params)
+        except Exception as e:
+            self.update_status(f"批量预测启动失败: {str(e)}")
+            import traceback
+            traceback.print_exc()
     
     def on_batch_prediction_stopped(self):
         """批量预测停止时调用"""
-        # 这里可以添加实际的批量预测停止逻辑
-        pass
+        try:
+            # 调用predictor的停止批量处理方法
+            self.worker.predictor.stop_batch_processing()
+            self.update_status("批量预测已停止")
+        except Exception as e:
+            self.update_status(f"停止批量预测失败: {str(e)}")
+            import traceback
+            traceback.print_exc()
     
     def load_config(self):
         """加载配置"""
