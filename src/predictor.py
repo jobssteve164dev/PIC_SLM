@@ -7,6 +7,7 @@ import json
 import shutil
 from PyQt5.QtCore import QObject, pyqtSignal
 from typing import Dict, Tuple, List, Optional
+import time
 
 class Predictor(QObject):
     # 定义信号
@@ -179,6 +180,8 @@ class Predictor(QObject):
             image_path: 图片路径
             top_k: 返回前k个预测结果
         """
+        start_time = time.time()
+        
         try:
             if self.model is None:
                 print("模型未加载，请先加载模型")
@@ -186,15 +189,22 @@ class Predictor(QObject):
                 
             # 加载和预处理图片
             try:
+                load_start = time.time()
                 image = Image.open(image_path).convert('RGB')
+                load_time = time.time() - load_start
+                print(f"图片加载时间: {load_time:.4f}秒")
             except Exception as img_err:
                 print(f"无法加载图像: {str(img_err)}")
                 return None
                 
+            preprocess_start = time.time()
             image_tensor = self.transform(image).unsqueeze(0).to(self.device)
+            preprocess_time = time.time() - preprocess_start
+            print(f"图片预处理时间: {preprocess_time:.4f}秒")
 
             # 预测
             try:
+                predict_start = time.time()
                 with torch.no_grad():
                     outputs = self.model(image_tensor)
                     # 检查输出格式
@@ -205,6 +215,10 @@ class Predictor(QObject):
                     probabilities = torch.nn.functional.softmax(outputs, dim=1)
                     top_k = min(top_k, len(self.class_names), probabilities.size(1))
                     top_prob, top_class = torch.topk(probabilities, top_k)
+                predict_time = time.time() - predict_start
+                print(f"模型推理时间: {predict_time:.4f}秒")
+                print(f"模型输出shape: {outputs.shape}")
+                print(f"概率分布前3个值: {probabilities[0][:3].tolist()}")
             except Exception as pred_err:
                 print(f"预测过程出错: {str(pred_err)}")
                 return None
@@ -220,6 +234,7 @@ class Predictor(QObject):
                             'class_name': self.class_names[class_idx],
                             'probability': prob * 100  # 转换为百分比
                         })
+                        print(f"预测结果 {i+1}: {self.class_names[class_idx]} - {prob*100:.2f}%")
                 except Exception as idx_err:
                     print(f"处理预测结果 {i} 时出错: {str(idx_err)}")
                     continue
@@ -227,6 +242,10 @@ class Predictor(QObject):
             if not predictions:
                 print("无法获取有效的预测结果")
                 return None
+                
+            total_time = time.time() - start_time
+            print(f"单张图片预测总时间: {total_time:.4f}秒")
+            print(f"图片: {os.path.basename(image_path)}, 最高置信度: {predictions[0]['class_name']} ({predictions[0]['probability']:.2f}%)")
                 
             return {
                 'predictions': predictions,
@@ -251,17 +270,34 @@ class Predictor(QObject):
                 - copy_mode: 'copy'（复制）或 'move'（移动）
                 - create_subfolders: 是否为每个类别创建子文件夹
         """
+        batch_start_time = time.time()
+        print("=" * 60)
+        print("开始批量预测")
+        print(f"批量预测开始时间: {time.strftime('%Y-%m-%d %H:%M:%S')}")
+        
         try:
             if self.model is None:
+                print("❌ 错误: 模型未加载")
                 self.prediction_error.emit('请先加载模型')
                 return
+            else:
+                print(f"✅ 模型已加载: {type(self.model).__name__}")
+                print(f"✅ 设备: {self.device}")
+                print(f"✅ 模型状态: {'训练模式' if self.model.training else '评估模式'}")
             
             if self.class_names is None or len(self.class_names) == 0:
+                print("❌ 错误: 类别信息未加载")
                 self.prediction_error.emit('类别信息未加载，请先加载模型')
                 return
+            else:
+                print(f"✅ 类别信息已加载: {len(self.class_names)} 个类别")
+                print(f"   类别列表: {self.class_names}")
                 
             source_folder = params.get('source_folder')
             target_folder = params.get('target_folder')
+            
+            print(f"📁 源文件夹: {source_folder}")
+            print(f"📁 目标文件夹: {target_folder}")
             
             # 验证必要参数
             if not source_folder:
@@ -284,6 +320,10 @@ class Predictor(QObject):
             copy_mode = params.get('copy_mode', 'copy')
             create_subfolders = params.get('create_subfolders', True)
             
+            print(f"⚙️ 置信度阈值: {confidence_threshold}%")
+            print(f"⚙️ 文件操作模式: {copy_mode}")
+            print(f"⚙️ 创建子文件夹: {create_subfolders}")
+            
             # 重置停止标志
             self._stop_batch_processing = False
             
@@ -294,8 +334,12 @@ class Predictor(QObject):
                           os.path.splitext(f.lower())[1] in valid_extensions]
             
             if not image_files:
+                print("❌ 未找到图片文件")
                 self.batch_prediction_status.emit('未找到图片文件')
                 return
+            
+            print(f"📷 找到 {len(image_files)} 张图片")
+            print(f"   图片格式统计: {dict((ext, sum(1 for f in image_files if f.lower().endswith(ext))) for ext in valid_extensions if any(f.lower().endswith(ext) for f in image_files))}")
                 
             # 创建目标文件夹
             os.makedirs(target_folder, exist_ok=True)
@@ -304,6 +348,7 @@ class Predictor(QObject):
             if create_subfolders:
                 for class_name in self.class_names:
                     os.makedirs(os.path.join(target_folder, class_name), exist_ok=True)
+                print(f"📁 已创建 {len(self.class_names)} 个类别子文件夹")
             
             # 统计结果
             results = {
@@ -314,14 +359,23 @@ class Predictor(QObject):
                 'class_counts': {class_name: 0 for class_name in self.class_names}
             }
             
+            prediction_times = []
+            
             # 批量处理图片
+            print("\n🔄 开始处理图片...")
             for i, image_file in enumerate(image_files):
                 if self._stop_batch_processing:
+                    print("⏹️ 批量处理已停止")
                     self.batch_prediction_status.emit('批量处理已停止')
                     break
                     
                 image_path = os.path.join(source_folder, image_file)
+                
+                # 记录单张图片预测时间
+                single_start = time.time()
                 result = self.predict_image(image_path)
+                single_time = time.time() - single_start
+                prediction_times.append(single_time)
                 
                 if result:
                     # 获取最高置信度的预测
@@ -356,15 +410,39 @@ class Predictor(QObject):
                             results['classified'] += 1
                             results['class_counts'][class_name] += 1
                         except Exception as e:
+                            print(f"❌ 处理文件 {image_file} 时出错: {str(e)}")
                             self.batch_prediction_status.emit(f'处理文件 {image_file} 时出错: {str(e)}')
                     else:
                         results['unclassified'] += 1
+                        print(f"⚠️ 图片 {image_file} 置信度过低 ({probability:.2f}% < {confidence_threshold}%)，未分类")
+                else:
+                    print(f"❌ 图片 {image_file} 预测失败")
+            
+            # 计算统计信息
+            batch_total_time = time.time() - batch_start_time
+            avg_prediction_time = sum(prediction_times) / len(prediction_times) if prediction_times else 0
+            
+            print("\n" + "=" * 60)
+            print("批量预测完成统计:")
+            print(f"⏱️ 总耗时: {batch_total_time:.2f}秒")
+            print(f"⏱️ 平均每张图片预测时间: {avg_prediction_time:.4f}秒")
+            print(f"🏃 预测速度: {len(image_files)/batch_total_time:.2f} 张/秒")
+            print(f"📊 总图片数: {results['total']}")
+            print(f"📊 已处理: {results['processed']}")
+            print(f"📊 已分类: {results['classified']}")
+            print(f"📊 未分类: {results['unclassified']}")
+            print("📊 各类别统计:")
+            for class_name, count in results['class_counts'].items():
+                if count > 0:
+                    print(f"   {class_name}: {count} 张")
+            print("=" * 60)
             
             # 发送完成信号
             self.batch_prediction_finished.emit(results)
             self.batch_prediction_status.emit('批量处理完成')
             
         except Exception as e:
+            print(f"❌ 批量预测过程中出错: {str(e)}")
             self.prediction_error.emit(f'批量预测过程中出错: {str(e)}')
 
     def stop_batch_processing(self) -> None:
