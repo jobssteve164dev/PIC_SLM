@@ -6,6 +6,9 @@ from PyQt5.QtGui import QImage, QPixmap
 from PyQt5.QtCore import Qt
 import logging
 
+# 导入matplotlib配置
+from src.utils.matplotlib_config import normalize_image_for_matplotlib, normalize_feature_map
+
 logger = logging.getLogger(__name__)
 
 
@@ -66,10 +69,13 @@ def display_feature_visualization(features, viewer):
         for i, (module, feature) in enumerate(feature_items[:16]):
             row, col = i // 4, i % 4
             
-            # 取第一个特征图
+            # 取第一个特征图并标准化
             feature_map = feature[0, 0].cpu().numpy()
             
-            axes[row, col].imshow(feature_map, cmap='viridis')
+            # 使用统一的特征图标准化函数
+            normalized_feature = normalize_feature_map(feature_map)
+            
+            axes[row, col].imshow(normalized_feature, cmap='viridis', vmin=0, vmax=1)
             axes[row, col].set_title(f'Layer {i+1}')
             axes[row, col].axis('off')
         
@@ -108,19 +114,23 @@ def display_gradcam(gradcam, original_image, viewer, class_name):
         # 调整GradCAM到原图大小
         gradcam_resized = cv2.resize(gradcam, (original_image.width, original_image.height))
         
+        # 标准化GradCAM数据
+        normalized_gradcam = normalize_feature_map(gradcam_resized)
+        
         # 创建热力图
         plt.figure(figsize=(12, 6))
         
-        # 原图
+        # 原图 - 标准化图像数据
         plt.subplot(1, 2, 1)
-        plt.imshow(original_image)
+        normalized_image = normalize_image_for_matplotlib(original_image)
+        plt.imshow(normalized_image)
         plt.title('原始图片')
         plt.axis('off')
         
         # GradCAM叠加
         plt.subplot(1, 2, 2)
-        plt.imshow(original_image)
-        plt.imshow(gradcam_resized, alpha=0.4, cmap='jet')
+        plt.imshow(normalized_image)
+        plt.imshow(normalized_gradcam, alpha=0.4, cmap='jet', vmin=0, vmax=1)
         plt.title(f'GradCAM - {class_name}')
         plt.axis('off')
         
@@ -173,15 +183,17 @@ def display_lime_explanation(explanation, original_image, viewer, target_class, 
         # 创建图像显示
         plt.figure(figsize=(12, 6))
         
-        # 原图
+        # 原图 - 标准化图像数据
         plt.subplot(1, 2, 1)
-        plt.imshow(original_image)
+        normalized_original = normalize_image_for_matplotlib(original_image)
+        plt.imshow(normalized_original)
         plt.title('原始图片')
         plt.axis('off')
         
-        # LIME解释
+        # LIME解释 - 标准化解释图像数据
         plt.subplot(1, 2, 2)
-        plt.imshow(temp)
+        normalized_temp = normalize_image_for_matplotlib(temp)
+        plt.imshow(normalized_temp)
         # 使用实际解释的类别名称
         class_name = class_names[target_class] if target_class < len(class_names) else f"类别{target_class}"
         plt.title(f'LIME解释 - {class_name}')

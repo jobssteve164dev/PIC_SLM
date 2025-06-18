@@ -25,17 +25,14 @@ from src.image_preprocessor import ImagePreprocessor
 from src.annotation_tool import AnnotationTool
 from src.config_loader import ConfigLoader
 
-# 配置matplotlib使用Agg后端（非交互式）以避免线程安全问题
-import matplotlib
-matplotlib.use('Agg')
+# 导入matplotlib配置（这会自动配置matplotlib并抑制警告）
+from src.utils.matplotlib_config import suppress_matplotlib_warnings
+
+# 确保matplotlib配置在其他导入之前加载
+suppress_matplotlib_warnings()
 
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_qt5agg import FigureCanvas
-
-# 配置matplotlib全局字体设置
-matplotlib.rcParams['font.sans-serif'] = ['SimHei', 'Microsoft YaHei', 'SimSun', 'Arial Unicode MS', 'sans-serif']
-matplotlib.rcParams['axes.unicode_minus'] = False  # 解决负号显示问题
-matplotlib.rcParams['font.size'] = 12  # 设置字体大小
 
 class Worker(QObject):
     def __init__(self, parent=None):
