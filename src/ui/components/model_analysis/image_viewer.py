@@ -144,13 +144,14 @@ class ZoomableImageViewer(QWidget):
             self.update()
     
     def center_image(self):
-        """居中显示图像"""
+        """居中显示图像，确保offset值为整数"""
         if self.pixmap and not self.pixmap.isNull():
             scaled_width = int(self.pixmap.width() * self.scale_factor)
             scaled_height = int(self.pixmap.height() * self.scale_factor)
             
-            self.offset_x = int((self.width() - scaled_width) / 2)
-            self.offset_y = int((self.height() - scaled_height) / 2)
+            # 使用round函数确保offset值为整数
+            self.offset_x = round((self.width() - scaled_width) / 2)
+            self.offset_y = round((self.height() - scaled_height) / 2)
     
     def zoom_in(self):
         """放大图像"""
@@ -198,10 +199,10 @@ class ZoomableImageViewer(QWidget):
             scaled_width = int(self.pixmap.width() * self.scale_factor)
             scaled_height = int(self.pixmap.height() * self.scale_factor)
             
-            # 绘制图像
+            # 绘制图像，确保offset值为整数
             painter.drawPixmap(
-                self.offset_x,
-                self.offset_y,
+                int(self.offset_x),
+                int(self.offset_y),
                 scaled_width,
                 scaled_height,
                 self.pixmap
@@ -211,8 +212,8 @@ class ZoomableImageViewer(QWidget):
             pen = QPen(QColor(200, 200, 200), 1, Qt.DashLine)
             painter.setPen(pen)
             painter.drawRect(
-                self.offset_x,
-                self.offset_y,
+                int(self.offset_x),
+                int(self.offset_y),
                 scaled_width,
                 scaled_height
             )
@@ -236,9 +237,9 @@ class ZoomableImageViewer(QWidget):
             # 计算移动距离
             delta = event.pos() - self.pan_start_point
             
-            # 更新偏移量
-            self.offset_x += delta.x()
-            self.offset_y += delta.y()
+            # 更新偏移量，确保为整数
+            self.offset_x = round(self.offset_x + delta.x())
+            self.offset_y = round(self.offset_y + delta.y())
             
             # 更新起始位置
             self.pan_start_point = event.pos()
@@ -258,7 +259,7 @@ class ZoomableImageViewer(QWidget):
         super().mouseReleaseEvent(event)
     
     def wheelEvent(self, event):
-        """鼠标滚轮事件"""
+        """鼠标滚轮事件，确保offset计算结果为整数"""
         if self.pixmap and not self.pixmap.isNull():
             # 获取当前鼠标位置
             pos = event.pos()
@@ -289,13 +290,14 @@ class ZoomableImageViewer(QWidget):
                 self.zoom_slider.setValue(int(self.scale_factor * 100))
                 self.zoom_label.setText(f"{int(self.scale_factor * 100)}%")
                 
-                # 调整偏移量，使鼠标指向的点保持在同一位置
+                # 调整偏移量，使鼠标指向的点保持在同一位置，确保结果为整数
                 scale_change = self.scale_factor / old_scale
                 new_img_width = self.pixmap.width() * self.scale_factor
                 new_img_height = self.pixmap.height() * self.scale_factor
                 
-                self.offset_x = pos.x() - rel_x * new_img_width
-                self.offset_y = pos.y() - rel_y * new_img_height
+                # 使用round函数确保offset值为整数
+                self.offset_x = round(pos.x() - rel_x * new_img_width)
+                self.offset_y = round(pos.y() - rel_y * new_img_height)
                 
                 # 更新界面
                 self.update()

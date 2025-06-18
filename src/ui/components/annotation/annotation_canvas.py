@@ -566,10 +566,10 @@ class AnnotationCanvas(QWidget):
         if not self.pixmap or self.pixmap.isNull():
             return QPointF()
             
-        # 计算图像在屏幕上的位置
+        # 计算图像在屏幕上的位置，确保offset值为整数
         scaled_size = self.pixmap.size() * self.scale_factor
-        x_offset = (self.width() - scaled_size.width()) / 2 + self.offset_x
-        y_offset = (self.height() - scaled_size.height()) / 2 + self.offset_y
+        x_offset = round((self.width() - scaled_size.width()) / 2 + self.offset_x)
+        y_offset = round((self.height() - scaled_size.height()) / 2 + self.offset_y)
         
         # 计算鼠标位置相对于图像的偏移
         relative_x = pos.x() - x_offset
@@ -630,8 +630,8 @@ class AnnotationCanvas(QWidget):
         # 计算缩放后的图像尺寸
         scaled_size = self.pixmap.size() * self.scale_factor
         
-        # 计算居中位置（考虑偏移量）
-        x = (self.width() - scaled_size.width()) / 2 + self.offset_x
-        y = (self.height() - scaled_size.height()) / 2 + self.offset_y
+        # 计算居中位置（考虑偏移量），确保为整数
+        x = round((self.width() - scaled_size.width()) / 2 + self.offset_x)
+        y = round((self.height() - scaled_size.height()) / 2 + self.offset_y)
         
         return QRectF(x, y, scaled_size.width(), scaled_size.height()) 

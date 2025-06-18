@@ -323,9 +323,9 @@ class ModelStructureEditor(QDialog, EditorFunctions):
         scale_y = nav_height / effective_rect.height()
         scale = min(scale_x, scale_y) * 0.9  # 留些边距
         
-        # 计算绘制位置的偏移量，使内容居中
-        x_offset = (nav_width - effective_rect.width() * scale) / 2
-        y_offset = (nav_height - effective_rect.height() * scale) / 2
+        # 计算绘制位置的偏移量，使内容居中，确保为整数
+        x_offset = round((nav_width - effective_rect.width() * scale) / 2)
+        y_offset = round((nav_height - effective_rect.height() * scale) / 2)
         
         # 绘制所有项的边界
         painter.setPen(QPen(Qt.darkGray, 1))
