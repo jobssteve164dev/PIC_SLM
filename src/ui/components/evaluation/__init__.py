@@ -14,6 +14,7 @@
 
 # 从widgets子模块导入核心组件
 from .widgets.model_evaluation_widget import ModelEvaluationWidget
+from .widgets.enhanced_model_evaluation_widget import EnhancedModelEvaluationWidget
 from .widgets.tensorboard_manager_widget import TensorBoardManagerWidget
 from .widgets.training_curve_widget import TrainingCurveWidget
 from .widgets.params_comparison_widget import ParamsComparisonWidget
@@ -31,6 +32,7 @@ from .utils.metrics_data_manager import MetricsDataManager
 __all__ = [
     # 核心Widget组件
     'ModelEvaluationWidget',
+    'EnhancedModelEvaluationWidget',
     'TensorBoardManagerWidget', 
     'TrainingCurveWidget',
     'ParamsComparisonWidget',
