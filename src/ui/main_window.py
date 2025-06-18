@@ -354,18 +354,12 @@ class MainWindow(QMainWindow):
     def on_batch_prediction_started(self, params):
         """批量预测开始时调用"""
         try:
-            # 准备批量预测参数，匹配predictor.batch_predict的参数格式
-            batch_params = {
-                'source_folder': params.get('input_folder'),
-                'target_folder': params.get('output_folder'),
-                'confidence_threshold': params.get('threshold', 0.5) * 100,  # 转换为百分比
-                'copy_mode': 'copy',  # 默认复制模式
-                'create_subfolders': True  # 创建子文件夹
-            }
+            # 直接使用prediction_tab传递的参数，无需重新构建
+            print(f"接收到的批量预测参数: {params}")
             
             self.update_status("开始批量预测...")
             # 调用predictor的批量预测方法
-            self.worker.predictor.batch_predict(batch_params)
+            self.worker.predictor.batch_predict(params)
         except Exception as e:
             self.update_status(f"批量预测启动失败: {str(e)}")
             import traceback

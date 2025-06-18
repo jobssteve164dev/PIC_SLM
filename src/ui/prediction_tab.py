@@ -535,6 +535,14 @@ class PredictionTab(BaseTab):
             'create_subfolders': self.create_subfolders_check.isChecked()
         }
         
+        # 添加调试信息
+        print(f"批量预测参数:")
+        print(f"  source_folder: {params['source_folder']}")
+        print(f"  target_folder: {params['target_folder']}")
+        print(f"  confidence_threshold: {params['confidence_threshold']}")
+        print(f"  copy_mode: {params['copy_mode']}")
+        print(f"  create_subfolders: {params['create_subfolders']}")
+        
         # 更新UI状态
         self.start_batch_btn.setEnabled(False)
         self.stop_batch_btn.setEnabled(True)
