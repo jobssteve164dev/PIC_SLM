@@ -2,8 +2,8 @@ from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QPushButton, QLabel, QFileDia
                            QHBoxLayout, QComboBox, QSpinBox, QGroupBox, QGridLayout,
                            QSizePolicy, QLineEdit, QCheckBox, QDoubleSpinBox, QRadioButton,
                            QButtonGroup, QToolTip, QFrame, QListWidget, QInputDialog, QMessageBox,
-                           QApplication)
-from PyQt5.QtCore import Qt, pyqtSignal, QPoint, QTimer
+                           QApplication, QProgressBar, QTextEdit)
+from PyQt5.QtCore import Qt, pyqtSignal, QPoint, QTimer, QThread
 from PyQt5.QtGui import QFont, QIcon
 import os
 import sys
@@ -11,6 +11,8 @@ import subprocess
 import platform
 from .base_tab import BaseTab
 import json
+import shutil
+from pathlib import Path
 
 # 导入统一的配置路径工具
 sys.path.append(os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), 'src'))
@@ -22,6 +24,7 @@ class DataProcessingTab(BaseTab):
     # 定义信号
     image_preprocessing_started = pyqtSignal(dict)
     create_class_folders_signal = pyqtSignal(str, list)  # 添加创建类别文件夹信号
+    folder_organize_started = pyqtSignal(dict)  # 添加文件夹整理信号
     
     def __init__(self, parent=None, main_window=None):
         super().__init__(parent, main_window)
@@ -30,6 +33,9 @@ class DataProcessingTab(BaseTab):
         self.resize_width = 224
         self.resize_height = 224
         self.defect_classes = []  # 初始化类别列表
+        # 文件夹整理相关变量
+        self.organize_source_folder = ""
+        self.organize_target_folder = ""
         self.init_ui()
         
         # 尝试从配置文件中加载完整配置信息（包括文件夹路径和类别信息）
@@ -158,6 +164,109 @@ class DataProcessingTab(BaseTab):
         
         # 连接勾选框信号
         self.check_class_folders.stateChanged.connect(self.on_check_class_folders_changed)
+        
+        # 创建文件夹整理组
+        organize_group = QGroupBox("文件夹图片整理")
+        organize_layout = QVBoxLayout()
+        
+        # 添加说明
+        organize_tip = QLabel("将源文件夹中的多个子文件夹的图片移动或复制到目标文件夹中，支持批量整理操作。")
+        organize_tip.setWordWrap(True)
+        organize_tip.setStyleSheet("color: #666666; font-size: 9pt;")
+        organize_layout.addWidget(organize_tip)
+        
+        # 源文件夹选择
+        organize_source_layout = QHBoxLayout()
+        organize_source_layout.addWidget(QLabel("源文件夹:"))
+        self.organize_source_edit = QLineEdit()
+        self.organize_source_edit.setReadOnly(True)
+        self.organize_source_edit.setPlaceholderText("请选择包含多个子文件夹的源文件夹")
+        organize_source_btn = QPushButton("浏览...")
+        organize_source_btn.clicked.connect(self.select_organize_source_folder)
+        organize_source_layout.addWidget(self.organize_source_edit)
+        organize_source_layout.addWidget(organize_source_btn)
+        organize_layout.addLayout(organize_source_layout)
+        
+        # 目标文件夹选择
+        organize_target_layout = QHBoxLayout()
+        organize_target_layout.addWidget(QLabel("目标文件夹:"))
+        self.organize_target_edit = QLineEdit()
+        self.organize_target_edit.setReadOnly(True)
+        self.organize_target_edit.setPlaceholderText("请选择图片整理后的目标文件夹")
+        organize_target_btn = QPushButton("浏览...")
+        organize_target_btn.clicked.connect(self.select_organize_target_folder)
+        organize_target_layout.addWidget(self.organize_target_edit)
+        organize_target_layout.addWidget(organize_target_btn)
+        organize_layout.addLayout(organize_target_layout)
+        
+        # 操作选项
+        organize_options_layout = QHBoxLayout()
+        self.organize_operation_group = QButtonGroup(self)
+        self.organize_copy_radio = QRadioButton("复制")
+        self.organize_move_radio = QRadioButton("移动")
+        self.organize_copy_radio.setChecked(True)  # 默认选择复制
+        self.organize_operation_group.addButton(self.organize_copy_radio, 0)
+        self.organize_operation_group.addButton(self.organize_move_radio, 1)
+        
+        organize_options_layout.addWidget(QLabel("操作类型:"))
+        organize_options_layout.addWidget(self.organize_copy_radio)
+        organize_options_layout.addWidget(self.organize_move_radio)
+        organize_options_layout.addStretch()
+        
+        # 添加保持文件夹结构选项
+        self.keep_folder_structure = QCheckBox("保持子文件夹结构")
+        self.keep_folder_structure.setChecked(True)
+        self.keep_folder_structure.setToolTip("勾选后将在目标文件夹中重建源文件夹的子文件夹结构")
+        organize_options_layout.addWidget(self.keep_folder_structure)
+        
+        organize_layout.addLayout(organize_options_layout)
+        
+        # 文件类型筛选
+        organize_filter_layout = QHBoxLayout()
+        organize_filter_layout.addWidget(QLabel("文件类型:"))
+        self.organize_file_types = QComboBox()
+        self.organize_file_types.addItems([
+            "所有图片 (*.jpg *.jpeg *.png *.bmp *.tiff *.gif)",
+            "JPEG (*.jpg *.jpeg)",
+            "PNG (*.png)",
+            "BMP (*.bmp)",
+            "TIFF (*.tiff)",
+            "所有文件 (*.*)"
+        ])
+        organize_filter_layout.addWidget(self.organize_file_types)
+        organize_filter_layout.addStretch()
+        organize_layout.addLayout(organize_filter_layout)
+        
+        # 进度条
+        self.organize_progress = QProgressBar()
+        self.organize_progress.setVisible(False)
+        organize_layout.addWidget(self.organize_progress)
+        
+        # 日志显示
+        self.organize_log = QTextEdit()
+        self.organize_log.setMaximumHeight(100)
+        self.organize_log.setVisible(False)
+        organize_layout.addWidget(self.organize_log)
+        
+        # 按钮组
+        organize_btn_layout = QHBoxLayout()
+        self.organize_start_btn = QPushButton("开始整理")
+        self.organize_start_btn.clicked.connect(self.start_folder_organize)
+        self.organize_start_btn.setEnabled(False)
+        self.organize_start_btn.setMinimumHeight(35)
+        
+        self.organize_preview_btn = QPushButton("预览操作")
+        self.organize_preview_btn.clicked.connect(self.preview_folder_organize)
+        self.organize_preview_btn.setEnabled(False)
+        
+        organize_btn_layout.addWidget(self.organize_preview_btn)
+        organize_btn_layout.addWidget(self.organize_start_btn)
+        organize_btn_layout.addStretch()
+        
+        organize_layout.addLayout(organize_btn_layout)
+        
+        organize_group.setLayout(organize_layout)
+        main_layout.addWidget(organize_group)
         
         # 创建输出文件夹选择组
         output_group = QGroupBox("输出文件夹")
@@ -837,4 +946,301 @@ class DataProcessingTab(BaseTab):
             print(error_msg)
             QMessageBox.critical(self, "错误", error_msg)
     
+    # 文件夹整理相关方法
+    def select_organize_source_folder(self):
+        """选择文件夹整理的源文件夹"""
+        folder = QFileDialog.getExistingDirectory(self, "选择包含多个子文件夹的源文件夹")
+        if folder:
+            self.organize_source_folder = folder
+            self.organize_source_edit.setText(folder)
+            self.check_organize_ready()
+    
+    def select_organize_target_folder(self):
+        """选择文件夹整理的目标文件夹"""
+        folder = QFileDialog.getExistingDirectory(self, "选择图片整理后的目标文件夹")
+        if folder:
+            self.organize_target_folder = folder
+            self.organize_target_edit.setText(folder)
+            self.check_organize_ready()
+    
+    def check_organize_ready(self):
+        """检查文件夹整理是否准备就绪"""
+        is_ready = bool(self.organize_source_folder and self.organize_target_folder)
+        self.organize_start_btn.setEnabled(is_ready)
+        self.organize_preview_btn.setEnabled(is_ready)
+        return is_ready
+    
+    def get_file_extensions(self):
+        """根据选择的文件类型获取文件扩展名列表"""
+        file_type = self.organize_file_types.currentText()
+        if "所有图片" in file_type:
+            return ['.jpg', '.jpeg', '.png', '.bmp', '.tiff', '.gif']
+        elif "JPEG" in file_type:
+            return ['.jpg', '.jpeg']
+        elif "PNG" in file_type:
+            return ['.png']
+        elif "BMP" in file_type:
+            return ['.bmp']
+        elif "TIFF" in file_type:
+            return ['.tiff']
+        elif "所有文件" in file_type:
+            return []  # 空列表表示所有文件
+        else:
+            return ['.jpg', '.jpeg', '.png', '.bmp', '.tiff', '.gif']
+    
+    def scan_source_folder(self):
+        """扫描源文件夹，获取所有符合条件的文件"""
+        if not self.organize_source_folder or not os.path.exists(self.organize_source_folder):
+            return []
+        
+        extensions = self.get_file_extensions()
+        files_to_process = []
+        
+        try:
+            for root, dirs, files in os.walk(self.organize_source_folder):
+                for file in files:
+                    if not extensions:  # 所有文件
+                        files_to_process.append((root, file))
+                    else:
+                        file_ext = os.path.splitext(file)[1].lower()
+                        if file_ext in extensions:
+                            files_to_process.append((root, file))
+        except Exception as e:
+            print(f"扫描源文件夹时出错: {str(e)}")
+            QMessageBox.critical(self, "错误", f"扫描源文件夹时出错: {str(e)}")
+            return []
+        
+        return files_to_process
+    
+    def preview_folder_organize(self):
+        """预览文件夹整理操作"""
+        files_to_process = self.scan_source_folder()
+        
+        if not files_to_process:
+            QMessageBox.information(self, "提示", "源文件夹中没有找到符合条件的文件。")
+            return
+        
+        # 显示预览信息
+        operation = "复制" if self.organize_copy_radio.isChecked() else "移动"
+        keep_structure = self.keep_folder_structure.isChecked()
+        
+        preview_text = f"操作预览:\n\n"
+        preview_text += f"操作类型: {operation}\n"
+        preview_text += f"源文件夹: {self.organize_source_folder}\n"
+        preview_text += f"目标文件夹: {self.organize_target_folder}\n"
+        preview_text += f"保持文件夹结构: {'是' if keep_structure else '否'}\n"
+        preview_text += f"文件类型: {self.organize_file_types.currentText()}\n"
+        preview_text += f"找到文件数量: {len(files_to_process)}\n\n"
+        
+        # 显示前10个文件的路径示例
+        preview_text += "文件示例:\n"
+        for i, (root, file) in enumerate(files_to_process[:10]):
+            rel_path = os.path.relpath(root, self.organize_source_folder)
+            if keep_structure and rel_path != '.':
+                target_path = os.path.join(self.organize_target_folder, rel_path, file)
+            else:
+                target_path = os.path.join(self.organize_target_folder, file)
+            preview_text += f"{i+1}. {os.path.join(root, file)} -> {target_path}\n"
+        
+        if len(files_to_process) > 10:
+            preview_text += f"... 还有 {len(files_to_process) - 10} 个文件\n"
+        
+        # 显示预览对话框
+        msg = QMessageBox(self)
+        msg.setWindowTitle("操作预览")
+        msg.setText("文件夹整理操作预览")
+        msg.setDetailedText(preview_text)
+        msg.setStandardButtons(QMessageBox.Ok)
+        msg.exec_()
+    
+    def start_folder_organize(self):
+        """开始文件夹整理"""
+        if not self.check_organize_ready():
+            QMessageBox.warning(self, "警告", "请先选择源文件夹和目标文件夹。")
+            return
+        
+        # 确认操作
+        operation = "复制" if self.organize_copy_radio.isChecked() else "移动"
+        reply = QMessageBox.question(self, "确认操作", 
+                                   f"确定要{operation}文件夹中的图片吗？\n\n"
+                                   f"源文件夹: {self.organize_source_folder}\n"
+                                   f"目标文件夹: {self.organize_target_folder}\n\n"
+                                   f"注意：移动操作将删除原文件！",
+                                   QMessageBox.Yes | QMessageBox.No)
+        
+        if reply != QMessageBox.Yes:
+            return
+        
+        # 准备参数
+        params = {
+            'source_folder': self.organize_source_folder,
+            'target_folder': self.organize_target_folder,
+            'operation': 'copy' if self.organize_copy_radio.isChecked() else 'move',
+            'keep_structure': self.keep_folder_structure.isChecked(),
+            'file_extensions': self.get_file_extensions()
+        }
+        
+        # 显示进度条和日志
+        self.organize_progress.setVisible(True)
+        self.organize_log.setVisible(True)
+        self.organize_progress.setValue(0)
+        self.organize_log.clear()
+        
+        # 禁用按钮
+        self.organize_start_btn.setEnabled(False)
+        self.organize_preview_btn.setEnabled(False)
+        
+        # 启动文件夹整理线程
+        self.organize_thread = FolderOrganizeThread(params)
+        self.organize_thread.progress_updated.connect(self.update_organize_progress)
+        self.organize_thread.log_updated.connect(self.update_organize_log)
+        self.organize_thread.finished.connect(self.organize_finished)
+        self.organize_thread.error_occurred.connect(self.organize_error)
+        self.organize_thread.start()
+        
+        self.update_status("开始文件夹整理...")
+    
+    def update_organize_progress(self, value):
+        """更新文件夹整理进度"""
+        self.organize_progress.setValue(value)
+    
+    def update_organize_log(self, message):
+        """更新文件夹整理日志"""
+        self.organize_log.append(message)
+        # 自动滚动到底部
+        cursor = self.organize_log.textCursor()
+        cursor.movePosition(cursor.End)
+        self.organize_log.setTextCursor(cursor)
+    
+    def organize_finished(self, result):
+        """文件夹整理完成"""
+        self.organize_progress.setValue(100)
+        self.organize_start_btn.setEnabled(True)
+        self.organize_preview_btn.setEnabled(True)
+        
+        success_count = result.get('success_count', 0)
+        error_count = result.get('error_count', 0)
+        
+        self.update_status(f"文件夹整理完成！成功: {success_count}, 失败: {error_count}")
+        
+        # 显示完成信息
+        QMessageBox.information(self, "完成", 
+                              f"文件夹整理完成！\n\n"
+                              f"成功处理: {success_count} 个文件\n"
+                              f"处理失败: {error_count} 个文件\n\n"
+                              f"详细信息请查看日志。")
+    
+    def organize_error(self, error_message):
+        """文件夹整理出错"""
+        self.organize_start_btn.setEnabled(True)
+        self.organize_preview_btn.setEnabled(True)
+        self.update_status(f"文件夹整理出错: {error_message}")
+        QMessageBox.critical(self, "错误", f"文件夹整理出错: {error_message}")
+
+
+class FolderOrganizeThread(QThread):
+    """文件夹整理线程"""
+    
+    progress_updated = pyqtSignal(int)
+    log_updated = pyqtSignal(str)
+    finished = pyqtSignal(dict)
+    error_occurred = pyqtSignal(str)
+    
+    def __init__(self, params):
+        super().__init__()
+        self.params = params
+        self.is_running = True
+    
+    def run(self):
+        """执行文件夹整理"""
+        try:
+            source_folder = self.params['source_folder']
+            target_folder = self.params['target_folder']
+            operation = self.params['operation']
+            keep_structure = self.params['keep_structure']
+            file_extensions = self.params['file_extensions']
+            
+            # 确保目标文件夹存在
+            os.makedirs(target_folder, exist_ok=True)
+            
+            # 扫描所有文件
+            files_to_process = []
+            for root, dirs, files in os.walk(source_folder):
+                for file in files:
+                    if not file_extensions:  # 所有文件
+                        files_to_process.append((root, file))
+                    else:
+                        file_ext = os.path.splitext(file)[1].lower()
+                        if file_ext in file_extensions:
+                            files_to_process.append((root, file))
+            
+            if not files_to_process:
+                self.log_updated.emit("没有找到符合条件的文件。")
+                self.finished.emit({'success_count': 0, 'error_count': 0})
+                return
+            
+            self.log_updated.emit(f"找到 {len(files_to_process)} 个文件需要处理。")
+            
+            success_count = 0
+            error_count = 0
+            
+            for i, (root, file) in enumerate(files_to_process):
+                if not self.is_running:
+                    break
+                
+                try:
+                    source_file = os.path.join(root, file)
+                    
+                    # 确定目标路径
+                    if keep_structure:
+                        rel_path = os.path.relpath(root, source_folder)
+                        if rel_path == '.':
+                            target_dir = target_folder
+                        else:
+                            target_dir = os.path.join(target_folder, rel_path)
+                    else:
+                        target_dir = target_folder
+                    
+                    # 确保目标目录存在
+                    os.makedirs(target_dir, exist_ok=True)
+                    
+                    target_file = os.path.join(target_dir, file)
+                    
+                    # 处理重名文件
+                    if os.path.exists(target_file):
+                        base_name, ext = os.path.splitext(file)
+                        counter = 1
+                        while os.path.exists(target_file):
+                            new_name = f"{base_name}_{counter}{ext}"
+                            target_file = os.path.join(target_dir, new_name)
+                            counter += 1
+                    
+                    # 执行操作
+                    if operation == 'copy':
+                        shutil.copy2(source_file, target_file)
+                        action = "复制"
+                    else:  # move
+                        shutil.move(source_file, target_file)
+                        action = "移动"
+                    
+                    success_count += 1
+                    self.log_updated.emit(f"{action}成功: {file}")
+                    
+                except Exception as e:
+                    error_count += 1
+                    self.log_updated.emit(f"处理失败: {file} - {str(e)}")
+                
+                # 更新进度
+                progress = int((i + 1) * 100 / len(files_to_process))
+                self.progress_updated.emit(progress)
+            
+            self.log_updated.emit(f"处理完成！成功: {success_count}, 失败: {error_count}")
+            self.finished.emit({'success_count': success_count, 'error_count': error_count})
+            
+        except Exception as e:
+            self.error_occurred.emit(str(e))
+    
+    def stop(self):
+        """停止处理"""
+        self.is_running = False
  
