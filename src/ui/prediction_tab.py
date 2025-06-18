@@ -314,8 +314,13 @@ class PredictionTab(BaseTab):
         self.stop_batch_btn.clicked.connect(self.stop_batch_prediction)
         self.stop_batch_btn.setEnabled(False)
         
+        self.open_output_btn = QPushButton("打开输出文件夹")
+        self.open_output_btn.clicked.connect(self.open_output_folder)
+        self.open_output_btn.setEnabled(False)  # 初始状态禁用
+        
         button_layout.addWidget(self.start_batch_btn)
         button_layout.addWidget(self.stop_batch_btn)
+        button_layout.addWidget(self.open_output_btn)
         
         layout.addLayout(button_layout)
     
@@ -518,6 +523,11 @@ class PredictionTab(BaseTab):
                    self.input_folder and os.path.exists(self.input_folder) and
                    self.output_folder and model_loaded)
         self.start_batch_btn.setEnabled(is_ready)
+        
+        # 打开输出文件夹按钮只需要输出文件夹存在即可
+        output_folder_exists = bool(self.output_folder and os.path.exists(self.output_folder))
+        self.open_output_btn.setEnabled(output_folder_exists)
+        
         return is_ready
     
     def start_batch_prediction(self):
@@ -600,4 +610,31 @@ class PredictionTab(BaseTab):
         self.top_k = value
         # 如果已经有预测结果，重新显示结果
         if hasattr(self, 'last_prediction_result'):
-            self.update_prediction_result(self.last_prediction_result) 
+            self.update_prediction_result(self.last_prediction_result)
+
+    def open_output_folder(self):
+        """打开输出文件夹"""
+        if not self.output_folder:
+            QMessageBox.warning(self, "警告", "请先选择输出文件夹")
+            return
+            
+        if not os.path.exists(self.output_folder):
+            QMessageBox.warning(self, "警告", f"输出文件夹不存在: {self.output_folder}")
+            return
+            
+        try:
+            import platform
+            import subprocess
+            
+            system = platform.system()
+            if system == "Windows":
+                os.startfile(self.output_folder)
+            elif system == "Darwin":  # macOS
+                subprocess.run(["open", self.output_folder])
+            else:  # Linux
+                subprocess.run(["xdg-open", self.output_folder])
+                
+            self.update_status(f"已打开输出文件夹: {self.output_folder}")
+        except Exception as e:
+            QMessageBox.critical(self, "错误", f"无法打开文件夹: {str(e)}")
+            self.update_status(f"打开文件夹失败: {str(e)}") 
