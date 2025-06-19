@@ -305,19 +305,23 @@ class EnhancedModelEvaluationWidget(QWidget):
         list_layout = QVBoxLayout()
         
         self.model_list = QListWidget()
-        self.model_list.setSelectionMode(QListWidget.SingleSelection)
+        self.model_list.setSelectionMode(QListWidget.MultiSelection)
         self.model_list.setMinimumHeight(120)
         list_layout.addWidget(self.model_list)
         
         # 评估按钮和进度条
         eval_layout = QHBoxLayout()
         self.evaluate_btn = QPushButton("评估选中模型")
-        self.evaluate_btn.clicked.connect(self.evaluate_model)
+        self.evaluate_btn.clicked.connect(self.evaluate_models)
+        
+        self.compare_btn = QPushButton("对比选中模型")
+        self.compare_btn.clicked.connect(self.compare_models)
         
         self.progress_bar = QProgressBar()
         self.progress_bar.setVisible(False)
         
         eval_layout.addWidget(self.evaluate_btn)
+        eval_layout.addWidget(self.compare_btn)
         eval_layout.addWidget(self.progress_bar)
         
         list_layout.addLayout(eval_layout)
@@ -344,6 +348,10 @@ class EnhancedModelEvaluationWidget(QWidget):
         # 分类报告标签页
         self.report_tab = self.create_report_tab()
         self.results_tabs.addTab(self.report_tab, "分类报告")
+        
+        # 模型对比标签页
+        self.comparison_tab = self.create_comparison_tab()
+        self.results_tabs.addTab(self.comparison_tab, "模型对比")
         
         splitter.addWidget(self.results_tabs)
         
@@ -418,6 +426,27 @@ class EnhancedModelEvaluationWidget(QWidget):
         
         return widget
     
+    def create_comparison_tab(self):
+        """创建模型对比标签页"""
+        widget = QWidget()
+        layout = QVBoxLayout(widget)
+        
+        # 对比表格
+        self.comparison_table = QTableWidget(0, 0)
+        self.comparison_table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+        
+        layout.addWidget(QLabel("模型对比结果"))
+        layout.addWidget(self.comparison_table)
+        
+        # 对比图表
+        self.comparison_figure = Figure(figsize=(12, 8))
+        self.comparison_canvas = FigureCanvas(self.comparison_figure)
+        
+        layout.addWidget(QLabel("性能对比图"))
+        layout.addWidget(self.comparison_canvas)
+        
+        return widget
+    
     def select_models_dir(self):
         """选择模型目录"""
         folder = QFileDialog.getExistingDirectory(self, "选择模型目录")
@@ -454,12 +483,32 @@ class EnhancedModelEvaluationWidget(QWidget):
         except Exception as e:
             QMessageBox.critical(self, "错误", f"刷新模型列表失败: {str(e)}")
     
-    def evaluate_model(self):
+    def evaluate_models(self):
         """评估选中的模型"""
-        current_item = self.model_list.currentItem()
-        if not current_item:
+        selected_items = self.model_list.selectedItems()
+        if not selected_items:
             QMessageBox.warning(self, "警告", "请选择要评估的模型")
             return
+        
+        if len(selected_items) == 1:
+            # 单个模型评估
+            self.evaluate_single_model(selected_items[0].text())
+        else:
+            # 多个模型评估
+            self.evaluate_multiple_models([item.text() for item in selected_items])
+    
+    def compare_models(self):
+        """对比选中的模型"""
+        selected_items = self.model_list.selectedItems()
+        if len(selected_items) < 2:
+            QMessageBox.warning(self, "警告", "请至少选择两个模型进行对比")
+            return
+        
+        model_names = [item.text() for item in selected_items]
+        self.compare_multiple_models(model_names)
+    
+    def evaluate_single_model(self, model_filename):
+        """评估单个模型"""
         
         # 检查是否选择了测试集目录
         if not self.test_data_dir:
@@ -470,7 +519,6 @@ class EnhancedModelEvaluationWidget(QWidget):
             QMessageBox.warning(self, "错误", "测试集目录不存在")
             return
         
-        model_filename = current_item.text()
         model_path = os.path.join(self.models_dir, model_filename)
         
         # 获取配置信息
@@ -523,6 +571,158 @@ class EnhancedModelEvaluationWidget(QWidget):
         self.progress_bar.setVisible(True)
         self.progress_bar.setValue(0)
         self.evaluation_thread.start()
+    
+    def evaluate_multiple_models(self, model_names):
+        """评估多个模型"""
+        self.current_batch_models = model_names
+        self.batch_results = {}
+        self.current_batch_index = 0
+        
+        self.update_status(f"开始批量评估 {len(model_names)} 个模型...")
+        self.evaluate_next_model_in_batch()
+    
+    def evaluate_next_model_in_batch(self):
+        """评估批次中的下一个模型"""
+        if self.current_batch_index >= len(self.current_batch_models):
+            # 所有模型评估完成
+            self.on_batch_evaluation_finished()
+            return
+        
+        model_name = self.current_batch_models[self.current_batch_index]
+        self.update_status(f"正在评估模型 {self.current_batch_index + 1}/{len(self.current_batch_models)}: {model_name}")
+        
+        # 启动单个模型评估
+        self.evaluate_single_model(model_name)
+    
+    def compare_multiple_models(self, model_names):
+        """对比多个模型"""
+        # 检查是否已有评估结果
+        missing_results = []
+        for model_name in model_names:
+            if model_name not in self.evaluation_results:
+                missing_results.append(model_name)
+        
+        if missing_results:
+            reply = QMessageBox.question(
+                self, "确认", 
+                f"以下模型尚未评估：\n{', '.join(missing_results)}\n\n是否先评估这些模型？",
+                QMessageBox.Yes | QMessageBox.No
+            )
+            
+            if reply == QMessageBox.Yes:
+                # 先评估缺失的模型，然后进行对比
+                self.pending_comparison_models = model_names
+                self.evaluate_multiple_models(missing_results)
+            return
+        
+        # 所有模型都有结果，直接进行对比
+        self.display_model_comparison(model_names)
+    
+    def on_batch_evaluation_finished(self):
+        """批量评估完成处理"""
+        self.update_status(f"批量评估完成，共评估 {len(self.current_batch_models)} 个模型")
+        
+        # 如果有待对比的模型，进行对比
+        if hasattr(self, 'pending_comparison_models'):
+            self.display_model_comparison(self.pending_comparison_models)
+            delattr(self, 'pending_comparison_models')
+        
+        # 显示批量结果总览
+        self.display_batch_results()
+    
+    def display_batch_results(self):
+        """显示批量评估结果"""
+        if not hasattr(self, 'current_batch_models'):
+            return
+        
+        # 切换到对比标签页
+        self.results_tabs.setCurrentWidget(self.comparison_tab)
+        
+        # 显示所有评估模型的对比
+        self.display_model_comparison(self.current_batch_models)
+    
+    def display_model_comparison(self, model_names):
+        """显示模型对比结果"""
+        # 准备对比数据
+        comparison_data = []
+        metrics = ['accuracy', 'precision', 'recall', 'f1_score', 'auc_score', 'params_count', 'avg_inference_time']
+        metric_names = ['准确率', '精确率', '召回率', 'F1分数', 'AUC分数', '参数数量', '推理时间(ms)']
+        
+        for model_name in model_names:
+            if model_name in self.evaluation_results:
+                result = self.evaluation_results[model_name]
+                row_data = [model_name]
+                for metric in metrics:
+                    value = result.get(metric, 0)
+                    if metric == 'params_count':
+                        row_data.append(f"{value:,}")
+                    elif metric == 'avg_inference_time':
+                        row_data.append(f"{value:.2f}")
+                    else:
+                        row_data.append(f"{value:.4f}")
+                comparison_data.append(row_data)
+        
+        # 更新对比表格
+        self.comparison_table.setRowCount(len(comparison_data))
+        self.comparison_table.setColumnCount(len(metrics) + 1)
+        self.comparison_table.setHorizontalHeaderLabels(['模型名称'] + metric_names)
+        
+        for i, row_data in enumerate(comparison_data):
+            for j, value in enumerate(row_data):
+                self.comparison_table.setItem(i, j, QTableWidgetItem(str(value)))
+        
+        # 绘制对比图表
+        self.plot_model_comparison(model_names)
+    
+    def plot_model_comparison(self, model_names):
+        """绘制模型对比图表"""
+        self.comparison_figure.clear()
+        
+        # 准备数据
+        metrics_to_plot = ['accuracy', 'precision', 'recall', 'f1_score']
+        metric_labels = ['准确率', '精确率', '召回率', 'F1分数']
+        
+        model_data = {}
+        for model_name in model_names:
+            if model_name in self.evaluation_results:
+                result = self.evaluation_results[model_name]
+                model_data[model_name] = [result.get(metric, 0) for metric in metrics_to_plot]
+        
+        if not model_data:
+            return
+        
+        # 创建子图
+        ax1 = self.comparison_figure.add_subplot(2, 2, 1)
+        ax2 = self.comparison_figure.add_subplot(2, 2, 2)
+        ax3 = self.comparison_figure.add_subplot(2, 2, 3)
+        ax4 = self.comparison_figure.add_subplot(2, 2, 4)
+        
+        axes = [ax1, ax2, ax3, ax4]
+        
+        # 绘制每个指标的对比
+        x_pos = range(len(model_names))
+        colors = plt.cm.Set3(np.linspace(0, 1, len(model_names)))
+        
+        for i, (metric, label) in enumerate(zip(metrics_to_plot, metric_labels)):
+            ax = axes[i]
+            values = [model_data[model_name][i] for model_name in model_names]
+            
+            bars = ax.bar(x_pos, values, color=colors)
+            ax.set_title(label)
+            ax.set_xlabel('模型')
+            ax.set_ylabel('分数')
+            ax.set_xticks(x_pos)
+            ax.set_xticklabels([name[:10] + '...' if len(name) > 10 else name for name in model_names], rotation=45)
+            ax.set_ylim(0, 1)
+            
+            # 在柱子上显示数值
+            for bar, value in zip(bars, values):
+                height = bar.get_height()
+                ax.text(bar.get_x() + bar.get_width()/2., height + 0.01,
+                       f'{value:.3f}', ha='center', va='bottom', fontsize=8)
+        
+        self.comparison_figure.tight_layout()
+        self.comparison_canvas.draw()
     
     def _guess_model_architecture(self, model_filename):
         """根据文件名猜测模型架构"""
@@ -586,12 +786,25 @@ class EnhancedModelEvaluationWidget(QWidget):
         self.evaluate_btn.setEnabled(True)
         self.progress_bar.setVisible(False)
         
-        current_item = self.model_list.currentItem()
-        if current_item:
-            model_name = current_item.text()
+        # 处理批量评估
+        if hasattr(self, 'current_batch_models') and hasattr(self, 'current_batch_index'):
+            model_name = self.current_batch_models[self.current_batch_index]
             self.evaluation_results[model_name] = result
-            self.display_results(result)
+            self.batch_results[model_name] = result
+            
             self.update_status(f"模型 {model_name} 评估完成")
+            
+            # 继续下一个模型
+            self.current_batch_index += 1
+            self.evaluate_next_model_in_batch()
+        else:
+            # 单个模型评估
+            selected_items = self.model_list.selectedItems()
+            if selected_items:
+                model_name = selected_items[0].text()
+                self.evaluation_results[model_name] = result
+                self.display_results(result)
+                self.update_status(f"模型 {model_name} 评估完成")
     
     def on_evaluation_error(self, error_msg):
         """评估错误处理"""
