@@ -140,18 +140,18 @@ class ModelEvaluationThread(QThread):
         
         # 基本指标
         accuracy = accuracy_score(y_true, y_pred)
-        precision, recall, f1, support = precision_recall_fscore_support(y_true, y_pred, average='weighted')
+        precision, recall, f1, support = precision_recall_fscore_support(y_true, y_pred, average='weighted', zero_division=0)
         
         # 每个类别的指标
         class_precision, class_recall, class_f1, class_support = precision_recall_fscore_support(
-            y_true, y_pred, average=None, labels=predictor.class_names
+            y_true, y_pred, average=None, labels=predictor.class_names, zero_division=0
         )
         
         # 混淆矩阵
         cm = confusion_matrix(y_true, y_pred, labels=predictor.class_names)
         
         # 分类报告
-        class_report = classification_report(y_true, y_pred, target_names=predictor.class_names, output_dict=True)
+        class_report = classification_report(y_true, y_pred, target_names=predictor.class_names, output_dict=True, zero_division=0)
         
         # AUC计算（多分类）
         try:
