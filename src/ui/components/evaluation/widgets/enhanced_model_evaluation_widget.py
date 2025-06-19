@@ -261,13 +261,22 @@ class EnhancedModelEvaluationWidget(QWidget):
         self.evaluation_results = {}
         
         # 支持的模型架构列表
-        self.supported_architectures = [
+        self.classification_architectures = [
             "ResNet18", "ResNet34", "ResNet50", "ResNet101", "ResNet152",
             "MobileNetV2", "MobileNetV3Small", "MobileNetV3Large",
             "VGG16", "VGG19", "DenseNet121", "DenseNet169", "DenseNet201",
             "EfficientNetB0", "EfficientNetB1", "EfficientNetB2", "EfficientNetB3",
             "InceptionV3", "Xception"
         ]
+        
+        # 支持的检测模型架构列表
+        self.detection_architectures = [
+            "YOLOv5", "YOLOv7", "YOLOv8", 
+            "Faster R-CNN", "Mask R-CNN", "RetinaNet",
+            "SSD", "EfficientDet", "DETR"
+        ]
+        
+        self.supported_architectures = self.classification_architectures
         
         self.init_ui()
         
@@ -316,11 +325,18 @@ class EnhancedModelEvaluationWidget(QWidget):
         models_layout.addWidget(self.test_data_path_edit, 1, 1)
         models_layout.addWidget(test_data_btn, 1, 2)
         
+        # 添加模型类型选择下拉框
+        self.model_type_combo = QComboBox()
+        self.model_type_combo.addItems(["分类模型", "检测模型"])
+        self.model_type_combo.currentTextChanged.connect(self.on_model_type_changed)
+        models_layout.addWidget(QLabel("模型类型:"), 2, 0)
+        models_layout.addWidget(self.model_type_combo, 2, 1, 1, 2)
+        
         # 添加模型架构选择下拉框
         self.arch_combo = QComboBox()
         self.arch_combo.addItems(self.supported_architectures)
-        models_layout.addWidget(QLabel("模型架构:"), 2, 0)
-        models_layout.addWidget(self.arch_combo, 2, 1, 1, 2)
+        models_layout.addWidget(QLabel("模型架构:"), 3, 0)
+        models_layout.addWidget(self.arch_combo, 3, 1, 1, 2)
         
         models_group.setLayout(models_layout)
         top_layout.addWidget(models_group)
@@ -604,24 +620,15 @@ class EnhancedModelEvaluationWidget(QWidget):
                 QMessageBox.warning(self, "错误", "找不到类别信息文件")
                 return
         
-        # 确定任务类型
-        test_dir = self.test_data_dir
-        
-        # 检查目录结构来判断任务类型
-        if self._is_classification_dataset(test_dir):
-            task_type = "分类模型"
-        elif self._is_detection_dataset(test_dir):
-            task_type = "检测模型"
-        else:
-            QMessageBox.warning(self, "错误", "无法识别测试数据集的格式\n\n分类数据集应该包含按类别命名的子文件夹\n检测数据集应该包含images文件夹")
-            return
+        # 使用用户选择的任务类型
+        task_type = self.model_type_combo.currentText()
         
         # 使用用户选择的模型架构
         model_arch = self.arch_combo.currentText()
         
         # 创建并启动评估线程
         self.evaluation_thread = ModelEvaluationThread(
-            model_path, model_arch, class_info_path, test_dir, task_type
+            model_path, model_arch, class_info_path, self.test_data_dir, task_type
         )
         
         # 连接信号
@@ -680,24 +687,15 @@ class EnhancedModelEvaluationWidget(QWidget):
                 QMessageBox.warning(self, "错误", "找不到类别信息文件")
                 return
         
-        # 确定任务类型
-        test_dir = self.test_data_dir
-        
-        # 检查目录结构来判断任务类型
-        if self._is_classification_dataset(test_dir):
-            task_type = "分类模型"
-        elif self._is_detection_dataset(test_dir):
-            task_type = "检测模型"
-        else:
-            QMessageBox.warning(self, "错误", "无法识别测试数据集的格式")
-            return
+        # 使用用户选择的任务类型
+        task_type = self.model_type_combo.currentText()
         
         # 使用用户选择的模型架构，而不是猜测
         model_arch = self.arch_combo.currentText()
         
         # 创建并启动评估线程
         self.evaluation_thread = ModelEvaluationThread(
-            model_path, model_arch, class_info_path, test_dir, task_type
+            model_path, model_arch, class_info_path, self.test_data_dir, task_type
         )
         
         # 连接信号
@@ -1356,3 +1354,13 @@ class EnhancedModelEvaluationWidget(QWidget):
                     self.test_data_path_edit.setText(test_dir)
                     self.test_data_dir = test_dir
                     break 
+    
+    def on_model_type_changed(self, model_type):
+        """当模型类型改变时更新架构列表"""
+        self.arch_combo.clear()
+        if model_type == "分类模型":
+            self.supported_architectures = self.classification_architectures
+        else:  # 检测模型
+            self.supported_architectures = self.detection_architectures
+        
+        self.arch_combo.addItems(self.supported_architectures) 
