@@ -2,7 +2,7 @@ from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QPushButton, QLabel, QFileDia
                            QHBoxLayout, QGroupBox, QGridLayout, QListWidget,
                            QListWidgetItem, QMessageBox, QTableWidget, QTableWidgetItem,
                            QHeaderView, QTabWidget, QTextEdit, QProgressBar, QSplitter,
-                           QScrollArea)
+                           QScrollArea, QSizePolicy)
 from PyQt5.QtCore import Qt, pyqtSignal, QThread
 from PyQt5.QtGui import QFont
 import os
@@ -443,7 +443,9 @@ class EnhancedModelEvaluationWidget(QWidget):
         # 对比表格
         self.comparison_table = QTableWidget(0, 0)
         self.comparison_table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
-        self.comparison_table.setMaximumHeight(300)  # 限制表格高度
+        # 移除高度限制，让表格直接展开显示所有内容
+        self.comparison_table.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Minimum)
+        self.comparison_table.verticalHeader().setVisible(False)  # 隐藏行号
         
         layout.addWidget(QLabel("模型对比结果"))
         layout.addWidget(self.comparison_table)
@@ -681,6 +683,17 @@ class EnhancedModelEvaluationWidget(QWidget):
         for i, row_data in enumerate(comparison_data):
             for j, value in enumerate(row_data):
                 self.comparison_table.setItem(i, j, QTableWidgetItem(str(value)))
+        
+        # 自动调整表格大小以适应内容
+        self.comparison_table.resizeRowsToContents()
+        self.comparison_table.resizeColumnsToContents()
+        
+        # 设置表格高度以适应所有行
+        total_height = self.comparison_table.horizontalHeader().height()
+        for i in range(self.comparison_table.rowCount()):
+            total_height += self.comparison_table.rowHeight(i)
+        total_height += self.comparison_table.frameWidth() * 2
+        self.comparison_table.setFixedHeight(total_height)
         
         # 绘制对比图表
         self.plot_model_comparison(model_names)
