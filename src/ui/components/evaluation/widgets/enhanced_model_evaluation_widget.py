@@ -249,6 +249,7 @@ class EnhancedModelEvaluationWidget(QWidget):
         super().__init__(parent)
         self.main_window = main_window
         self.models_dir = ""
+        self.test_data_dir = ""
         self.models_list = []
         self.evaluation_results = {}
         
@@ -283,6 +284,18 @@ class EnhancedModelEvaluationWidget(QWidget):
         models_layout.addWidget(self.models_path_edit, 0, 1)
         models_layout.addWidget(models_btn, 0, 2)
         models_layout.addWidget(refresh_btn, 0, 3)
+        
+        # 测试集目录选择
+        self.test_data_path_edit = QLabel()
+        self.test_data_path_edit.setStyleSheet("QLabel { border: 1px solid gray; padding: 5px; }")
+        self.test_data_path_edit.setText("请选择测试集数据目录")
+        
+        test_data_btn = QPushButton("浏览...")
+        test_data_btn.clicked.connect(self.select_test_data_dir)
+        
+        models_layout.addWidget(QLabel("测试集目录:"), 1, 0)
+        models_layout.addWidget(self.test_data_path_edit, 1, 1)
+        models_layout.addWidget(test_data_btn, 1, 2)
         
         models_group.setLayout(models_layout)
         top_layout.addWidget(models_group)
@@ -413,6 +426,13 @@ class EnhancedModelEvaluationWidget(QWidget):
             self.models_path_edit.setText(folder)
             self.refresh_model_list()
     
+    def select_test_data_dir(self):
+        """选择测试集数据目录"""
+        folder = QFileDialog.getExistingDirectory(self, "选择测试集数据目录")
+        if folder:
+            self.test_data_dir = folder
+            self.test_data_path_edit.setText(folder)
+    
     def refresh_model_list(self):
         """刷新模型列表"""
         if not self.models_dir:
@@ -441,19 +461,26 @@ class EnhancedModelEvaluationWidget(QWidget):
             QMessageBox.warning(self, "警告", "请选择要评估的模型")
             return
         
+        # 检查是否选择了测试集目录
+        if not self.test_data_dir:
+            QMessageBox.warning(self, "警告", "请选择测试集数据目录")
+            return
+        
+        if not os.path.exists(self.test_data_dir):
+            QMessageBox.warning(self, "错误", "测试集目录不存在")
+            return
+        
         model_filename = current_item.text()
         model_path = os.path.join(self.models_dir, model_filename)
         
         # 获取配置信息
         config_file = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))), 'config.json')
         
-        data_dir = ""
         class_info_path = ""
         
         if os.path.exists(config_file):
             with open(config_file, 'r', encoding='utf-8') as f:
                 config = json.load(f)
-                data_dir = config.get('default_output_folder', '')
                 class_info_path = config.get('default_class_info_file', '')
         
         # 验证类别信息文件
@@ -465,15 +492,16 @@ class EnhancedModelEvaluationWidget(QWidget):
                 QMessageBox.warning(self, "错误", "找不到类别信息文件")
                 return
         
-        # 确定测试数据目录和任务类型
-        if os.path.exists(os.path.join(data_dir, 'dataset', 'val')):
-            test_dir = os.path.join(data_dir, 'dataset', 'val')
+        # 确定任务类型
+        test_dir = self.test_data_dir
+        
+        # 检查目录结构来判断任务类型
+        if self._is_classification_dataset(test_dir):
             task_type = "分类模型"
-        elif os.path.exists(os.path.join(data_dir, 'detection_data')):
-            test_dir = os.path.join(data_dir, 'detection_data')
+        elif self._is_detection_dataset(test_dir):
             task_type = "检测模型"
         else:
-            QMessageBox.warning(self, "错误", "找不到有效的测试数据集目录")
+            QMessageBox.warning(self, "错误", "无法识别测试数据集的格式\n\n分类数据集应该包含按类别命名的子文件夹\n检测数据集应该包含images文件夹")
             return
         
         # 猜测模型架构
@@ -514,6 +542,39 @@ class EnhancedModelEvaluationWidget(QWidget):
             return "VGG16"
         else:
             return "ResNet18"
+    
+    def _is_classification_dataset(self, data_dir):
+        """判断是否为分类数据集"""
+        try:
+            items = os.listdir(data_dir)
+            # 检查是否有子目录（类别文件夹）
+            subdirs = [item for item in items if os.path.isdir(os.path.join(data_dir, item))]
+            
+            if len(subdirs) > 0:
+                # 检查子目录中是否包含图片文件
+                for subdir in subdirs[:3]:  # 只检查前3个子目录
+                    subdir_path = os.path.join(data_dir, subdir)
+                    files = os.listdir(subdir_path)
+                    image_files = [f for f in files if f.lower().endswith(('.jpg', '.jpeg', '.png', '.bmp'))]
+                    if image_files:
+                        return True
+            return False
+        except:
+            return False
+    
+    def _is_detection_dataset(self, data_dir):
+        """判断是否为检测数据集"""
+        try:
+            # 检查是否包含images文件夹
+            images_dir = os.path.join(data_dir, 'images')
+            if os.path.exists(images_dir):
+                # 检查images文件夹中是否有val或test子文件夹
+                val_dir = os.path.join(images_dir, 'val')
+                test_dir = os.path.join(images_dir, 'test')
+                return os.path.exists(val_dir) or os.path.exists(test_dir)
+            return False
+        except:
+            return False
     
     def update_status(self, message):
         """更新状态"""
@@ -659,4 +720,26 @@ class EnhancedModelEvaluationWidget(QWidget):
             if os.path.exists(model_dir):
                 self.models_path_edit.setText(model_dir)
                 self.models_dir = model_dir
-                self.refresh_model_list() 
+                self.refresh_model_list()
+        
+        # 设置默认测试集目录
+        if 'default_test_data_dir' in config:
+            test_dir = config['default_test_data_dir']
+            if os.path.exists(test_dir):
+                self.test_data_path_edit.setText(test_dir)
+                self.test_data_dir = test_dir
+        elif 'default_output_folder' in config:
+            # 尝试从输出文件夹中查找测试集
+            output_folder = config['default_output_folder']
+            possible_test_dirs = [
+                os.path.join(output_folder, 'dataset', 'val'),
+                os.path.join(output_folder, 'dataset', 'test'),
+                os.path.join(output_folder, 'detection_data'),
+                os.path.join(output_folder, 'test_data')
+            ]
+            
+            for test_dir in possible_test_dirs:
+                if os.path.exists(test_dir):
+                    self.test_data_path_edit.setText(test_dir)
+                    self.test_data_dir = test_dir
+                    break 
