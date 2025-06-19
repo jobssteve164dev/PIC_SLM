@@ -1150,39 +1150,61 @@ class EnhancedModelEvaluationWidget(QWidget):
         
         # 添加悬停功能显示完整类别名称和详细信息
         try:
+            # 存储混淆矩阵数据以供悬停功能使用
+            self.current_cm = cm
+            self.current_class_names = class_names
+            
             # 为混淆矩阵添加自定义悬停功能
             def on_hover(event):
-                if event.inaxes == ax:
-                    # 获取鼠标位置对应的矩阵索引
-                    x, y = int(event.xdata + 0.5), int(event.ydata + 0.5)
-                    if 0 <= x < len(class_names) and 0 <= y < len(class_names):
-                        predicted_class = class_names[x]
-                        true_class = class_names[y]
-                        count = cm[y, x]  # 注意y,x的顺序
+                if event.inaxes == ax and event.xdata is not None and event.ydata is not None:
+                    # seaborn heatmap的坐标系统：
+                    # - x轴从左到右对应预测类别（列索引）
+                    # - y轴从上到下对应真实类别（行索引）
+                    # - 每个格子的中心在整数坐标上 (0, 0), (1, 0), (0, 1) 等
+                    
+                    # 使用四舍五入来获取最近的格子索引
+                    x_idx = int(round(event.xdata))
+                    y_idx = int(round(event.ydata))
+                    
+                    # 确保索引在有效范围内
+                    if 0 <= x_idx < len(class_names) and 0 <= y_idx < len(class_names):
+                        predicted_class = class_names[x_idx]
+                        true_class = class_names[y_idx]
+                        count = cm[y_idx, x_idx]  # 混淆矩阵中 [真实类别行, 预测类别列]
                         
-                        # 计算百分比
-                        total_true = np.sum(cm[y, :])
+                        # 计算在该真实类别中的占比
+                        total_true = np.sum(cm[y_idx, :])
                         percentage = (count / total_true * 100) if total_true > 0 else 0
                         
-                        # 创建悬停提示
-                        hover_text = f"🎯 真实类别: {true_class} | 🔮 预测类别: {predicted_class} | 📊 样本数: {count} | 📈 占比: {percentage:.1f}%"
+                        # 判断是否为正确分类（对角线元素）
+                        if x_idx == y_idx:
+                            classification_type = "✅ 正确分类"
+                            style_color = "#d4edda"  # 绿色背景
+                            border_color = "#28a745"
+                        else:
+                            classification_type = "❌ 错误分类"
+                            style_color = "#f8d7da"  # 红色背景
+                            border_color = "#dc3545"
+                        
+                        # 创建详细的悬停提示
+                        hover_text = f"🎯 真实: {true_class} | 🔮 预测: {predicted_class} | 📊 样本: {count} | 📈 占比: {percentage:.1f}% | {classification_type}"
                         
                         # 更新悬停信息标签
                         if hasattr(self, 'confusion_hover_label'):
                             self.confusion_hover_label.setText(hover_text)
-                            self.confusion_hover_label.setStyleSheet("""
-                                QLabel {
-                                    background-color: #e8f4fd;
-                                    border: 1px solid #4a90e2;
-                                    padding: 5px;
-                                    border-radius: 3px;
+                            self.confusion_hover_label.setStyleSheet(f"""
+                                QLabel {{
+                                    background-color: {style_color};
+                                    border: 2px solid {border_color};
+                                    padding: 8px;
+                                    border-radius: 5px;
                                     font-size: 12px;
                                     color: #2c3e50;
                                     font-weight: bold;
-                                }
+                                }}
                             """)
                     else:
-                        # 鼠标移出时恢复默认信息
+                        # 鼠标移出有效区域时恢复默认信息
                         if hasattr(self, 'confusion_hover_label'):
                             self.confusion_hover_label.setText("将鼠标悬停在混淆矩阵上查看详细信息")
                             self.confusion_hover_label.setStyleSheet("""
