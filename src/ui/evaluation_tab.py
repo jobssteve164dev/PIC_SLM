@@ -16,6 +16,7 @@ from .components.evaluation import (
     TrainingCurveWidget,
     TensorBoardManagerWidget,
     ModelEvaluationWidget,
+    EnhancedModelEvaluationWidget,
     ParamsComparisonWidget,
     VisualizationContainerWidget
 )
@@ -32,6 +33,7 @@ class EvaluationTab(BaseTab):
         self.training_curve_widget = None
         self.tensorboard_widget = None
         self.model_eval_widget = None
+        self.enhanced_model_eval_widget = None
         self.params_compare_widget = None
         self.visualization_container = None
         
@@ -72,16 +74,22 @@ class EvaluationTab(BaseTab):
         self.params_compare_btn.clicked.connect(lambda: self.switch_view(2))
         switch_layout.addWidget(self.params_compare_btn)
         
-        # 模型评估按钮
-        self.eval_btn = QPushButton("模型评估")
+        # 基础模型评估按钮
+        self.eval_btn = QPushButton("基础模型评估")
         self.eval_btn.setCheckable(True)
         self.eval_btn.clicked.connect(lambda: self.switch_view(3))
         switch_layout.addWidget(self.eval_btn)
         
+        # 增强模型评估按钮
+        self.enhanced_eval_btn = QPushButton("增强模型评估")
+        self.enhanced_eval_btn.setCheckable(True)
+        self.enhanced_eval_btn.clicked.connect(lambda: self.switch_view(4))
+        switch_layout.addWidget(self.enhanced_eval_btn)
+        
         # 模型结构可视化按钮
         self.model_structure_btn = QPushButton("模型结构")
         self.model_structure_btn.setCheckable(True)
-        self.model_structure_btn.clicked.connect(lambda: self.switch_view(4))
+        self.model_structure_btn.clicked.connect(lambda: self.switch_view(5))
         switch_layout.addWidget(self.model_structure_btn)
         
         main_layout.addLayout(switch_layout)
@@ -114,10 +122,15 @@ class EvaluationTab(BaseTab):
             self.params_compare_widget.status_updated.connect(self.update_status)
             self.stacked_widget.addWidget(self.params_compare_widget)
             
-            # 创建模型评估组件
+            # 创建基础模型评估组件
             self.model_eval_widget = ModelEvaluationWidget(main_window=self.main_window)
             self.model_eval_widget.status_updated.connect(self.update_status)
             self.stacked_widget.addWidget(self.model_eval_widget)
+            
+            # 创建增强模型评估组件
+            self.enhanced_model_eval_widget = EnhancedModelEvaluationWidget(main_window=self.main_window)
+            self.enhanced_model_eval_widget.status_updated.connect(self.update_status)
+            self.stacked_widget.addWidget(self.enhanced_model_eval_widget)
             
             # 创建可视化容器组件（仅用于模型结构可视化）
             self.visualization_container = VisualizationContainerWidget()
@@ -136,7 +149,7 @@ class EvaluationTab(BaseTab):
         # 取消所有按钮的选中状态
         buttons = [
             self.training_curve_btn, self.tb_btn, self.params_compare_btn,
-            self.eval_btn, self.model_structure_btn
+            self.eval_btn, self.enhanced_eval_btn, self.model_structure_btn
         ]
         
         for btn in buttons:
@@ -186,6 +199,9 @@ class EvaluationTab(BaseTab):
             # 为各个组件应用配置
             if self.model_eval_widget:
                 self.model_eval_widget.apply_config(config)
+                
+            if self.enhanced_model_eval_widget:
+                self.enhanced_model_eval_widget.apply_config(config)
                 
             if self.tensorboard_widget:
                 self.tensorboard_widget.apply_config(config)

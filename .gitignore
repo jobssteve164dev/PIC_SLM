@@ -1,4 +1,8 @@
 *.pth
 models/saved_models/
 __pycache__/
-*.pyc 
+*.pyc
+# 打包生成的文件
+dist/
+build/
+*.spec 

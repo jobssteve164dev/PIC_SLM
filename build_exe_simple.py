@@ -64,7 +64,19 @@ def build_exe():
     ]
     
     try:
-        result = subprocess.run(cmd, cwd=str(project_root), capture_output=True, text=True)
+        # 设置环境变量解决编码问题
+        env = os.environ.copy()
+        env['PYTHONIOENCODING'] = 'utf-8'
+        
+        result = subprocess.run(
+            cmd, 
+            cwd=str(project_root), 
+            capture_output=True, 
+            text=True,
+            encoding='utf-8',
+            errors='ignore',
+            env=env
+        )
         
         if result.returncode == 0:
             print("✓ exe文件构建成功！")
@@ -86,7 +98,11 @@ def build_exe():
         else:
             print("✗ exe文件构建失败")
             print("错误输出:")
-            print(result.stderr)
+            if result.stderr:
+                try:
+                    print(result.stderr)
+                except UnicodeDecodeError:
+                    print("错误信息包含特殊字符，无法显示")
             return False
             
     except Exception as e:

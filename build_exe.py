@@ -245,12 +245,19 @@ exe = EXE(
             
             print(f"执行命令: {' '.join(cmd)}")
             
+            # 设置环境变量解决编码问题
+            env = os.environ.copy()
+            env['PYTHONIOENCODING'] = 'utf-8'
+            
             process = subprocess.Popen(
                 cmd,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.STDOUT,
                 universal_newlines=True,
-                cwd=str(self.project_root)
+                encoding='utf-8',
+                errors='ignore',
+                cwd=str(self.project_root),
+                env=env
             )
             
             # 实时显示输出
