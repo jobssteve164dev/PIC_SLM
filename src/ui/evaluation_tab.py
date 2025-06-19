@@ -15,7 +15,6 @@ from .base_tab import BaseTab
 from .components.evaluation import (
     TrainingCurveWidget,
     TensorBoardManagerWidget,
-    ModelEvaluationWidget,
     EnhancedModelEvaluationWidget,
     ParamsComparisonWidget,
     VisualizationContainerWidget
@@ -32,7 +31,6 @@ class EvaluationTab(BaseTab):
         # 初始化各个组件
         self.training_curve_widget = None
         self.tensorboard_widget = None
-        self.model_eval_widget = None
         self.enhanced_model_eval_widget = None
         self.params_compare_widget = None
         self.visualization_container = None
@@ -74,22 +72,17 @@ class EvaluationTab(BaseTab):
         self.params_compare_btn.clicked.connect(lambda: self.switch_view(2))
         switch_layout.addWidget(self.params_compare_btn)
         
-        # 基础模型评估按钮
-        self.eval_btn = QPushButton("基础模型评估")
+        # 模型评估按钮
+        self.eval_btn = QPushButton("模型评估")
         self.eval_btn.setCheckable(True)
         self.eval_btn.clicked.connect(lambda: self.switch_view(3))
+        self.eval_btn.setToolTip("完整的模型性能评估，包含准确率、精确率、召回率、F1分数、混淆矩阵等专业指标")
         switch_layout.addWidget(self.eval_btn)
-        
-        # 增强模型评估按钮
-        self.enhanced_eval_btn = QPushButton("增强模型评估")
-        self.enhanced_eval_btn.setCheckable(True)
-        self.enhanced_eval_btn.clicked.connect(lambda: self.switch_view(4))
-        switch_layout.addWidget(self.enhanced_eval_btn)
         
         # 模型结构可视化按钮
         self.model_structure_btn = QPushButton("模型结构")
         self.model_structure_btn.setCheckable(True)
-        self.model_structure_btn.clicked.connect(lambda: self.switch_view(5))
+        self.model_structure_btn.clicked.connect(lambda: self.switch_view(4))
         switch_layout.addWidget(self.model_structure_btn)
         
         main_layout.addLayout(switch_layout)
@@ -122,12 +115,7 @@ class EvaluationTab(BaseTab):
             self.params_compare_widget.status_updated.connect(self.update_status)
             self.stacked_widget.addWidget(self.params_compare_widget)
             
-            # 创建基础模型评估组件
-            self.model_eval_widget = ModelEvaluationWidget(main_window=self.main_window)
-            self.model_eval_widget.status_updated.connect(self.update_status)
-            self.stacked_widget.addWidget(self.model_eval_widget)
-            
-            # 创建增强模型评估组件
+            # 创建模型评估组件
             self.enhanced_model_eval_widget = EnhancedModelEvaluationWidget(main_window=self.main_window)
             self.enhanced_model_eval_widget.status_updated.connect(self.update_status)
             self.stacked_widget.addWidget(self.enhanced_model_eval_widget)
@@ -149,7 +137,7 @@ class EvaluationTab(BaseTab):
         # 取消所有按钮的选中状态
         buttons = [
             self.training_curve_btn, self.tb_btn, self.params_compare_btn,
-            self.eval_btn, self.enhanced_eval_btn, self.model_structure_btn
+            self.eval_btn, self.model_structure_btn
         ]
         
         for btn in buttons:
@@ -197,9 +185,6 @@ class EvaluationTab(BaseTab):
             
         try:
             # 为各个组件应用配置
-            if self.model_eval_widget:
-                self.model_eval_widget.apply_config(config)
-                
             if self.enhanced_model_eval_widget:
                 self.enhanced_model_eval_widget.apply_config(config)
                 
@@ -223,18 +208,18 @@ class EvaluationTab(BaseTab):
     
     def select_models_dir(self):
         """选择模型目录（兼容原有接口）"""
-        if self.model_eval_widget:
-            self.model_eval_widget.select_models_dir()
+        if self.enhanced_model_eval_widget:
+            self.enhanced_model_eval_widget.select_models_dir()
     
     def refresh_model_list(self):
         """刷新模型列表（兼容原有接口）"""
-        if self.model_eval_widget:
-            self.model_eval_widget.refresh_model_list()
+        if self.enhanced_model_eval_widget:
+            self.enhanced_model_eval_widget.refresh_model_list()
     
     def compare_models(self):
         """比较选中的模型（兼容原有接口）"""
-        if self.model_eval_widget:
-            self.model_eval_widget.compare_models()
+        if self.enhanced_model_eval_widget:
+            self.enhanced_model_eval_widget.compare_models()
     
     def select_log_dir(self):
         """选择TensorBoard日志目录（兼容原有接口）"""
@@ -307,21 +292,21 @@ class EvaluationTab(BaseTab):
     @property
     def models_dir(self):
         """获取模型目录"""
-        if self.model_eval_widget:
-            return self.model_eval_widget.models_dir
+        if self.enhanced_model_eval_widget:
+            return self.enhanced_model_eval_widget.models_dir
         return ""
     
     @models_dir.setter
     def models_dir(self, value):
         """设置模型目录"""
-        if self.model_eval_widget:
-            self.model_eval_widget.models_dir = value
+        if self.enhanced_model_eval_widget:
+            self.enhanced_model_eval_widget.models_dir = value
     
     @property
     def models_list(self):
         """获取模型列表"""
-        if self.model_eval_widget:
-            return self.model_eval_widget.models_list
+        if self.enhanced_model_eval_widget:
+            return self.enhanced_model_eval_widget.models_list
         return []
     
     @property

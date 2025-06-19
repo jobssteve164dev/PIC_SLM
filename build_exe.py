@@ -141,6 +141,8 @@ class ExeBuilder:
             'requests',
             'scikit-image',
             'mplcursors',
+            'unittest',
+            'unittest.mock',
         ]
         
         # 扫描src目录获取项目内部模块
@@ -211,7 +213,6 @@ class ExeBuilder:
         # 排除的模块（减少打包大小）
         excludes = [
             'tkinter',
-            'unittest',
             'test',
             'distutils',
             'setuptools',

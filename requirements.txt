@@ -1,7 +1,7 @@
 # 自动生成的依赖文件
-# 生成时间: 2025-06-19 10:36:01
+# 生成时间: 2025-06-19 10:57:37
 
-# 核心依赖
+# 核心GUI框架
 PyQt5==5.15.11
 numpy==2.0.2
 pillow==11.1.0
@@ -27,16 +27,6 @@ scikit-image==0.24.0
 mplcursors==0.6
 requests==2.32.3
 
-# 可选依赖
-labelImg==1.8.6
-labelme==5.7.0
-ultralytics==8.3.94
-
-# 平台特定依赖
+# 可选依赖（根据需要安装）
 # pywin32>=228; platform_system=="Windows"  # Windows系统支持
 # nvidia-ml-py3>=7.352.0  # NVIDIA GPU监控
-
-# 注意事项：
-# 1. 本文件由脚本自动生成，请勿手动编辑
-# 2. 如需添加新依赖，请修改update_requirements.py脚本
-# 3. 建议在虚拟环境中安装这些依赖

@@ -10,7 +10,7 @@ evaluation/
 ├── README.md                       # 本说明文档
 ├── widgets/                        # 核心功能组件
 │   ├── __init__.py
-│   ├── model_evaluation_widget.py          # 模型评估和比较组件
+│   ├── enhanced_model_evaluation_widget.py # 增强的模型评估组件
 │   ├── tensorboard_manager_widget.py       # TensorBoard管理组件
 │   ├── training_curve_widget.py            # 训练曲线显示组件
 │   ├── params_comparison_widget.py         # 训练参数对比组件
@@ -31,7 +31,7 @@ evaluation/
 ### widgets/ - 核心功能组件
 包含评估标签页的主要UI组件，每个组件负责特定的功能模块：
 
-- **ModelEvaluationWidget**: 负责模型选择、评估和比较功能
+- **EnhancedModelEvaluationWidget**: 负责完整的模型评估，包含精确率、召回率、F1分数、混淆矩阵等专业指标
 - **TensorBoardManagerWidget**: 管理TensorBoard服务的启动、停止和配置
 - **TrainingCurveWidget**: 实时显示训练过程中的各种指标曲线
 - **ParamsComparisonWidget**: 对比不同模型的训练参数配置

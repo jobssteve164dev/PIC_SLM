@@ -2,7 +2,7 @@
 
 # 从新的evaluation子包导入评估组件
 from .evaluation import (
-    ModelEvaluationWidget,
+    EnhancedModelEvaluationWidget,
     TensorBoardManagerWidget,
     TrainingCurveWidget,
     ParamsComparisonWidget,
@@ -56,7 +56,7 @@ from ..model_analysis_widget import ModelAnalysisWidget
 
 __all__ = [
     # 评估组件 (从evaluation子包导入)
-    'ModelEvaluationWidget',
+    'EnhancedModelEvaluationWidget',
     'TensorBoardManagerWidget', 
     'TrainingCurveWidget',
     'ParamsComparisonWidget',

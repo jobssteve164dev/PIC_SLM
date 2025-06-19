@@ -58,6 +58,8 @@ def build_exe():
         '--hidden-import=cv2',
         '--hidden-import=pandas',
         '--hidden-import=lime',
+        '--hidden-import=unittest',
+        '--hidden-import=unittest.mock',
         '--clean',
         '--noconfirm',
         str(main_py)
