@@ -23,6 +23,143 @@ class ExeBuilder:
         self.spec_file = self.project_root / "app.spec"
         self.exe_name = "图片分类模型训练工具"
         
+    def update_requirements(self):
+        """更新requirements.txt文件"""
+        print("=" * 60)
+        print("正在更新requirements.txt文件...")
+        
+        try:
+            # 获取当前环境的包列表
+            result = subprocess.run([sys.executable, '-m', 'pip', 'freeze'], 
+                                  capture_output=True, text=True, check=True)
+            current_packages = {}
+            for line in result.stdout.strip().split('\n'):
+                if '==' in line:
+                    name, version = line.split('==', 1)
+                    current_packages[name.lower()] = f"{name}=={version}"
+            
+            # 定义项目实际需要的核心依赖
+            core_dependencies = {
+                'pyqt5': 'PyQt5',
+                'numpy': 'numpy', 
+                'pillow': 'Pillow',
+                'matplotlib': 'matplotlib',
+                'torch': 'torch',
+                'torchvision': 'torchvision',
+                'timm': 'timm',
+                'opencv-python': 'opencv-python',
+                'albumentations': 'albumentations',
+                'pandas': 'pandas',
+                'tensorboard': 'tensorboard',
+                'scikit-learn': 'scikit-learn',
+                'seaborn': 'seaborn',
+                'tqdm': 'tqdm',
+                'pyyaml': 'PyYAML',
+                'psutil': 'psutil',
+                'colorama': 'colorama',
+                'efficientnet-pytorch': 'efficientnet-pytorch',
+                'torchmetrics': 'torchmetrics',
+                'torchsummary': 'torchsummary',
+                'lime': 'lime',
+                'scikit-image': 'scikit-image',
+                'mplcursors': 'mplcursors',
+                'requests': 'requests',
+            }
+            
+            # 生成新的requirements.txt内容
+            new_requirements = []
+            new_requirements.append("# 自动生成的依赖文件")
+            new_requirements.append(f"# 生成时间: {time.strftime('%Y-%m-%d %H:%M:%S')}")
+            new_requirements.append("")
+            new_requirements.append("# 核心GUI框架")
+            
+            for key, package_name in core_dependencies.items():
+                if key in current_packages:
+                    new_requirements.append(current_packages[key])
+                else:
+                    print(f"警告: 未找到包 {package_name}")
+            
+            # 添加可选依赖说明
+            new_requirements.append("")
+            new_requirements.append("# 可选依赖（根据需要安装）")
+            new_requirements.append("# pywin32>=228; platform_system==\"Windows\"  # Windows系统支持")
+            new_requirements.append("# nvidia-ml-py3>=7.352.0  # NVIDIA GPU监控")
+            
+            # 写入文件
+            requirements_path = self.project_root / "requirements.txt"
+            with open(requirements_path, 'w', encoding='utf-8') as f:
+                f.write('\n'.join(new_requirements))
+            
+            print(f"✓ requirements.txt 已更新: {requirements_path}")
+            return True
+            
+        except Exception as e:
+            print(f"✗ 更新requirements.txt失败: {e}")
+            return False
+    
+    def get_dynamic_hiddenimports(self):
+        """动态获取隐藏导入列表"""
+        # 基础第三方库
+        base_imports = [
+            'PyQt5.QtCore',
+            'PyQt5.QtGui', 
+            'PyQt5.QtWidgets',
+            'PyQt5.sip',
+            'torch',
+            'torch.nn',
+            'torch.optim',
+            'torch.utils.data',
+            'torchvision',
+            'torchvision.transforms',
+            'torchvision.models',
+            'numpy',
+            'PIL',
+            'PIL.Image',
+            'matplotlib',
+            'matplotlib.pyplot',
+            'matplotlib.backends.backend_qt5agg',
+            'matplotlib.figure',
+            'sklearn',
+            'sklearn.metrics',
+            'sklearn.preprocessing',
+            'cv2',
+            'albumentations',
+            'timm',
+            'timm.models',
+            'tensorboard',
+            'lime',
+            'lime.lime_image',
+            'pandas',
+            'seaborn',
+            'tqdm',
+            'yaml',
+            'psutil',
+            'efficientnet_pytorch',
+            'torchmetrics',
+            'torchsummary',
+            'colorama',
+            'requests',
+            'scikit-image',
+            'mplcursors',
+        ]
+        
+        # 扫描src目录获取项目内部模块
+        project_imports = []
+        src_dir = self.project_root / "src"
+        
+        def scan_directory(directory, prefix="src"):
+            for item in directory.iterdir():
+                if item.is_file() and item.suffix == '.py' and item.name != '__init__.py':
+                    module_name = f"{prefix}.{item.stem}"
+                    project_imports.append(module_name)
+                elif item.is_dir() and not item.name.startswith('.') and not item.name.startswith('__pycache__'):
+                    scan_directory(item, f"{prefix}.{item.name}")
+        
+        if src_dir.exists():
+            scan_directory(src_dir)
+        
+        return base_imports + project_imports
+    
     def check_dependencies(self):
         """检查打包所需的依赖"""
         print("=" * 60)
@@ -65,43 +202,11 @@ class ExeBuilder:
             ('setting', 'setting'),
             ('readme', 'readme'),
             ('config.json', '.'),
+            ('src', 'src'),  # 添加整个src目录
         ]
         
-        # 收集隐藏导入
-        hiddenimports = [
-            'PyQt5.QtCore',
-            'PyQt5.QtGui', 
-            'PyQt5.QtWidgets',
-            'torch',
-            'torchvision',
-            'numpy',
-            'PIL',
-            'matplotlib',
-            'sklearn',
-            'cv2',
-            'albumentations',
-            'timm',
-            'tensorboard',
-            'lime',
-            'pandas',
-            'seaborn',
-            'tqdm',
-            'yaml',
-            'psutil',
-            'efficientnet_pytorch',
-            'torchmetrics',
-            'torchsummary',
-            'pytorch_lightning',
-            'imgaug',
-            'labelImg',
-            'labelme',
-            'colorama',
-            'requests',
-            'scikit-image',
-            'ultralytics',
-            'pywin32',
-            'nvidia-ml-py3',
-        ]
+        # 动态获取隐藏导入
+        hiddenimports = self.get_dynamic_hiddenimports()
         
         # 排除的模块（减少打包大小）
         excludes = [
@@ -111,6 +216,10 @@ class ExeBuilder:
             'distutils',
             'setuptools',
             'pip',
+            'wheel',
+            'jupyter',
+            'notebook',
+            'IPython',
         ]
         
         spec_content = f'''# -*- mode: python ; coding: utf-8 -*-
@@ -136,7 +245,7 @@ excludes = {excludes}
 # 分析
 a = Analysis(
     [str(project_root / 'src' / 'main.py')],
-    pathex=[str(project_root)],
+    pathex=[str(project_root), str(project_root / 'src')],  # 添加src目录到路径
     binaries=[],
     datas=datas,
     hiddenimports=hiddenimports,
@@ -422,6 +531,9 @@ if errorlevel 1 (
         print("=" * 80)
         
         try:
+            # 更新依赖文件
+            self.update_requirements()
+            
             # 检查依赖
             if not self.check_dependencies():
                 print("✗ 依赖检查失败，终止构建")
