@@ -736,7 +736,8 @@ class EnhancedModelEvaluationWidget(QWidget):
         if not model_data:
             return
         
-        # 创建子图
+        # 创建子图，增加子图间距
+        self.comparison_figure.subplots_adjust(hspace=0.4, wspace=0.3, bottom=0.15, top=0.95)
         ax1 = self.comparison_figure.add_subplot(2, 2, 1)
         ax2 = self.comparison_figure.add_subplot(2, 2, 2)
         ax3 = self.comparison_figure.add_subplot(2, 2, 3)
@@ -748,25 +749,53 @@ class EnhancedModelEvaluationWidget(QWidget):
         x_pos = range(len(model_names))
         colors = plt.cm.Set3(np.linspace(0, 1, len(model_names)))
         
+        # 智能处理模型名称显示
+        def get_display_name(name, max_length=12):
+            """获取适合显示的模型名称"""
+            if len(name) <= max_length:
+                return name
+            # 尝试保留关键信息
+            if '_' in name:
+                parts = name.split('_')
+                if len(parts) >= 2:
+                    # 保留第一部分和最后部分
+                    return f"{parts[0][:6]}...{parts[-1][-4:]}"
+            return name[:max_length-3] + '...'
+        
+        display_names = [get_display_name(name) for name in model_names]
+        
         for i, (metric, label) in enumerate(zip(metrics_to_plot, metric_labels)):
             ax = axes[i]
             values = [model_data[model_name][i] for model_name in model_names]
             
             bars = ax.bar(x_pos, values, color=colors)
-            ax.set_title(label)
-            ax.set_xlabel('模型')
-            ax.set_ylabel('分数')
+            ax.set_title(label, fontsize=10)
+            ax.set_xlabel('模型', fontsize=9)
+            ax.set_ylabel('分数', fontsize=9)
             ax.set_xticks(x_pos)
-            ax.set_xticklabels([name[:10] + '...' if len(name) > 10 else name for name in model_names], rotation=45)
+            
+            # 设置横坐标标签，根据模型数量调整角度和字体大小
+            if len(model_names) <= 3:
+                # 模型少时，不旋转，字体稍大
+                ax.set_xticklabels(display_names, rotation=0, fontsize=8, ha='center')
+            elif len(model_names) <= 5:
+                # 中等数量模型，小角度旋转
+                ax.set_xticklabels(display_names, rotation=30, fontsize=7, ha='right')
+            else:
+                # 模型多时，大角度旋转，字体更小
+                ax.set_xticklabels(display_names, rotation=45, fontsize=6, ha='right')
+            
             ax.set_ylim(0, 1)
+            ax.tick_params(axis='y', labelsize=8)
             
             # 在柱子上显示数值
             for bar, value in zip(bars, values):
                 height = bar.get_height()
                 ax.text(bar.get_x() + bar.get_width()/2., height + 0.01,
-                       f'{value:.3f}', ha='center', va='bottom', fontsize=8)
+                       f'{value:.3f}', ha='center', va='bottom', fontsize=7)
         
-        self.comparison_figure.tight_layout()
+        # 使用tight_layout但设置更多的底部边距以容纳旋转的标签
+        self.comparison_figure.tight_layout(pad=2.0, rect=[0, 0.05, 1, 0.98])
         self.comparison_canvas.draw()
     
     def _guess_model_architecture(self, model_filename):
@@ -955,15 +984,39 @@ class EnhancedModelEvaluationWidget(QWidget):
         cm = np.array(result['confusion_matrix'])
         class_names = result['class_names']
         
+        # 智能处理类别名称显示
+        def get_display_class_name(name, max_length=8):
+            """获取适合显示的类别名称"""
+            if len(name) <= max_length:
+                return name
+            return name[:max_length-2] + '..'
+        
+        display_class_names = [get_display_class_name(name) for name in class_names]
+        
         # 使用seaborn绘制热力图
         sns.heatmap(cm, annot=True, fmt='d', cmap='Blues', 
-                   xticklabels=class_names, yticklabels=class_names, ax=ax)
+                   xticklabels=display_class_names, yticklabels=display_class_names, ax=ax)
         
-        ax.set_title('混淆矩阵')
-        ax.set_xlabel('预测类别')
-        ax.set_ylabel('真实类别')
+        ax.set_title('混淆矩阵', fontsize=12)
+        ax.set_xlabel('预测类别', fontsize=10)
+        ax.set_ylabel('真实类别', fontsize=10)
         
-        self.confusion_figure.tight_layout()
+        # 根据类别数量调整标签显示
+        if len(class_names) <= 5:
+            # 类别少时，不旋转
+            ax.set_xticklabels(display_class_names, rotation=0, fontsize=9)
+            ax.set_yticklabels(display_class_names, rotation=0, fontsize=9)
+        elif len(class_names) <= 10:
+            # 中等数量类别，小角度旋转
+            ax.set_xticklabels(display_class_names, rotation=30, fontsize=8, ha='right')
+            ax.set_yticklabels(display_class_names, rotation=0, fontsize=8)
+        else:
+            # 类别多时，大角度旋转，字体更小
+            ax.set_xticklabels(display_class_names, rotation=45, fontsize=7, ha='right')
+            ax.set_yticklabels(display_class_names, rotation=0, fontsize=7)
+        
+        # 设置更多的边距以容纳旋转的标签
+        self.confusion_figure.tight_layout(pad=2.0, rect=[0.05, 0.1, 0.95, 0.95])
         self.confusion_canvas.draw()
     
     def update_classification_report(self, result):
