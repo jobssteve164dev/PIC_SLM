@@ -19,6 +19,12 @@ matplotlib.use('Qt5Agg')
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.figure import Figure
 import seaborn as sns
+try:
+    import mplcursors
+    MPLCURSORS_AVAILABLE = True
+except ImportError:
+    MPLCURSORS_AVAILABLE = False
+    print("mplcursors未安装，将使用备选的悬停功能")
 from sklearn.metrics import (classification_report, confusion_matrix, 
                            precision_recall_fscore_support, roc_auc_score, 
                            average_precision_score, accuracy_score)
@@ -408,6 +414,21 @@ class EnhancedModelEvaluationWidget(QWidget):
         layout.setContentsMargins(10, 10, 10, 10)
         layout.setSpacing(10)
         
+        # 悬停提示标签
+        self.confusion_hover_label = QLabel("将鼠标悬停在混淆矩阵上查看详细信息")
+        self.confusion_hover_label.setStyleSheet("""
+            QLabel {
+                background-color: #f0f0f0;
+                border: 1px solid #ccc;
+                padding: 5px;
+                border-radius: 3px;
+                font-size: 12px;
+                color: #666;
+            }
+        """)
+        self.confusion_hover_label.setMinimumHeight(25)
+        layout.addWidget(self.confusion_hover_label)
+        
         # 创建matplotlib图表
         self.confusion_figure = Figure(figsize=(10, 8))  # 增大尺寸
         self.confusion_canvas = FigureCanvas(self.confusion_figure)
@@ -449,6 +470,21 @@ class EnhancedModelEvaluationWidget(QWidget):
         
         layout.addWidget(QLabel("模型对比结果"))
         layout.addWidget(self.comparison_table)
+        
+        # 悬停提示标签
+        self.hover_info_label = QLabel("将鼠标悬停在图表上查看详细信息")
+        self.hover_info_label.setStyleSheet("""
+            QLabel {
+                background-color: #f0f0f0;
+                border: 1px solid #ccc;
+                padding: 5px;
+                border-radius: 3px;
+                font-size: 12px;
+                color: #666;
+            }
+        """)
+        self.hover_info_label.setMinimumHeight(25)
+        layout.addWidget(self.hover_info_label)
         
         # 对比图表
         self.comparison_figure = Figure(figsize=(14, 10))  # 增大图表尺寸
@@ -764,6 +800,9 @@ class EnhancedModelEvaluationWidget(QWidget):
         
         display_names = [get_display_name(name) for name in model_names]
         
+        # 存储悬停信息
+        self.hover_cursors = []
+        
         for i, (metric, label) in enumerate(zip(metrics_to_plot, metric_labels)):
             ax = axes[i]
             values = [model_data[model_name][i] for model_name in model_names]
@@ -793,10 +832,104 @@ class EnhancedModelEvaluationWidget(QWidget):
                 height = bar.get_height()
                 ax.text(bar.get_x() + bar.get_width()/2., height + 0.01,
                        f'{value:.3f}', ha='center', va='bottom', fontsize=7)
+            
+            # 添加悬停功能显示完整模型名称和详细信息
+            try:
+                if MPLCURSORS_AVAILABLE:
+                    cursor = mplcursors.cursor(bars, hover=True)
+                    cursor.connect("add", lambda sel, metric_name=label, model_list=model_names, values_list=values: 
+                        self._on_bar_hover(sel, metric_name, model_list, values_list))
+                    self.hover_cursors.append(cursor)
+                else:
+                    # 使用matplotlib内置的悬停功能
+                    self._add_matplotlib_hover(ax, bars, label, model_names, values)
+            except Exception as e:
+                print(f"添加悬停功能时出错: {e}")
         
         # 使用tight_layout但设置更多的底部边距以容纳旋转的标签
         self.comparison_figure.tight_layout(pad=2.0, rect=[0, 0.05, 1, 0.98])
         self.comparison_canvas.draw()
+    
+    def _on_bar_hover(self, sel, metric_name, model_list, values_list):
+        """处理柱状图悬停事件（mplcursors版本）"""
+        try:
+            index = int(sel.target.index)
+            if 0 <= index < len(model_list):
+                model_name = model_list[index]
+                value = values_list[index]
+                
+                # 创建详细的悬停信息
+                hover_text = f"模型: {model_name}\n{metric_name}: {value:.4f}"
+                
+                # 如果有评估结果，添加更多信息
+                if model_name in self.evaluation_results:
+                    result = self.evaluation_results[model_name]
+                    hover_text += f"\n参数数量: {result.get('params_count', 0):,}"
+                    hover_text += f"\n推理时间: {result.get('avg_inference_time', 0):.2f}ms"
+                
+                sel.annotation.set_text(hover_text)
+                sel.annotation.get_bbox_patch().set(boxstyle="round,pad=0.5", 
+                                                  facecolor="lightyellow", 
+                                                  edgecolor="gray", 
+                                                  alpha=0.9)
+        except Exception as e:
+            print(f"处理悬停事件时出错: {e}")
+            sel.annotation.set_text("悬停信息获取失败")
+    
+    def _add_matplotlib_hover(self, ax, bars, metric_name, model_names, values):
+        """使用matplotlib内置功能添加悬停效果"""
+        def on_hover(event):
+            if event.inaxes == ax:
+                hover_found = False
+                for i, bar in enumerate(bars):
+                    if bar.contains(event)[0]:
+                        # 鼠标在柱子上
+                        model_name = model_names[i]
+                        value = values[i]
+                        
+                        # 创建详细的悬停信息
+                        hover_text = f"📊 {metric_name} | 🏷️ 模型: {model_name} | 📈 分数: {value:.4f}"
+                        
+                        # 如果有评估结果，添加更多信息
+                        if model_name in self.evaluation_results:
+                            result = self.evaluation_results[model_name]
+                            hover_text += f" | ⚙️ 参数: {result.get('params_count', 0):,}"
+                            hover_text += f" | ⚡ 推理: {result.get('avg_inference_time', 0):.2f}ms"
+                        
+                        # 更新悬停信息标签
+                        if hasattr(self, 'hover_info_label'):
+                            self.hover_info_label.setText(hover_text)
+                            self.hover_info_label.setStyleSheet("""
+                                QLabel {
+                                    background-color: #e8f4fd;
+                                    border: 1px solid #4a90e2;
+                                    padding: 5px;
+                                    border-radius: 3px;
+                                    font-size: 12px;
+                                    color: #2c3e50;
+                                    font-weight: bold;
+                                }
+                            """)
+                        
+                        hover_found = True
+                        break
+                
+                # 鼠标不在任何柱子上，恢复默认信息
+                if not hover_found and hasattr(self, 'hover_info_label'):
+                    self.hover_info_label.setText("将鼠标悬停在图表上查看详细信息")
+                    self.hover_info_label.setStyleSheet("""
+                        QLabel {
+                            background-color: #f0f0f0;
+                            border: 1px solid #ccc;
+                            padding: 5px;
+                            border-radius: 3px;
+                            font-size: 12px;
+                            color: #666;
+                        }
+                    """)
+        
+        # 连接悬停事件
+        self.comparison_canvas.mpl_connect('motion_notify_event', on_hover)
     
     def _guess_model_architecture(self, model_filename):
         """根据文件名猜测模型架构"""
@@ -994,8 +1127,8 @@ class EnhancedModelEvaluationWidget(QWidget):
         display_class_names = [get_display_class_name(name) for name in class_names]
         
         # 使用seaborn绘制热力图
-        sns.heatmap(cm, annot=True, fmt='d', cmap='Blues', 
-                   xticklabels=display_class_names, yticklabels=display_class_names, ax=ax)
+        heatmap = sns.heatmap(cm, annot=True, fmt='d', cmap='Blues', 
+                             xticklabels=display_class_names, yticklabels=display_class_names, ax=ax)
         
         ax.set_title('混淆矩阵', fontsize=12)
         ax.set_xlabel('预测类别', fontsize=10)
@@ -1014,6 +1147,60 @@ class EnhancedModelEvaluationWidget(QWidget):
             # 类别多时，大角度旋转，字体更小
             ax.set_xticklabels(display_class_names, rotation=45, fontsize=7, ha='right')
             ax.set_yticklabels(display_class_names, rotation=0, fontsize=7)
+        
+        # 添加悬停功能显示完整类别名称和详细信息
+        try:
+            # 为混淆矩阵添加自定义悬停功能
+            def on_hover(event):
+                if event.inaxes == ax:
+                    # 获取鼠标位置对应的矩阵索引
+                    x, y = int(event.xdata + 0.5), int(event.ydata + 0.5)
+                    if 0 <= x < len(class_names) and 0 <= y < len(class_names):
+                        predicted_class = class_names[x]
+                        true_class = class_names[y]
+                        count = cm[y, x]  # 注意y,x的顺序
+                        
+                        # 计算百分比
+                        total_true = np.sum(cm[y, :])
+                        percentage = (count / total_true * 100) if total_true > 0 else 0
+                        
+                        # 创建悬停提示
+                        hover_text = f"🎯 真实类别: {true_class} | 🔮 预测类别: {predicted_class} | 📊 样本数: {count} | 📈 占比: {percentage:.1f}%"
+                        
+                        # 更新悬停信息标签
+                        if hasattr(self, 'confusion_hover_label'):
+                            self.confusion_hover_label.setText(hover_text)
+                            self.confusion_hover_label.setStyleSheet("""
+                                QLabel {
+                                    background-color: #e8f4fd;
+                                    border: 1px solid #4a90e2;
+                                    padding: 5px;
+                                    border-radius: 3px;
+                                    font-size: 12px;
+                                    color: #2c3e50;
+                                    font-weight: bold;
+                                }
+                            """)
+                    else:
+                        # 鼠标移出时恢复默认信息
+                        if hasattr(self, 'confusion_hover_label'):
+                            self.confusion_hover_label.setText("将鼠标悬停在混淆矩阵上查看详细信息")
+                            self.confusion_hover_label.setStyleSheet("""
+                                QLabel {
+                                    background-color: #f0f0f0;
+                                    border: 1px solid #ccc;
+                                    padding: 5px;
+                                    border-radius: 3px;
+                                    font-size: 12px;
+                                    color: #666;
+                                }
+                            """)
+            
+            # 连接悬停事件
+            self.confusion_canvas.mpl_connect('motion_notify_event', on_hover)
+            
+        except Exception as e:
+            print(f"添加混淆矩阵悬停功能时出错: {e}")
         
         # 设置更多的边距以容纳旋转的标签
         self.confusion_figure.tight_layout(pad=2.0, rect=[0.05, 0.1, 0.95, 0.95])
