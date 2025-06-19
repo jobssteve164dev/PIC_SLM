@@ -1,7 +1,8 @@
 from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QPushButton, QLabel, QFileDialog,
                            QHBoxLayout, QGroupBox, QGridLayout, QListWidget,
                            QListWidgetItem, QMessageBox, QTableWidget, QTableWidgetItem,
-                           QHeaderView, QTabWidget, QTextEdit, QProgressBar, QSplitter)
+                           QHeaderView, QTabWidget, QTextEdit, QProgressBar, QSplitter,
+                           QScrollArea)
 from PyQt5.QtCore import Qt, pyqtSignal, QThread
 from PyQt5.QtGui import QFont
 import os
@@ -257,7 +258,19 @@ class EnhancedModelEvaluationWidget(QWidget):
         
     def init_ui(self):
         """初始化UI"""
-        layout = QVBoxLayout(self)
+        # 主布局
+        main_layout = QVBoxLayout(self)
+        main_layout.setContentsMargins(0, 0, 0, 0)
+        
+        # 创建滚动区域
+        scroll_area = QScrollArea()
+        scroll_area.setWidgetResizable(True)
+        scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        scroll_area.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        
+        # 创建滚动内容容器
+        scroll_content = QWidget()
+        layout = QVBoxLayout(scroll_content)
         
         # 创建分割器
         splitter = QSplitter(Qt.Vertical)
@@ -359,6 +372,12 @@ class EnhancedModelEvaluationWidget(QWidget):
         splitter.setSizes([300, 500])
         
         layout.addWidget(splitter)
+        
+        # 将滚动内容设置到滚动区域
+        scroll_area.setWidget(scroll_content)
+        
+        # 将滚动区域添加到主布局
+        main_layout.addWidget(scroll_area)
     
     def create_overview_tab(self):
         """创建总览标签页"""
@@ -399,17 +418,34 @@ class EnhancedModelEvaluationWidget(QWidget):
     
     def create_confusion_tab(self):
         """创建混淆矩阵标签页"""
-        widget = QWidget()
-        layout = QVBoxLayout(widget)
+        # 创建主容器
+        main_widget = QWidget()
+        main_layout = QVBoxLayout(main_widget)
+        main_layout.setContentsMargins(5, 5, 5, 5)
+        
+        # 创建滚动区域
+        scroll_area = QScrollArea()
+        scroll_area.setWidgetResizable(True)
+        scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        scroll_area.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        
+        # 创建滚动内容
+        scroll_content = QWidget()
+        layout = QVBoxLayout(scroll_content)
         
         # 创建matplotlib图表
-        self.confusion_figure = Figure(figsize=(8, 6))
+        self.confusion_figure = Figure(figsize=(10, 8))  # 增大尺寸
         self.confusion_canvas = FigureCanvas(self.confusion_figure)
+        self.confusion_canvas.setMinimumHeight(500)  # 设置最小高度
         
         layout.addWidget(QLabel("混淆矩阵"))
         layout.addWidget(self.confusion_canvas)
         
-        return widget
+        # 设置滚动内容
+        scroll_area.setWidget(scroll_content)
+        main_layout.addWidget(scroll_area)
+        
+        return main_widget
     
     def create_report_tab(self):
         """创建分类报告标签页"""
@@ -428,24 +464,42 @@ class EnhancedModelEvaluationWidget(QWidget):
     
     def create_comparison_tab(self):
         """创建模型对比标签页"""
-        widget = QWidget()
-        layout = QVBoxLayout(widget)
+        # 创建主容器
+        main_widget = QWidget()
+        main_layout = QVBoxLayout(main_widget)
+        main_layout.setContentsMargins(5, 5, 5, 5)
+        
+        # 创建滚动区域
+        scroll_area = QScrollArea()
+        scroll_area.setWidgetResizable(True)
+        scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        scroll_area.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        
+        # 创建滚动内容
+        scroll_content = QWidget()
+        layout = QVBoxLayout(scroll_content)
         
         # 对比表格
         self.comparison_table = QTableWidget(0, 0)
         self.comparison_table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+        self.comparison_table.setMaximumHeight(300)  # 限制表格高度
         
         layout.addWidget(QLabel("模型对比结果"))
         layout.addWidget(self.comparison_table)
         
         # 对比图表
-        self.comparison_figure = Figure(figsize=(12, 8))
+        self.comparison_figure = Figure(figsize=(14, 10))  # 增大图表尺寸
         self.comparison_canvas = FigureCanvas(self.comparison_figure)
+        self.comparison_canvas.setMinimumHeight(600)  # 设置最小高度
         
         layout.addWidget(QLabel("性能对比图"))
         layout.addWidget(self.comparison_canvas)
         
-        return widget
+        # 设置滚动内容
+        scroll_area.setWidget(scroll_content)
+        main_layout.addWidget(scroll_area)
+        
+        return main_widget
     
     def select_models_dir(self):
         """选择模型目录"""
