@@ -262,6 +262,10 @@ class EnhancedModelEvaluationWidget(QWidget):
         
         self.init_ui()
         
+        # 设置默认值
+        self.model_type_combo.setCurrentText("分类模型")
+        self.model_arch_combo.setCurrentText("ResNet18")
+        
     def init_ui(self):
         """初始化UI"""
         # 主布局 - 直接使用组件的布局，不需要额外的滚动区域
@@ -276,10 +280,30 @@ class EnhancedModelEvaluationWidget(QWidget):
         top_widget = QWidget()
         top_layout = QVBoxLayout(top_widget)
         
-        # 模型目录选择组
-        models_group = QGroupBox("模型目录")
+        # 模型配置组
+        models_group = QGroupBox("模型配置")
         models_layout = QGridLayout()
         
+        # 模型类型选择
+        models_layout.addWidget(QLabel("模型类型:"), 0, 0)
+        self.model_type_combo = QComboBox()
+        self.model_type_combo.addItems(["分类模型", "检测模型"])
+        self.model_type_combo.currentIndexChanged.connect(self.switch_model_type)
+        self.model_type_combo.setToolTip("选择模型的任务类型：分类模型用于图像分类，检测模型用于目标检测")
+        models_layout.addWidget(self.model_type_combo, 0, 1)
+        
+        # 模型架构选择
+        models_layout.addWidget(QLabel("模型架构:"), 0, 2)
+        self.model_arch_combo = QComboBox()
+        self.model_arch_combo.addItems([
+            "MobileNetV2", "MobileNetV3", "ResNet18", "ResNet34", "ResNet50", "ResNet101", "ResNet152",
+            "EfficientNetB0", "EfficientNetB1", "EfficientNetB2", "EfficientNetB3", "EfficientNetB4",
+            "VGG16", "VGG19", "DenseNet121", "DenseNet169", "DenseNet201", "InceptionV3", "Xception"
+        ])
+        self.model_arch_combo.setToolTip("选择模型的具体架构，必须与训练时使用的架构完全一致")
+        models_layout.addWidget(self.model_arch_combo, 0, 3)
+        
+        # 模型目录选择
         self.models_path_edit = QLabel()
         self.models_path_edit.setStyleSheet("QLabel { border: 1px solid gray; padding: 5px; }")
         self.models_path_edit.setText("请选择包含模型的目录")
@@ -290,10 +314,10 @@ class EnhancedModelEvaluationWidget(QWidget):
         refresh_btn = QPushButton("刷新")
         refresh_btn.clicked.connect(self.refresh_model_list)
         
-        models_layout.addWidget(QLabel("模型目录:"), 0, 0)
-        models_layout.addWidget(self.models_path_edit, 0, 1)
-        models_layout.addWidget(models_btn, 0, 2)
-        models_layout.addWidget(refresh_btn, 0, 3)
+        models_layout.addWidget(QLabel("模型目录:"), 1, 0)
+        models_layout.addWidget(self.models_path_edit, 1, 1, 1, 2)
+        models_layout.addWidget(models_btn, 1, 3)
+        models_layout.addWidget(refresh_btn, 1, 4)
         
         # 测试集目录选择
         self.test_data_path_edit = QLabel()
@@ -303,9 +327,9 @@ class EnhancedModelEvaluationWidget(QWidget):
         test_data_btn = QPushButton("浏览...")
         test_data_btn.clicked.connect(self.select_test_data_dir)
         
-        models_layout.addWidget(QLabel("测试集目录:"), 1, 0)
-        models_layout.addWidget(self.test_data_path_edit, 1, 1)
-        models_layout.addWidget(test_data_btn, 1, 2)
+        models_layout.addWidget(QLabel("测试集目录:"), 2, 0)
+        models_layout.addWidget(self.test_data_path_edit, 2, 1, 1, 2)
+        models_layout.addWidget(test_data_btn, 2, 3)
         
         models_group.setLayout(models_layout)
         top_layout.addWidget(models_group)
@@ -496,6 +520,23 @@ class EnhancedModelEvaluationWidget(QWidget):
         
         return widget
     
+    def switch_model_type(self, index):
+        """切换模型类型"""
+        if index == 0:  # 分类模型
+            self.model_arch_combo.clear()
+            self.model_arch_combo.addItems([
+                "MobileNetV2", "MobileNetV3", "ResNet18", "ResNet34", "ResNet50", "ResNet101", "ResNet152",
+                "EfficientNetB0", "EfficientNetB1", "EfficientNetB2", "EfficientNetB3", "EfficientNetB4",
+                "VGG16", "VGG19", "DenseNet121", "DenseNet169", "DenseNet201", "InceptionV3", "Xception"
+            ])
+        else:  # 检测模型
+            self.model_arch_combo.clear()
+            self.model_arch_combo.addItems([
+                "YOLOv5", "YOLOv8", "YOLOv7", "YOLOv6", "YOLOv4", "YOLOv3",
+                "SSD", "SSD512", "SSD300", "Faster R-CNN", "Mask R-CNN",
+                "RetinaNet", "DETR"
+            ])
+    
     def select_models_dir(self):
         """选择模型目录"""
         folder = QFileDialog.getExistingDirectory(self, "选择模型目录")
@@ -528,9 +569,65 @@ class EnhancedModelEvaluationWidget(QWidget):
             
             if not self.models_list:
                 QMessageBox.information(self, "提示", "未找到模型文件")
+            else:
+                # 尝试从第一个模型文件自动识别配置
+                self.auto_detect_model_config()
                 
         except Exception as e:
             QMessageBox.critical(self, "错误", f"刷新模型列表失败: {str(e)}")
+    
+    def auto_detect_model_config(self):
+        """自动检测模型配置"""
+        if not self.models_list:
+            return
+            
+        try:
+            # 查找训练配置文件
+            config_files = []
+            train_config_dir = os.path.join(os.path.dirname(self.models_dir), 'train_config')
+            
+            if os.path.exists(train_config_dir):
+                for file in os.listdir(train_config_dir):
+                    if file.endswith('_config.json'):
+                        config_files.append(os.path.join(train_config_dir, file))
+            
+            # 也在模型目录中查找配置文件
+            for file in os.listdir(self.models_dir):
+                if file.endswith('_config.json'):
+                    config_files.append(os.path.join(self.models_dir, file))
+            
+            if config_files:
+                # 使用最新的配置文件
+                latest_config = max(config_files, key=os.path.getmtime)
+                
+                with open(latest_config, 'r', encoding='utf-8') as f:
+                    config = json.load(f)
+                
+                # 提取模型架构信息
+                model_arch = config.get('model_architecture', '')
+                model_type = config.get('model_type', '')
+                
+                if model_arch:
+                    # 设置模型类型
+                    if model_type == 'classification' or 'classification' in model_type.lower():
+                        self.model_type_combo.setCurrentText("分类模型")
+                    elif model_type == 'detection' or 'detection' in model_type.lower():
+                        self.model_type_combo.setCurrentText("检测模型")
+                    
+                    # 触发模型类型切换以更新架构列表
+                    self.switch_model_type(self.model_type_combo.currentIndex())
+                    
+                    # 设置模型架构
+                    arch_index = self.model_arch_combo.findText(model_arch)
+                    if arch_index >= 0:
+                        self.model_arch_combo.setCurrentIndex(arch_index)
+                        self.update_status(f"自动识别到模型架构: {model_arch}")
+                    else:
+                        self.update_status(f"配置文件中的架构 '{model_arch}' 不在支持列表中")
+                
+        except Exception as e:
+            print(f"自动检测模型配置失败: {str(e)}")
+            # 不显示错误，因为这只是一个辅助功能
     
     def evaluate_models(self):
         """评估选中的模型"""
@@ -589,20 +686,34 @@ class EnhancedModelEvaluationWidget(QWidget):
                 QMessageBox.warning(self, "错误", "找不到类别信息文件")
                 return
         
-        # 确定任务类型
+        # 获取用户选择的模型类型和架构
+        task_type = self.model_type_combo.currentText()
+        model_arch = self.model_arch_combo.currentText()
+        
+        # 验证数据集格式与模型类型的匹配
         test_dir = self.test_data_dir
-        
-        # 检查目录结构来判断任务类型
-        if self._is_classification_dataset(test_dir):
-            task_type = "分类模型"
-        elif self._is_detection_dataset(test_dir):
-            task_type = "检测模型"
-        else:
-            QMessageBox.warning(self, "错误", "无法识别测试数据集的格式\n\n分类数据集应该包含按类别命名的子文件夹\n检测数据集应该包含images文件夹")
-            return
-        
-        # 猜测模型架构
-        model_arch = self._guess_model_architecture(model_filename)
+        if task_type == "分类模型":
+            if not self._is_classification_dataset(test_dir):
+                reply = QMessageBox.question(
+                    self, "数据集格式警告", 
+                    f"您选择的是分类模型，但测试数据集格式看起来不像分类数据集。\n\n"
+                    f"分类数据集应该包含按类别命名的子文件夹。\n"
+                    f"是否继续评估？",
+                    QMessageBox.Yes | QMessageBox.No
+                )
+                if reply == QMessageBox.No:
+                    return
+        elif task_type == "检测模型":
+            if not self._is_detection_dataset(test_dir):
+                reply = QMessageBox.question(
+                    self, "数据集格式警告", 
+                    f"您选择的是检测模型，但测试数据集格式看起来不像检测数据集。\n\n"
+                    f"检测数据集应该包含images文件夹。\n"
+                    f"是否继续评估？",
+                    QMessageBox.Yes | QMessageBox.No
+                )
+                if reply == QMessageBox.No:
+                    return
         
         # 创建并启动评估线程
         self.evaluation_thread = ModelEvaluationThread(
@@ -932,23 +1043,10 @@ class EnhancedModelEvaluationWidget(QWidget):
         self.comparison_canvas.mpl_connect('motion_notify_event', on_hover)
     
     def _guess_model_architecture(self, model_filename):
-        """根据文件名猜测模型架构"""
-        filename_lower = model_filename.lower()
-        
-        if "resnet18" in filename_lower:
-            return "ResNet18"
-        elif "resnet34" in filename_lower:
-            return "ResNet34"
-        elif "resnet50" in filename_lower:
-            return "ResNet50"
-        elif "mobilenet" in filename_lower:
-            return "MobileNetV2"
-        elif "efficientnet" in filename_lower:
-            return "EfficientNetB0"
-        elif "vgg16" in filename_lower:
-            return "VGG16"
-        else:
-            return "ResNet18"
+        """根据文件名猜测模型架构（已弃用，现在使用用户选择的架构）"""
+        # 此方法已弃用，保留仅用于兼容性
+        # 现在使用用户在界面上选择的模型架构
+        return self.model_arch_combo.currentText()
     
     def _is_classification_dataset(self, data_dir):
         """判断是否为分类数据集"""
