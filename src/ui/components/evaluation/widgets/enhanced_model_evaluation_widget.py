@@ -661,6 +661,18 @@ class EnhancedModelEvaluationWidget(QWidget):
         metrics = ['accuracy', 'precision', 'recall', 'f1_score', 'auc_score', 'params_count', 'avg_inference_time']
         metric_names = ['准确率', '精确率', '召回率', 'F1分数', 'AUC分数', '参数数量', '推理时间(ms)']
         
+        # 定义参数解释的工具提示
+        metric_tooltips = {
+            '模型名称': '被评估的模型文件名称',
+            '准确率': '正确预测的样本数占总样本数的比例\n计算公式: (TP+TN)/(TP+TN+FP+FN)\n范围: 0-1，越高越好',
+            '精确率': '预测为正类的样本中实际为正类的比例\n计算公式: TP/(TP+FP)\n范围: 0-1，越高越好\n反映模型预测正类的准确性',
+            '召回率': '实际正类样本中被正确预测为正类的比例\n计算公式: TP/(TP+FN)\n范围: 0-1，越高越好\n反映模型找出正类的能力',
+            'F1分数': '精确率和召回率的调和平均数\n计算公式: 2×(精确率×召回率)/(精确率+召回率)\n范围: 0-1，越高越好\n综合评估分类性能',
+            'AUC分数': 'ROC曲线下的面积，衡量分类器区分能力\n范围: 0-1，0.5为随机分类器\n越接近1表示分类能力越强',
+            '参数数量': '模型中可训练参数的总数量\n影响模型复杂度、内存占用和计算量\n参数越多模型越复杂但可能过拟合',
+            '推理时间(ms)': '模型对单张图片进行预测的平均耗时\n单位: 毫秒(ms)\n越小表示推理速度越快，实时性越好'
+        }
+        
         for model_name in model_names:
             if model_name in self.evaluation_results:
                 result = self.evaluation_results[model_name]
@@ -679,6 +691,15 @@ class EnhancedModelEvaluationWidget(QWidget):
         self.comparison_table.setRowCount(len(comparison_data))
         self.comparison_table.setColumnCount(len(metrics) + 1)
         self.comparison_table.setHorizontalHeaderLabels(['模型名称'] + metric_names)
+        
+        # 为表头添加工具提示
+        header = self.comparison_table.horizontalHeader()
+        for i, header_text in enumerate(['模型名称'] + metric_names):
+            if header_text in metric_tooltips:
+                # 创建一个临时的QTableWidgetItem来设置工具提示
+                header_item = QTableWidgetItem(header_text)
+                header_item.setToolTip(metric_tooltips[header_text])
+                self.comparison_table.setHorizontalHeaderItem(i, header_item)
         
         for i, row_data in enumerate(comparison_data):
             for j, value in enumerate(row_data):
@@ -854,6 +875,19 @@ class EnhancedModelEvaluationWidget(QWidget):
     
     def update_overview_table(self, result):
         """更新总览表格"""
+        # 定义指标解释的工具提示
+        overview_tooltips = {
+            "准确率": "正确预测的样本数占总样本数的比例\n计算公式: (TP+TN)/(TP+TN+FP+FN)\n范围: 0-1，越高越好",
+            "精确率 (加权平均)": "各类别精确率按样本数量加权的平均值\n精确率 = TP/(TP+FP)\n反映模型预测正类的准确性",
+            "召回率 (加权平均)": "各类别召回率按样本数量加权的平均值\n召回率 = TP/(TP+FN)\n反映模型找出正类的能力",
+            "F1分数 (加权平均)": "各类别F1分数按样本数量加权的平均值\nF1 = 2×(精确率×召回率)/(精确率+召回率)\n综合评估分类性能",
+            "AUC分数": "ROC曲线下的面积，衡量分类器区分能力\n范围: 0-1，0.5为随机分类器\n越接近1表示分类能力越强",
+            "平均精度分数": "精确率-召回率曲线下的面积\n综合考虑不同阈值下的精确率和召回率\n范围: 0-1，越高越好",
+            "模型参数数量": "模型中可训练参数的总数量\n影响模型复杂度、内存占用和计算量\n参数越多模型越复杂但可能过拟合",
+            "平均推理时间": "模型对单张图片进行预测的平均耗时\n单位: 毫秒(ms)\n越小表示推理速度越快，实时性越好",
+            "测试样本总数": "用于评估的测试样本总数量\n样本数量越多评估结果越可靠"
+        }
+        
         overview_data = [
             ("准确率", f"{result.get('accuracy', 0):.4f}"),
             ("精确率 (加权平均)", f"{result.get('precision', 0):.4f}"),
@@ -869,11 +903,27 @@ class EnhancedModelEvaluationWidget(QWidget):
         self.overview_table.setRowCount(len(overview_data))
         
         for i, (metric, value) in enumerate(overview_data):
-            self.overview_table.setItem(i, 0, QTableWidgetItem(metric))
-            self.overview_table.setItem(i, 1, QTableWidgetItem(value))
+            # 创建指标名称项并设置工具提示
+            metric_item = QTableWidgetItem(metric)
+            if metric in overview_tooltips:
+                metric_item.setToolTip(overview_tooltips[metric])
+            self.overview_table.setItem(i, 0, metric_item)
+            
+            # 创建数值项
+            value_item = QTableWidgetItem(value)
+            self.overview_table.setItem(i, 1, value_item)
     
     def update_metrics_table(self, result):
         """更新详细指标表格"""
+        # 定义详细指标表头的工具提示
+        metrics_header_tooltips = {
+            "类别": "数据集中的分类类别名称",
+            "精确率": "该类别预测正确的样本数占预测为该类别总样本数的比例\n计算公式: TP/(TP+FP)\n范围: 0-1，越高越好",
+            "召回率": "该类别预测正确的样本数占实际该类别总样本数的比例\n计算公式: TP/(TP+FN)\n范围: 0-1，越高越好",
+            "F1分数": "该类别精确率和召回率的调和平均数\n计算公式: 2×(精确率×召回率)/(精确率+召回率)\n范围: 0-1，越高越好",
+            "支持样本数": "测试集中该类别的实际样本数量\n用于计算加权平均时的权重依据"
+        }
+        
         class_names = result['class_names']
         class_precision = result['class_precision']
         class_recall = result['class_recall']
@@ -881,6 +931,14 @@ class EnhancedModelEvaluationWidget(QWidget):
         class_support = result['class_support']
         
         self.metrics_table.setRowCount(len(class_names))
+        
+        # 为表头设置工具提示
+        header_labels = ["类别", "精确率", "召回率", "F1分数", "支持样本数"]
+        for i, header_text in enumerate(header_labels):
+            if header_text in metrics_header_tooltips:
+                header_item = QTableWidgetItem(header_text)
+                header_item.setToolTip(metrics_header_tooltips[header_text])
+                self.metrics_table.setHorizontalHeaderItem(i, header_item)
         
         for i, class_name in enumerate(class_names):
             self.metrics_table.setItem(i, 0, QTableWidgetItem(class_name))
