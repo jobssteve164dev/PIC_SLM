@@ -513,15 +513,25 @@ class EnhancedModelEvaluationWidget(QWidget):
         layout.setContentsMargins(10, 10, 10, 10)
         layout.setSpacing(10)
         
+        # 创建滚动区域来包含表格，确保表格显示完整
+        table_scroll = QScrollArea()
+        table_scroll.setWidgetResizable(True)
+        table_scroll.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        table_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        table_scroll.setMinimumHeight(200)  # 设置最小高度
+        table_scroll.setMaximumHeight(400)  # 设置最大高度，避免占用过多空间
+        
         # 对比表格
         self.comparison_table = QTableWidget(0, 0)
-        self.comparison_table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
-        # 移除高度限制，让表格直接展开显示所有内容
-        self.comparison_table.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Minimum)
+        self.comparison_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeToContents)
+        self.comparison_table.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         self.comparison_table.verticalHeader().setVisible(False)  # 隐藏行号
         
+        # 将表格放入滚动区域
+        table_scroll.setWidget(self.comparison_table)
+        
         layout.addWidget(QLabel("模型对比结果"))
-        layout.addWidget(self.comparison_table)
+        layout.addWidget(table_scroll)
         
         # 悬停提示标签
         self.hover_info_label = QLabel("将鼠标悬停在图表上查看详细信息")
@@ -865,12 +875,10 @@ class EnhancedModelEvaluationWidget(QWidget):
         self.comparison_table.resizeRowsToContents()
         self.comparison_table.resizeColumnsToContents()
         
-        # 设置表格高度以适应所有行
-        total_height = self.comparison_table.horizontalHeader().height()
-        for i in range(self.comparison_table.rowCount()):
-            total_height += self.comparison_table.rowHeight(i)
-        total_height += self.comparison_table.frameWidth() * 2
-        self.comparison_table.setFixedHeight(total_height)
+        # 自动调整表格高度以适应内容，但不设置固定高度
+        # 让滚动区域来处理高度问题
+        self.comparison_table.resizeRowsToContents()
+        self.comparison_table.resizeColumnsToContents()
         
         # 绘制对比图表
         self.plot_model_comparison(model_names)
@@ -920,8 +928,23 @@ class EnhancedModelEvaluationWidget(QWidget):
         
         display_names = [get_display_name(name) for name in model_names]
         
-        # 存储悬停信息
+        # 清除之前的悬停连接
+        if hasattr(self, 'hover_cursors'):
+            for cursor in self.hover_cursors:
+                try:
+                    cursor.remove()
+                except:
+                    pass
         self.hover_cursors = []
+        
+        # 清除之前的matplotlib事件连接
+        if hasattr(self, 'hover_connections'):
+            for conn in self.hover_connections:
+                try:
+                    self.comparison_canvas.mpl_disconnect(conn)
+                except:
+                    pass
+        self.hover_connections = []
         
         for i, (metric, label) in enumerate(zip(metrics_to_plot, metric_labels)):
             ax = axes[i]
@@ -954,15 +977,11 @@ class EnhancedModelEvaluationWidget(QWidget):
                        f'{value:.3f}', ha='center', va='bottom', fontsize=7)
             
             # 添加悬停功能显示完整模型名称和详细信息
+            # 为了稳定性，直接使用matplotlib内置的悬停功能
             try:
-                if MPLCURSORS_AVAILABLE:
-                    cursor = mplcursors.cursor(bars, hover=True)
-                    cursor.connect("add", lambda sel, metric_name=label, model_list=model_names, values_list=values: 
-                        self._on_bar_hover(sel, metric_name, model_list, values_list))
-                    self.hover_cursors.append(cursor)
-                else:
-                    # 使用matplotlib内置的悬停功能
-                    self._add_matplotlib_hover(ax, bars, label, model_names, values)
+                conn = self._add_matplotlib_hover(ax, bars, label, model_names, values)
+                if conn:
+                    self.hover_connections.append(conn)
             except Exception as e:
                 print(f"添加悬停功能时出错: {e}")
         
@@ -973,8 +992,21 @@ class EnhancedModelEvaluationWidget(QWidget):
     def _on_bar_hover(self, sel, metric_name, model_list, values_list):
         """处理柱状图悬停事件（mplcursors版本）"""
         try:
-            index = int(sel.target.index)
-            if 0 <= index < len(model_list):
+            # 获取柱状图的索引，mplcursors的target是matplotlib的Artist对象
+            # 我们需要从Artist对象中获取索引
+            artist = sel.target
+            
+            # 通过检查artist的位置来确定索引
+            index = None
+            if hasattr(artist, 'get_x'):
+                x_pos = artist.get_x()
+                # 计算最接近的索引
+                for i in range(len(model_list)):
+                    if abs(x_pos - i) < 0.5:  # 允许一定的误差
+                        index = i
+                        break
+            
+            if index is not None and 0 <= index < len(model_list):
                 model_name = model_list[index]
                 value = values_list[index]
                 
@@ -982,7 +1014,7 @@ class EnhancedModelEvaluationWidget(QWidget):
                 hover_text = f"模型: {model_name}\n{metric_name}: {value:.4f}"
                 
                 # 如果有评估结果，添加更多信息
-                if model_name in self.evaluation_results:
+                if hasattr(self, 'evaluation_results') and model_name in self.evaluation_results:
                     result = self.evaluation_results[model_name]
                     hover_text += f"\n参数数量: {result.get('params_count', 0):,}"
                     hover_text += f"\n推理时间: {result.get('avg_inference_time', 0):.2f}ms"
@@ -992,6 +1024,8 @@ class EnhancedModelEvaluationWidget(QWidget):
                                                   facecolor="lightyellow", 
                                                   edgecolor="gray", 
                                                   alpha=0.9)
+            else:
+                sel.annotation.set_text("悬停信息获取失败")
         except Exception as e:
             print(f"处理悬停事件时出错: {e}")
             sel.annotation.set_text("悬停信息获取失败")
@@ -999,10 +1033,12 @@ class EnhancedModelEvaluationWidget(QWidget):
     def _add_matplotlib_hover(self, ax, bars, metric_name, model_names, values):
         """使用matplotlib内置功能添加悬停效果"""
         def on_hover(event):
-            if event.inaxes == ax:
+            if event.inaxes == ax and event.xdata is not None and event.ydata is not None:
                 hover_found = False
                 for i, bar in enumerate(bars):
-                    if bar.contains(event)[0]:
+                    # 使用更精确的碰撞检测
+                    contains, info = bar.contains(event)
+                    if contains:
                         # 鼠标在柱子上
                         model_name = model_names[i]
                         value = values[i]
@@ -1011,7 +1047,7 @@ class EnhancedModelEvaluationWidget(QWidget):
                         hover_text = f"📊 {metric_name} | 🏷️ 模型: {model_name} | 📈 分数: {value:.4f}"
                         
                         # 如果有评估结果，添加更多信息
-                        if model_name in self.evaluation_results:
+                        if hasattr(self, 'evaluation_results') and model_name in self.evaluation_results:
                             result = self.evaluation_results[model_name]
                             hover_text += f" | ⚙️ 参数: {result.get('params_count', 0):,}"
                             hover_text += f" | ⚡ 推理: {result.get('avg_inference_time', 0):.2f}ms"
@@ -1048,8 +1084,13 @@ class EnhancedModelEvaluationWidget(QWidget):
                         }
                     """)
         
-        # 连接悬停事件
-        self.comparison_canvas.mpl_connect('motion_notify_event', on_hover)
+        # 连接悬停事件并返回连接对象
+        try:
+            connection_id = self.comparison_canvas.mpl_connect('motion_notify_event', on_hover)
+            return connection_id
+        except Exception as e:
+            print(f"连接matplotlib悬停事件失败: {e}")
+            return None
     
     def _guess_model_architecture(self, model_filename):
         """根据文件名猜测模型架构"""
@@ -1324,8 +1365,15 @@ class EnhancedModelEvaluationWidget(QWidget):
                                 }
                             """)
             
+            # 清除之前的混淆矩阵悬停连接
+            if hasattr(self, 'confusion_hover_connection'):
+                try:
+                    self.confusion_canvas.mpl_disconnect(self.confusion_hover_connection)
+                except:
+                    pass
+            
             # 连接悬停事件
-            self.confusion_canvas.mpl_connect('motion_notify_event', on_hover)
+            self.confusion_hover_connection = self.confusion_canvas.mpl_connect('motion_notify_event', on_hover)
             
         except Exception as e:
             print(f"添加混淆矩阵悬停功能时出错: {e}")
