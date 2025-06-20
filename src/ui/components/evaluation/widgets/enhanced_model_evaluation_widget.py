@@ -1142,30 +1142,78 @@ class EnhancedModelEvaluationWidget(QWidget):
         
         # 处理批量评估
         if hasattr(self, 'current_batch_models') and hasattr(self, 'current_batch_index'):
-            model_name = self.current_batch_models[self.current_batch_index]
-            self.evaluation_results[model_name] = result
-            self.batch_results[model_name] = result
-            
-            self.update_status(f"模型 {model_name} 评估完成")
-            
-            # 继续下一个模型
-            self.current_batch_index += 1
-            self.evaluate_next_model_in_batch()
+            # 检查索引是否在有效范围内
+            if self.current_batch_index < len(self.current_batch_models):
+                model_name = self.current_batch_models[self.current_batch_index]
+                self.evaluation_results[model_name] = result
+                
+                # 确保batch_results存在
+                if not hasattr(self, 'batch_results'):
+                    self.batch_results = {}
+                self.batch_results[model_name] = result
+                
+                self.update_status(f"模型 {model_name} 评估完成")
+                
+                # 继续下一个模型
+                self.current_batch_index += 1
+                self.evaluate_next_model_in_batch()
+            else:
+                # 索引超出范围，说明批量评估已完成
+                self.update_status("批量评估异常完成")
+                self.on_batch_evaluation_finished()
         else:
             # 单个模型评估
-            selected_items = self.model_list.selectedItems()
-            if selected_items:
-                model_name = selected_items[0].text()
+            # 获取当前选中的模型名称
+            selected_models = []
+            for i in range(self.model_list.count()):
+                item = self.model_list.item(i)
+                if item.checkState() == Qt.Checked:
+                    selected_models.append(item.text())
+            
+            if selected_models:
+                # 如果有选中的模型，使用第一个
+                model_name = selected_models[0]
                 self.evaluation_results[model_name] = result
                 self.display_results(result)
                 self.update_status(f"模型 {model_name} 评估完成")
+            else:
+                # 如果没有选中的模型，可能是通过其他方式触发的评估
+                self.update_status("模型评估完成")
     
     def on_evaluation_error(self, error_msg):
         """评估错误处理"""
         self.evaluate_btn.setEnabled(True)
         self.progress_bar.setVisible(False)
-        QMessageBox.critical(self, "评估错误", error_msg)
-        self.update_status("评估失败")
+        
+        # 处理批量评估中的错误
+        if hasattr(self, 'current_batch_models') and hasattr(self, 'current_batch_index'):
+            if self.current_batch_index < len(self.current_batch_models):
+                model_name = self.current_batch_models[self.current_batch_index]
+                self.update_status(f"模型 {model_name} 评估失败: {error_msg}")
+                
+                # 询问是否继续评估下一个模型
+                reply = QMessageBox.question(
+                    self, "评估错误", 
+                    f"模型 {model_name} 评估失败:\n{error_msg}\n\n是否继续评估下一个模型？",
+                    QMessageBox.Yes | QMessageBox.No
+                )
+                
+                if reply == QMessageBox.Yes:
+                    # 继续下一个模型
+                    self.current_batch_index += 1
+                    self.evaluate_next_model_in_batch()
+                else:
+                    # 停止批量评估
+                    self.update_status("批量评估已停止")
+                    self.on_batch_evaluation_finished()
+            else:
+                # 索引超出范围
+                QMessageBox.critical(self, "评估错误", f"批量评估索引错误: {error_msg}")
+                self.update_status("批量评估失败")
+        else:
+            # 单个模型评估错误
+            QMessageBox.critical(self, "评估错误", error_msg)
+            self.update_status("评估失败")
     
     def display_results(self, result):
         """显示评估结果"""
