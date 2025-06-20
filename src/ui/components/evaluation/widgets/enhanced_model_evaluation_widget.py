@@ -271,9 +271,11 @@ class EnhancedModelEvaluationWidget(QWidget):
         
         # 支持的检测模型架构列表
         self.detection_architectures = [
-            "YOLOv5", "YOLOv7", "YOLOv8", 
+            "YOLOv3", "YOLOv4", "YOLOv5", "YOLOv6", "YOLOv7", "YOLOv8", 
             "Faster R-CNN", "Mask R-CNN", "RetinaNet",
-            "SSD", "EfficientDet", "DETR"
+            "SSD", "SSD300", "SSD512", 
+            "EfficientDet", "DETR", "Deformable DETR", 
+            "Swin Transformer", "DINO"
         ]
         
         self.supported_architectures = self.classification_architectures
