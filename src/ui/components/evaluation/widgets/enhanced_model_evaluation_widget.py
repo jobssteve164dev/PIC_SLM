@@ -331,12 +331,15 @@ class EnhancedModelEvaluationWidget(QWidget):
         self.model_type_combo = QComboBox()
         self.model_type_combo.addItems(["分类模型", "检测模型"])
         self.model_type_combo.currentTextChanged.connect(self.on_model_type_changed)
+        self.model_type_combo.setToolTip("选择要评估的模型类型：\n- 分类模型：预测图像类别\n- 检测模型：检测图像中的物体位置和类别")
         models_layout.addWidget(QLabel("模型类型:"), 2, 0)
         models_layout.addWidget(self.model_type_combo, 2, 1, 1, 2)
         
         # 添加模型架构选择下拉框
         self.arch_combo = QComboBox()
         self.arch_combo.addItems(self.supported_architectures)
+        self.arch_combo.currentTextChanged.connect(self.on_arch_changed)
+        self.arch_combo.setToolTip("选择模型的具体架构，确保与训练时使用的架构一致")
         models_layout.addWidget(QLabel("模型架构:"), 3, 0)
         models_layout.addWidget(self.arch_combo, 3, 1, 1, 2)
         
@@ -1362,7 +1365,48 @@ class EnhancedModelEvaluationWidget(QWidget):
         self.arch_combo.clear()
         if model_type == "分类模型":
             self.supported_architectures = self.classification_architectures
+            self.update_status(f"已切换到分类模型，可选架构已更新")
         else:  # 检测模型
             self.supported_architectures = self.detection_architectures
+            self.update_status(f"已切换到检测模型，可选架构已更新")
         
-        self.arch_combo.addItems(self.supported_architectures) 
+        self.arch_combo.addItems(self.supported_architectures)
+        
+        # 更新界面状态
+        if hasattr(self, 'results_tabs'):
+            # 对于检测模型，隐藏或禁用一些分类特有的标签页
+            is_classification = (model_type == "分类模型")
+            if hasattr(self, 'confusion_tab'):
+                index = self.results_tabs.indexOf(self.confusion_tab)
+                if index >= 0:
+                    self.results_tabs.setTabEnabled(index, is_classification)
+                    
+            if hasattr(self, 'report_tab'):
+                index = self.results_tabs.indexOf(self.report_tab)
+                if index >= 0:
+                    self.results_tabs.setTabEnabled(index, is_classification)
+        
+        # 清空之前的评估结果
+        self.evaluation_results = {}
+        
+        # 如果有选中的模型，提示用户重新评估
+        if self.model_list.selectedItems():
+            selected_models = [item.text() for item in self.model_list.selectedItems()]
+            if len(selected_models) > 0:
+                self.update_status(f"模型类型已更改，请重新评估选中的模型")
+                
+        # 发送信号通知模型类型已更改
+        self.status_updated.emit(f"模型类型已更改为: {model_type}")
+    
+    def on_arch_changed(self, arch_name):
+        """当模型架构改变时更新状态"""
+        self.update_status(f"已选择模型架构: {arch_name}")
+        
+        # 如果有选中的模型，提示用户重新评估
+        if self.model_list.selectedItems():
+            selected_models = [item.text() for item in self.model_list.selectedItems()]
+            if len(selected_models) > 0:
+                self.update_status(f"模型架构已更改为 {arch_name}，请重新评估选中的模型")
+                
+        # 清空之前的评估结果，因为架构变化会导致评估结果不同
+        self.evaluation_results = {} 
