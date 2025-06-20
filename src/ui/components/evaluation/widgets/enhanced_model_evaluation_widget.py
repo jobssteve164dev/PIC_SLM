@@ -350,10 +350,26 @@ class EnhancedModelEvaluationWidget(QWidget):
         list_group = QGroupBox("可用模型")
         list_layout = QVBoxLayout()
         
+        # 使用复选框列表替代普通列表
         self.model_list = QListWidget()
         self.model_list.setSelectionMode(QListWidget.MultiSelection)
         self.model_list.setMinimumHeight(120)
+        
+        # 添加重置选择按钮和全选按钮
+        select_buttons_layout = QHBoxLayout()
+        self.reset_selection_btn = QPushButton("重置选择")
+        self.reset_selection_btn.clicked.connect(self.reset_model_selection)
+        self.reset_selection_btn.setToolTip("清除所有选中的模型")
+        
+        self.select_all_btn = QPushButton("全选")
+        self.select_all_btn.clicked.connect(self.select_all_models)
+        self.select_all_btn.setToolTip("选择所有可用模型")
+        
+        select_buttons_layout.addWidget(self.reset_selection_btn)
+        select_buttons_layout.addWidget(self.select_all_btn)
+        
         list_layout.addWidget(self.model_list)
+        list_layout.addLayout(select_buttons_layout)
         
         # 评估按钮和进度条
         eval_layout = QHBoxLayout()
@@ -549,10 +565,11 @@ class EnhancedModelEvaluationWidget(QWidget):
     
     def refresh_model_list(self):
         """刷新模型列表"""
-        if not self.models_dir:
-            return
-            
         try:
+            if not self.models_dir or not os.path.exists(self.models_dir):
+                QMessageBox.warning(self, "警告", "请先选择模型目录")
+                return
+                
             self.model_list.clear()
             self.models_list = []
             
@@ -560,7 +577,12 @@ class EnhancedModelEvaluationWidget(QWidget):
             for file in os.listdir(self.models_dir):
                 if file.endswith(('.h5', '.pb', '.tflite', '.pth')):
                     self.models_list.append(file)
-                    self.model_list.addItem(file)
+                    
+                    # 创建带复选框的列表项
+                    item = QListWidgetItem(file)
+                    item.setFlags(item.flags() | Qt.ItemIsUserCheckable)
+                    item.setCheckState(Qt.Unchecked)
+                    self.model_list.addItem(item)
             
             if not self.models_list:
                 QMessageBox.information(self, "提示", "未找到模型文件")
@@ -568,29 +590,54 @@ class EnhancedModelEvaluationWidget(QWidget):
         except Exception as e:
             QMessageBox.critical(self, "错误", f"刷新模型列表失败: {str(e)}")
     
+    def reset_model_selection(self):
+        """重置模型选择"""
+        for i in range(self.model_list.count()):
+            item = self.model_list.item(i)
+            item.setCheckState(Qt.Unchecked)
+        self.update_status("已重置模型选择")
+    
+    def select_all_models(self):
+        """选择所有模型"""
+        for i in range(self.model_list.count()):
+            item = self.model_list.item(i)
+            item.setCheckState(Qt.Checked)
+        self.update_status(f"已选择全部 {self.model_list.count()} 个模型")
+    
     def evaluate_models(self):
         """评估选中的模型"""
-        selected_items = self.model_list.selectedItems()
-        if not selected_items:
+        # 获取选中的模型
+        selected_models = []
+        for i in range(self.model_list.count()):
+            item = self.model_list.item(i)
+            if item.checkState() == Qt.Checked:
+                selected_models.append(item.text())
+        
+        if not selected_models:
             QMessageBox.warning(self, "警告", "请选择要评估的模型")
             return
         
-        if len(selected_items) == 1:
+        if len(selected_models) == 1:
             # 单个模型评估
-            self.evaluate_single_model(selected_items[0].text())
+            self.evaluate_single_model(selected_models[0])
         else:
             # 多个模型评估
-            self.evaluate_multiple_models([item.text() for item in selected_items])
+            self.evaluate_multiple_models(selected_models)
     
     def compare_models(self):
         """对比选中的模型"""
-        selected_items = self.model_list.selectedItems()
-        if len(selected_items) < 2:
+        # 获取选中的模型
+        selected_models = []
+        for i in range(self.model_list.count()):
+            item = self.model_list.item(i)
+            if item.checkState() == Qt.Checked:
+                selected_models.append(item.text())
+        
+        if len(selected_models) < 2:
             QMessageBox.warning(self, "警告", "请至少选择两个模型进行对比")
             return
         
-        model_names = [item.text() for item in selected_items]
-        self.compare_multiple_models(model_names)
+        self.compare_multiple_models(selected_models)
     
     def evaluate_single_model(self, model_filename):
         """评估单个模型"""
@@ -1390,10 +1437,14 @@ class EnhancedModelEvaluationWidget(QWidget):
         self.evaluation_results = {}
         
         # 如果有选中的模型，提示用户重新评估
-        if self.model_list.selectedItems():
-            selected_models = [item.text() for item in self.model_list.selectedItems()]
-            if len(selected_models) > 0:
-                self.update_status(f"模型类型已更改，请重新评估选中的模型")
+        selected_count = 0
+        for i in range(self.model_list.count()):
+            item = self.model_list.item(i)
+            if item.checkState() == Qt.Checked:
+                selected_count += 1
+                
+        if selected_count > 0:
+            self.update_status(f"模型类型已更改，请重新评估选中的 {selected_count} 个模型")
                 
         # 发送信号通知模型类型已更改
         self.status_updated.emit(f"模型类型已更改为: {model_type}")
@@ -1403,10 +1454,14 @@ class EnhancedModelEvaluationWidget(QWidget):
         self.update_status(f"已选择模型架构: {arch_name}")
         
         # 如果有选中的模型，提示用户重新评估
-        if self.model_list.selectedItems():
-            selected_models = [item.text() for item in self.model_list.selectedItems()]
-            if len(selected_models) > 0:
-                self.update_status(f"模型架构已更改为 {arch_name}，请重新评估选中的模型")
+        selected_count = 0
+        for i in range(self.model_list.count()):
+            item = self.model_list.item(i)
+            if item.checkState() == Qt.Checked:
+                selected_count += 1
+                
+        if selected_count > 0:
+            self.update_status(f"模型架构已更改为 {arch_name}，请重新评估选中的 {selected_count} 个模型")
                 
         # 清空之前的评估结果，因为架构变化会导致评估结果不同
         self.evaluation_results = {} 
