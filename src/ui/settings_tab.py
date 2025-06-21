@@ -95,6 +95,18 @@ class SettingsTab(BaseTab):
         # 添加高级设置选项卡
         self.settings_tabs.addTab(advanced_tab, "高级设置")
         
+        # 创建系统资源限制选项卡
+        resource_tab = QWidget()
+        resource_layout = QVBoxLayout(resource_tab)
+        resource_layout.setContentsMargins(10, 10, 10, 10)
+        
+        # 添加资源限制组件
+        self.resource_limit_widget = ResourceLimitWidget()
+        resource_layout.addWidget(self.resource_limit_widget)
+        
+        # 添加资源限制选项卡
+        self.settings_tabs.addTab(resource_tab, "资源限制")
+        
         main_layout.addWidget(self.settings_tabs)
         
         # 添加按钮组
@@ -161,6 +173,10 @@ class SettingsTab(BaseTab):
         # 连接配置文件选择器信号
         self.config_profile_selector.profile_changed.connect(self.on_profile_changed)
         self.config_profile_selector.profile_loaded.connect(self.on_profile_loaded)
+        
+        # 连接资源限制组件信号
+        self.resource_limit_widget.limits_changed.connect(self.on_resource_limits_changed)
+        self.resource_limit_widget.monitoring_toggled.connect(self.on_resource_monitoring_toggled)
     
     def on_folder_changed(self, folder_type: str, folder_path: str):
         """处理文件夹变化"""
@@ -263,6 +279,12 @@ class SettingsTab(BaseTab):
         minimize_to_tray = self.config.get('minimize_to_tray', True)
         self.minimize_to_tray_checkbox.setChecked(minimize_to_tray)
         
+        # 应用资源限制配置
+        print(f"SettingsTab._apply_config_to_ui: 应用资源限制配置...")
+        resource_limits_config = self.config.get('resource_limits', {})
+        if resource_limits_config:
+            self.resource_limit_widget.set_resource_limits_config(resource_limits_config)
+        
         print("SettingsTab._apply_config_to_ui: 配置应用完成")
     
     def _collect_current_config(self) -> dict:
@@ -278,6 +300,9 @@ class SettingsTab(BaseTab):
         
         # 获取系统托盘配置
         minimize_to_tray = self.minimize_to_tray_checkbox.isChecked()
+        
+        # 获取资源限制配置
+        resource_limits_config = self.resource_limit_widget.get_resource_limits_config()
         
         # 创建完整配置
         config = self.config_manager.create_config_dict(
@@ -297,6 +322,9 @@ class SettingsTab(BaseTab):
         
         # 添加系统托盘配置
         config['minimize_to_tray'] = minimize_to_tray
+        
+        # 添加资源限制配置
+        config['resource_limits'] = resource_limits_config
         
         return config
     
@@ -548,3 +576,13 @@ class SettingsTab(BaseTab):
         except Exception as e:
             QMessageBox.critical(self, "验证失败", f"配置验证失败:\n{str(e)}")
             return False 
+    
+    def on_resource_limits_changed(self, limits: dict):
+        """处理资源限制变化"""
+        print(f"资源限制变化: {limits}")
+        # 这里可以添加更多处理逻辑，比如保存到配置文件
+        
+    def on_resource_monitoring_toggled(self, enabled: bool):
+        """处理资源监控开关"""
+        print(f"资源监控状态: {'启用' if enabled else '禁用'}")
+        # 这里可以添加更多处理逻辑，比如通知主窗口
