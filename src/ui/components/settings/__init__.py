@@ -8,6 +8,7 @@
 - model_config_widget: 模型配置组件
 - weight_strategy: 权重策略枚举
 - config_profile_selector: 配置文件选择器组件
+- resource_limit_widget: 系统资源限制组件
 """
 
 from .config_manager import ConfigManager
@@ -16,6 +17,7 @@ from .class_weight_widget import ClassWeightWidget
 from .model_config_widget import ModelConfigWidget
 from .weight_strategy import WeightStrategy
 from .config_profile_selector import ConfigProfileSelector
+from .resource_limit_widget import ResourceLimitWidget
 
 __all__ = [
     'ConfigManager',
@@ -23,5 +25,6 @@ __all__ = [
     'ClassWeightWidget',
     'ModelConfigWidget',
     'WeightStrategy',
-    'ConfigProfileSelector'
+    'ConfigProfileSelector',
+    'ResourceLimitWidget'
 ] 

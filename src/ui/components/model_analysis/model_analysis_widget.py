@@ -273,7 +273,13 @@ class ModelAnalysisWidget(QWidget):
             
             # 获取当前选择的类别名称
             current_class_idx = self.analysis_section['class_combo'].currentIndex()
-            current_class_name = self.class_names[current_class_idx] if current_class_idx < len(self.class_names) else f"类别{current_class_idx}"
+            
+            # 确保索引在有效范围内
+            if not self.class_names or current_class_idx < 0 or current_class_idx >= len(self.class_names):
+                current_class_idx = 0
+                current_class_name = f"类别{current_class_idx}"
+            else:
+                current_class_name = self.class_names[current_class_idx]
             
             if analysis_type == "特征可视化":
                 display_feature_visualization(result, self.results_section['feature_viewer'])
@@ -320,8 +326,20 @@ class ModelAnalysisWidget(QWidget):
     def refresh_image_displays(self):
         """刷新所有图片显示"""
         try:
+            # 检查是否有类别名称数据，避免列表索引越界
+            if not self.class_names:
+                # 如果没有类别数据，只重新显示原始图片
+                if self.image:
+                    display_image(self.image, self.image_section['original_image_label'])
+                return
+            
             # 重新显示所有已有的分析结果
             current_class_idx = self.analysis_section['class_combo'].currentIndex()
+            
+            # 确保索引在有效范围内
+            if current_class_idx < 0 or current_class_idx >= len(self.class_names):
+                current_class_idx = 0
+                
             current_class_name = self.class_names[current_class_idx] if current_class_idx < len(self.class_names) else f"类别{current_class_idx}"
             
             for analysis_type, result in self.current_results.items():
@@ -340,6 +358,9 @@ class ModelAnalysisWidget(QWidget):
                 
         except Exception as e:
             self.logger.error(f"刷新图片显示失败: {str(e)}")
+            # 添加详细的错误信息用于调试
+            import traceback
+            self.logger.error(f"详细错误信息: {traceback.format_exc()}")
     
     def set_model(self, model, class_names=None):
         """从外部设置模型"""

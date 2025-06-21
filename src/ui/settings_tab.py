@@ -11,7 +11,7 @@ import time
 from .base_tab import BaseTab
 from .components.settings import (ConfigManager, FolderConfigWidget, 
                                 ClassWeightWidget, ModelConfigWidget, WeightStrategy,
-                                ConfigProfileSelector)
+                                ConfigProfileSelector, ResourceLimitWidget)
 
 
 class SettingsTab(BaseTab):
