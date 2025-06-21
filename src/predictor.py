@@ -5,9 +5,220 @@ from torchvision import transforms
 from PIL import Image
 import json
 import shutil
-from PyQt5.QtCore import QObject, pyqtSignal
+from PyQt5.QtCore import QObject, pyqtSignal, QThread
 from typing import Dict, Tuple, List, Optional
 import time
+
+class BatchPredictionThread(QThread):
+    """批量预测独立线程"""
+    
+    # 定义信号
+    progress_updated = pyqtSignal(int)
+    status_updated = pyqtSignal(str)
+    prediction_finished = pyqtSignal(dict)
+    prediction_error = pyqtSignal(str)
+    
+    def __init__(self, predictor, params):
+        super().__init__()
+        self.predictor = predictor
+        self.params = params
+        self._stop_processing = False
+        
+    def run(self):
+        """线程运行入口"""
+        try:
+            self._batch_predict()
+        except Exception as e:
+            import traceback
+            error_msg = f"批量预测线程出错: {str(e)}\n{traceback.format_exc()}"
+            print(error_msg)
+            self.prediction_error.emit(error_msg)
+    
+    def stop_processing(self):
+        """停止处理"""
+        self._stop_processing = True
+        
+    def _batch_predict(self):
+        """执行批量预测"""
+        batch_start_time = time.time()
+        print("=" * 60)
+        print("开始批量预测（独立线程）")
+        print(f"批量预测开始时间: {time.strftime('%Y-%m-%d %H:%M:%S')}")
+        
+        try:
+            if self.predictor.model is None:
+                print("❌ 错误: 模型未加载")
+                self.prediction_error.emit('请先加载模型')
+                return
+            else:
+                print(f"✅ 模型已加载: {type(self.predictor.model).__name__}")
+                print(f"✅ 设备: {self.predictor.device}")
+                print(f"✅ 模型状态: {'训练模式' if self.predictor.model.training else '评估模式'}")
+            
+            if self.predictor.class_names is None or len(self.predictor.class_names) == 0:
+                print("❌ 错误: 类别信息未加载")
+                self.prediction_error.emit('类别信息未加载，请先加载模型')
+                return
+            else:
+                print(f"✅ 类别信息已加载: {len(self.predictor.class_names)} 个类别")
+                print(f"   类别列表: {self.predictor.class_names}")
+                
+            source_folder = self.params.get('source_folder')
+            target_folder = self.params.get('target_folder')
+            
+            print(f"📁 源文件夹: {source_folder}")
+            print(f"📁 目标文件夹: {target_folder}")
+            
+            # 验证必要参数
+            if not source_folder:
+                self.prediction_error.emit('源文件夹路径不能为空')
+                return
+            
+            if not target_folder:
+                self.prediction_error.emit('目标文件夹路径不能为空')
+                return
+            
+            if not os.path.exists(source_folder):
+                self.prediction_error.emit(f'源文件夹不存在: {source_folder}')
+                return
+            
+            if not os.path.isdir(source_folder):
+                self.prediction_error.emit(f'源路径不是文件夹: {source_folder}')
+                return
+            
+            confidence_threshold = self.params.get('confidence_threshold', 50.0)  # 默认50%
+            copy_mode = self.params.get('copy_mode', 'copy')
+            create_subfolders = self.params.get('create_subfolders', True)
+            
+            print(f"⚙️ 置信度阈值: {confidence_threshold}%")
+            print(f"⚙️ 文件操作模式: {copy_mode}")
+            print(f"⚙️ 创建子文件夹: {create_subfolders}")
+            
+            # 获取所有图片文件
+            valid_extensions = ['.jpg', '.jpeg', '.png', '.bmp', '.tif', '.tiff']
+            image_files = [f for f in os.listdir(source_folder) 
+                          if os.path.isfile(os.path.join(source_folder, f)) and 
+                          os.path.splitext(f.lower())[1] in valid_extensions]
+            
+            if not image_files:
+                print("❌ 未找到图片文件")
+                self.status_updated.emit('未找到图片文件')
+                return
+            
+            print(f"📷 找到 {len(image_files)} 张图片")
+            print(f"   图片格式统计: {dict((ext, sum(1 for f in image_files if f.lower().endswith(ext))) for ext in valid_extensions if any(f.lower().endswith(ext) for f in image_files))}")
+                
+            # 创建目标文件夹
+            os.makedirs(target_folder, exist_ok=True)
+            
+            # 如果需要创建子文件夹，为每个类别创建一个子文件夹
+            if create_subfolders:
+                for class_name in self.predictor.class_names:
+                    os.makedirs(os.path.join(target_folder, class_name), exist_ok=True)
+                print(f"📁 已创建 {len(self.predictor.class_names)} 个类别子文件夹")
+            
+            # 统计结果
+            results = {
+                'total': len(image_files),
+                'processed': 0,
+                'classified': 0,
+                'unclassified': 0,
+                'class_counts': {class_name: 0 for class_name in self.predictor.class_names}
+            }
+            
+            prediction_times = []
+            
+            # 批量处理图片
+            print("\n🔄 开始处理图片...")
+            for i, image_file in enumerate(image_files):
+                if self._stop_processing:
+                    print("⏹️ 批量处理已停止")
+                    self.status_updated.emit('批量处理已停止')
+                    break
+                    
+                image_path = os.path.join(source_folder, image_file)
+                
+                # 记录单张图片预测时间
+                single_start = time.time()
+                result = self.predictor.predict_image(image_path)
+                single_time = time.time() - single_start
+                prediction_times.append(single_time)
+                
+                if result:
+                    # 获取最高置信度的预测
+                    top_prediction = result['predictions'][0]
+                    class_name = top_prediction['class_name']
+                    probability = top_prediction['probability']
+                    
+                    # 更新进度
+                    progress = int((i + 1) / len(image_files) * 100)
+                    self.progress_updated.emit(progress)
+                    self.status_updated.emit(f'处理图片 {i+1}/{len(image_files)}: {image_file}')
+                    
+                    results['processed'] += 1
+                    
+                    # 如果置信度高于阈值，则分类图片
+                    print(f"🔍 置信度比较: {image_file}")
+                    print(f"   预测置信度: {probability:.2f}%")
+                    print(f"   设定阈值: {confidence_threshold}%")
+                    print(f"   比较结果: {probability:.2f}% {'≥' if probability >= confidence_threshold else '<'} {confidence_threshold}%")
+                    
+                    if probability >= confidence_threshold:
+                        print(f"   ✅ 置信度达标，将分类到: {class_name}")
+                        # 确定目标路径
+                        if create_subfolders:
+                            target_path = os.path.join(target_folder, class_name, image_file)
+                        else:
+                            # 如果不创建子文件夹，则在文件名前添加类别名称
+                            base_name, ext = os.path.splitext(image_file)
+                            target_path = os.path.join(target_folder, f"{class_name}_{base_name}{ext}")
+                        
+                        # 复制或移动文件
+                        try:
+                            if copy_mode == 'copy':
+                                shutil.copy2(image_path, target_path)
+                            else:  # move
+                                shutil.move(image_path, target_path)
+                                
+                            results['classified'] += 1
+                            results['class_counts'][class_name] += 1
+                            print(f"   ✅ 文件已{('复制' if copy_mode == 'copy' else '移动')}到: {target_path}")
+                        except Exception as e:
+                            print(f"❌ 处理文件 {image_file} 时出错: {str(e)}")
+                            self.status_updated.emit(f'处理文件 {image_file} 时出错: {str(e)}')
+                    else:
+                        results['unclassified'] += 1
+                        print(f"   ❌ 置信度不达标，未分类")
+                        print(f"⚠️ 图片 {image_file} 置信度过低 ({probability:.2f}% < {confidence_threshold}%)，未分类")
+                else:
+                    print(f"❌ 图片 {image_file} 预测失败")
+            
+            # 计算统计信息
+            batch_total_time = time.time() - batch_start_time
+            avg_prediction_time = sum(prediction_times) / len(prediction_times) if prediction_times else 0
+            
+            print("\n" + "=" * 60)
+            print("批量预测完成统计:")
+            print(f"⏱️ 总耗时: {batch_total_time:.2f}秒")
+            print(f"⏱️ 平均每张图片预测时间: {avg_prediction_time:.4f}秒")
+            print(f"🏃 预测速度: {len(image_files)/batch_total_time:.2f} 张/秒")
+            print(f"📊 总图片数: {results['total']}")
+            print(f"📊 已处理: {results['processed']}")
+            print(f"📊 已分类: {results['classified']}")
+            print(f"📊 未分类: {results['unclassified']}")
+            print("📊 各类别统计:")
+            for class_name, count in results['class_counts'].items():
+                if count > 0:
+                    print(f"   {class_name}: {count} 张")
+            print("=" * 60)
+            
+            # 发送完成信号
+            self.prediction_finished.emit(results)
+            self.status_updated.emit('批量处理完成')
+            
+        except Exception as e:
+            print(f"❌ 批量预测过程中出错: {str(e)}")
+            self.prediction_error.emit(f'批量预测过程中出错: {str(e)}')
 
 class Predictor(QObject):
     # 定义信号
@@ -28,6 +239,7 @@ class Predictor(QObject):
             transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
         ])
         self._stop_batch_processing = False
+        self.batch_prediction_thread = None  # 添加线程引用
 
     def load_model(self, model_path: str, class_info_path: str) -> None:
         """
@@ -260,7 +472,7 @@ class Predictor(QObject):
 
     def batch_predict(self, params: Dict) -> None:
         """
-        批量预测图片并根据预测结果分类
+        启动批量预测线程
         
         参数:
             params: 包含批量预测参数的字典
@@ -270,202 +482,60 @@ class Predictor(QObject):
                 - copy_mode: 'copy'（复制）或 'move'（移动）
                 - create_subfolders: 是否为每个类别创建子文件夹
         """
-        batch_start_time = time.time()
-        print("=" * 60)
-        print("开始批量预测")
-        print(f"批量预测开始时间: {time.strftime('%Y-%m-%d %H:%M:%S')}")
+        # 如果已有线程在运行，先停止它
+        if self.batch_prediction_thread and self.batch_prediction_thread.isRunning():
+            print("⚠️ 已有批量预测线程在运行，先停止它")
+            self.stop_batch_processing()
+            self.batch_prediction_thread.wait()  # 等待线程结束
         
-        try:
-            if self.model is None:
-                print("❌ 错误: 模型未加载")
-                self.prediction_error.emit('请先加载模型')
-                return
-            else:
-                print(f"✅ 模型已加载: {type(self.model).__name__}")
-                print(f"✅ 设备: {self.device}")
-                print(f"✅ 模型状态: {'训练模式' if self.model.training else '评估模式'}")
-            
-            if self.class_names is None or len(self.class_names) == 0:
-                print("❌ 错误: 类别信息未加载")
-                self.prediction_error.emit('类别信息未加载，请先加载模型')
-                return
-            else:
-                print(f"✅ 类别信息已加载: {len(self.class_names)} 个类别")
-                print(f"   类别列表: {self.class_names}")
-                
-            source_folder = params.get('source_folder')
-            target_folder = params.get('target_folder')
-            
-            print(f"📁 源文件夹: {source_folder}")
-            print(f"📁 目标文件夹: {target_folder}")
-            
-            # 验证必要参数
-            if not source_folder:
-                self.prediction_error.emit('源文件夹路径不能为空')
-                return
-            
-            if not target_folder:
-                self.prediction_error.emit('目标文件夹路径不能为空')
-                return
-            
-            if not os.path.exists(source_folder):
-                self.prediction_error.emit(f'源文件夹不存在: {source_folder}')
-                return
-            
-            if not os.path.isdir(source_folder):
-                self.prediction_error.emit(f'源路径不是文件夹: {source_folder}')
-                return
-            
-            confidence_threshold = params.get('confidence_threshold', 50.0)  # 默认50%
-            copy_mode = params.get('copy_mode', 'copy')
-            create_subfolders = params.get('create_subfolders', True)
-            
-            print(f"⚙️ 置信度阈值: {confidence_threshold}%")
-            print(f"⚙️ 文件操作模式: {copy_mode}")
-            print(f"⚙️ 创建子文件夹: {create_subfolders}")
-            
-            # 添加置信度阈值验证调试
-            print(f"🔍 置信度阈值验证:")
-            print(f"   原始参数值: {params.get('confidence_threshold')}")
-            print(f"   使用的阈值: {confidence_threshold}%")
-            print(f"   阈值类型: {type(confidence_threshold)}")
-            if confidence_threshold != 50.0:
-                print(f"   ✅ 使用自定义阈值: {confidence_threshold}%")
-            else:
-                print(f"   ⚠️ 使用默认阈值: 50.0%")
-            
-            # 重置停止标志
-            self._stop_batch_processing = False
-            
-            # 获取所有图片文件
-            valid_extensions = ['.jpg', '.jpeg', '.png', '.bmp', '.tif', '.tiff']
-            image_files = [f for f in os.listdir(source_folder) 
-                          if os.path.isfile(os.path.join(source_folder, f)) and 
-                          os.path.splitext(f.lower())[1] in valid_extensions]
-            
-            if not image_files:
-                print("❌ 未找到图片文件")
-                self.batch_prediction_status.emit('未找到图片文件')
-                return
-            
-            print(f"📷 找到 {len(image_files)} 张图片")
-            print(f"   图片格式统计: {dict((ext, sum(1 for f in image_files if f.lower().endswith(ext))) for ext in valid_extensions if any(f.lower().endswith(ext) for f in image_files))}")
-                
-            # 创建目标文件夹
-            os.makedirs(target_folder, exist_ok=True)
-            
-            # 如果需要创建子文件夹，为每个类别创建一个子文件夹
-            if create_subfolders:
-                for class_name in self.class_names:
-                    os.makedirs(os.path.join(target_folder, class_name), exist_ok=True)
-                print(f"📁 已创建 {len(self.class_names)} 个类别子文件夹")
-            
-            # 统计结果
-            results = {
-                'total': len(image_files),
-                'processed': 0,
-                'classified': 0,
-                'unclassified': 0,
-                'class_counts': {class_name: 0 for class_name in self.class_names}
-            }
-            
-            prediction_times = []
-            
-            # 批量处理图片
-            print("\n🔄 开始处理图片...")
-            for i, image_file in enumerate(image_files):
-                if self._stop_batch_processing:
-                    print("⏹️ 批量处理已停止")
-                    self.batch_prediction_status.emit('批量处理已停止')
-                    break
-                    
-                image_path = os.path.join(source_folder, image_file)
-                
-                # 记录单张图片预测时间
-                single_start = time.time()
-                result = self.predict_image(image_path)
-                single_time = time.time() - single_start
-                prediction_times.append(single_time)
-                
-                if result:
-                    # 获取最高置信度的预测
-                    top_prediction = result['predictions'][0]
-                    class_name = top_prediction['class_name']
-                    probability = top_prediction['probability']
-                    
-                    # 更新进度
-                    progress = int((i + 1) / len(image_files) * 100)
-                    self.batch_prediction_progress.emit(progress)
-                    self.batch_prediction_status.emit(f'处理图片 {i+1}/{len(image_files)}: {image_file}')
-                    
-                    results['processed'] += 1
-                    
-                    # 如果置信度高于阈值，则分类图片
-                    print(f"🔍 置信度比较: {image_file}")
-                    print(f"   预测置信度: {probability:.2f}%")
-                    print(f"   设定阈值: {confidence_threshold}%")
-                    print(f"   比较结果: {probability:.2f}% {'≥' if probability >= confidence_threshold else '<'} {confidence_threshold}%")
-                    
-                    if probability >= confidence_threshold:
-                        print(f"   ✅ 置信度达标，将分类到: {class_name}")
-                        # 确定目标路径
-                        if create_subfolders:
-                            target_path = os.path.join(target_folder, class_name, image_file)
-                        else:
-                            # 如果不创建子文件夹，则在文件名前添加类别名称
-                            base_name, ext = os.path.splitext(image_file)
-                            target_path = os.path.join(target_folder, f"{class_name}_{base_name}{ext}")
-                        
-                        # 复制或移动文件
-                        try:
-                            if copy_mode == 'copy':
-                                shutil.copy2(image_path, target_path)
-                            else:  # move
-                                shutil.move(image_path, target_path)
-                                
-                            results['classified'] += 1
-                            results['class_counts'][class_name] += 1
-                            print(f"   ✅ 文件已{('复制' if copy_mode == 'copy' else '移动')}到: {target_path}")
-                        except Exception as e:
-                            print(f"❌ 处理文件 {image_file} 时出错: {str(e)}")
-                            self.batch_prediction_status.emit(f'处理文件 {image_file} 时出错: {str(e)}')
-                    else:
-                        results['unclassified'] += 1
-                        print(f"   ❌ 置信度不达标，未分类")
-                        print(f"⚠️ 图片 {image_file} 置信度过低 ({probability:.2f}% < {confidence_threshold}%)，未分类")
-                else:
-                    print(f"❌ 图片 {image_file} 预测失败")
-            
-            # 计算统计信息
-            batch_total_time = time.time() - batch_start_time
-            avg_prediction_time = sum(prediction_times) / len(prediction_times) if prediction_times else 0
-            
-            print("\n" + "=" * 60)
-            print("批量预测完成统计:")
-            print(f"⏱️ 总耗时: {batch_total_time:.2f}秒")
-            print(f"⏱️ 平均每张图片预测时间: {avg_prediction_time:.4f}秒")
-            print(f"🏃 预测速度: {len(image_files)/batch_total_time:.2f} 张/秒")
-            print(f"📊 总图片数: {results['total']}")
-            print(f"📊 已处理: {results['processed']}")
-            print(f"📊 已分类: {results['classified']}")
-            print(f"📊 未分类: {results['unclassified']}")
-            print("📊 各类别统计:")
-            for class_name, count in results['class_counts'].items():
-                if count > 0:
-                    print(f"   {class_name}: {count} 张")
-            print("=" * 60)
-            
-            # 发送完成信号
-            self.batch_prediction_finished.emit(results)
-            self.batch_prediction_status.emit('批量处理完成')
-            
-        except Exception as e:
-            print(f"❌ 批量预测过程中出错: {str(e)}")
-            self.prediction_error.emit(f'批量预测过程中出错: {str(e)}')
+        # 创建新的批量预测线程
+        self.batch_prediction_thread = BatchPredictionThread(self, params)
+        
+        # 连接线程信号到Predictor的信号
+        self.batch_prediction_thread.progress_updated.connect(self.batch_prediction_progress.emit)
+        self.batch_prediction_thread.status_updated.connect(self.batch_prediction_status.emit)
+        self.batch_prediction_thread.prediction_finished.connect(self.batch_prediction_finished.emit)
+        self.batch_prediction_thread.prediction_error.connect(self.prediction_error.emit)
+        
+        # 启动线程
+        print("🚀 启动批量预测独立线程")
+        self.batch_prediction_thread.start()
 
     def stop_batch_processing(self) -> None:
         """停止批量处理"""
         self._stop_batch_processing = True
+        
+        # 如果有运行中的批量预测线程，停止它
+        if self.batch_prediction_thread and self.batch_prediction_thread.isRunning():
+            print("🛑 正在停止批量预测线程...")
+            self.batch_prediction_thread.stop_processing()
+            # 不在这里wait()，让调用者决定是否等待
+    
+    def is_batch_prediction_running(self) -> bool:
+        """检查批量预测线程是否正在运行"""
+        return self.batch_prediction_thread is not None and self.batch_prediction_thread.isRunning()
+    
+    def wait_for_batch_prediction_to_finish(self, timeout_ms: int = 5000) -> bool:
+        """等待批量预测线程完成
+        
+        Args:
+            timeout_ms: 超时时间（毫秒）
+            
+        Returns:
+            bool: True表示线程正常结束，False表示超时
+        """
+        if self.batch_prediction_thread and self.batch_prediction_thread.isRunning():
+            return self.batch_prediction_thread.wait(timeout_ms)
+        return True
+    
+    def cleanup_batch_prediction_thread(self):
+        """清理批量预测线程"""
+        if self.batch_prediction_thread:
+            if self.batch_prediction_thread.isRunning():
+                self.batch_prediction_thread.stop_processing()
+                self.batch_prediction_thread.wait(3000)  # 等待3秒
+            self.batch_prediction_thread.deleteLater()
+            self.batch_prediction_thread = None
 
     def _create_model(self, model_name: str, num_classes: int) -> nn.Module:
         """创建模型"""

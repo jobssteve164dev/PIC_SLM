@@ -649,6 +649,22 @@ class MainWindow(QMainWindow):
             return
         
         # 否则执行正常的关闭流程
+        print("MainWindow: 开始清理资源...")
+        
+        # 停止批量预测线程
+        if hasattr(self, 'worker') and hasattr(self.worker, 'predictor'):
+            try:
+                print("MainWindow: 正在停止批量预测线程...")
+                if self.worker.predictor.is_batch_prediction_running():
+                    self.worker.predictor.stop_batch_processing()
+                    # 等待线程结束，最多等待3秒
+                    if not self.worker.predictor.wait_for_batch_prediction_to_finish(3000):
+                        print("MainWindow: 批量预测线程停止超时，强制清理")
+                    self.worker.predictor.cleanup_batch_prediction_thread()
+                    print("MainWindow: 批量预测线程已清理")
+            except Exception as e:
+                print(f"MainWindow: 停止批量预测线程失败: {str(e)}")
+        
         # 确保在关闭窗口时停止TensorBoard进程
         if hasattr(self, 'evaluation_tab') and hasattr(self.evaluation_tab, 'stop_tensorboard'):
             try:
@@ -674,6 +690,7 @@ class MainWindow(QMainWindow):
         if hasattr(self, 'tray_icon'):
             self.tray_icon.hide()
         
+        print("MainWindow: 资源清理完成")
         super().closeEvent(event)
     
     def changeEvent(self, event):
