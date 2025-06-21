@@ -1,0 +1,6 @@
+{"timestamp":"2025-06-21T22:31:26.847817","level":"INFO","logger":"__main__","message":"这是一条信息","module":"test_logger","function":"test_logger","line":26}
+{"timestamp":"2025-06-21T22:31:26.847817","level":"INFO","logger":"__main__","message":"这是一条信息","module":"test_logger","function":"test_logger","line":26}
+{"timestamp":"2025-06-21T22:31:26.847817","level":"WARNING","logger":"__main__","message":"这是一条警告","module":"test_logger","function":"test_logger","line":27}
+{"timestamp":"2025-06-21T22:31:26.847817","level":"WARNING","logger":"__main__","message":"这是一条警告","module":"test_logger","function":"test_logger","line":27}
+{"timestamp":"2025-06-21T22:31:26.848860","level":"ERROR","logger":"__main__","message":"这是一条错误信息","module":"test_logger","function":"test_logger","line":28}
+{"timestamp":"2025-06-21T22:31:26.848860","level":"ERROR","logger":"__main__","message":"这是一条错误信息","module":"test_logger","function":"test_logger","line":28}
