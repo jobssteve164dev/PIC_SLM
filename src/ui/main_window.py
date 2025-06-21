@@ -1,7 +1,8 @@
 from PyQt5.QtWidgets import (QMainWindow, QTabWidget, QVBoxLayout, QWidget,
-                           QStatusBar, QProgressBar, QLabel, QApplication, QMessageBox, QPushButton)
+                           QStatusBar, QProgressBar, QLabel, QApplication, QMessageBox, QPushButton,
+                           QSystemTrayIcon, QMenu, QAction, QCheckBox, QHBoxLayout)
 from PyQt5.QtCore import Qt, pyqtSignal, QTimer
-from PyQt5.QtGui import QFont
+from PyQt5.QtGui import QFont, QIcon
 import os
 import sys
 import json
@@ -63,6 +64,9 @@ class MainWindow(QMainWindow):
         # 初始化预处理线程
         self.preprocessing_thread = None
         
+        # 初始化系统托盘
+        self.init_system_tray()
+        
         # 初始化UI
         self.init_ui()
         
@@ -71,6 +75,72 @@ class MainWindow(QMainWindow):
         
         # 确保所有tab都已收到配置信息，使用定时器延迟一点再次强制应用配置
         QTimer.singleShot(100, self._ensure_all_tabs_configured)
+
+    def init_system_tray(self):
+        """初始化系统托盘"""
+        # 检查系统是否支持托盘图标
+        if not QSystemTrayIcon.isSystemTrayAvailable():
+            QMessageBox.critical(None, "系统托盘", "系统不支持托盘图标功能")
+            return
+        
+        # 创建托盘图标
+        self.tray_icon = QSystemTrayIcon(self)
+        
+        # 设置托盘图标
+        icon_path = os.path.join(os.path.dirname(__file__), 'icons', 'app.png')
+        if os.path.exists(icon_path):
+            icon = QIcon(icon_path)
+        else:
+            # 如果图标文件不存在，尝试创建它
+            try:
+                from .create_icon import create_app_icon
+                created_icon_path = create_app_icon()
+                if os.path.exists(created_icon_path):
+                    icon = QIcon(created_icon_path)
+                else:
+                    icon = self.style().standardIcon(self.style().SP_ComputerIcon)
+            except Exception as e:
+                print(f"创建图标失败: {e}")
+                # 使用默认图标
+                icon = self.style().standardIcon(self.style().SP_ComputerIcon)
+        self.tray_icon.setIcon(icon)
+        
+        # 同时设置窗口图标
+        self.setWindowIcon(icon)
+        
+        # 创建托盘菜单
+        self.tray_menu = QMenu()
+        
+        # 显示/隐藏窗口动作
+        self.show_action = QAction("显示主窗口", self)
+        self.show_action.triggered.connect(self.show_window)
+        self.tray_menu.addAction(self.show_action)
+        
+        self.hide_action = QAction("隐藏到托盘", self)
+        self.hide_action.triggered.connect(self.hide_to_tray)
+        self.tray_menu.addAction(self.hide_action)
+        
+        self.tray_menu.addSeparator()
+        
+        # 退出动作
+        self.quit_action = QAction("退出程序", self)
+        self.quit_action.triggered.connect(self.quit_application)
+        self.tray_menu.addAction(self.quit_action)
+        
+        # 设置托盘菜单
+        self.tray_icon.setContextMenu(self.tray_menu)
+        
+        # 设置托盘图标提示
+        self.tray_icon.setToolTip("图片模型训练系统")
+        
+        # 连接托盘图标双击事件
+        self.tray_icon.activated.connect(self.tray_icon_activated)
+        
+        # 显示托盘图标
+        self.tray_icon.show()
+        
+        # 初始化最小化到托盘的选项状态
+        self.minimize_to_tray_enabled = True
 
     def init_ui(self):
         """初始化UI"""
@@ -497,6 +567,12 @@ class MainWindow(QMainWindow):
             if hasattr(self.prediction_tab, 'check_model_ready'):
                 self.prediction_tab.check_model_ready()
                 print("MainWindow: 已调用prediction_tab.check_model_ready()方法")
+        
+        # 应用系统托盘配置
+        if 'minimize_to_tray' in config:
+            minimize_to_tray = config['minimize_to_tray']
+            self.set_minimize_to_tray_enabled(minimize_to_tray)
+            print(f"MainWindow: 已应用系统托盘配置: {minimize_to_tray}")
                     
         print("MainWindow.apply_config应用完成")
 
@@ -504,8 +580,75 @@ class MainWindow(QMainWindow):
         """切换到标注选项卡"""
         self.tabs.setCurrentWidget(self.annotation_tab)
     
+    def set_minimize_to_tray_enabled(self, enabled):
+        """设置最小化到托盘功能的启用状态"""
+        self.minimize_to_tray_enabled = enabled
+        if enabled:
+            self.tray_icon.showMessage(
+                "系统托盘",
+                "程序将在最小化或关闭时隐藏到系统托盘。双击托盘图标可以重新显示窗口。",
+                QSystemTrayIcon.Information,
+                3000
+            )
+        else:
+            self.tray_icon.showMessage(
+                "系统托盘",
+                "已关闭最小化到托盘功能。程序将按传统方式最小化和关闭。",
+                QSystemTrayIcon.Information,
+                2000
+            )
+    
+    def tray_icon_activated(self, reason):
+        """处理托盘图标激活事件"""
+        if reason == QSystemTrayIcon.DoubleClick:
+            self.show_window()
+    
+    def show_window(self):
+        """显示主窗口"""
+        self.show()
+        self.raise_()
+        self.activateWindow()
+        # 如果窗口被最小化，恢复正常状态
+        if self.isMinimized():
+            self.showNormal()
+    
+    def hide_to_tray(self):
+        """隐藏到系统托盘"""
+        self.hide()
+        self.tray_icon.showMessage(
+            "系统托盘",
+            "程序已最小化到系统托盘。双击托盘图标可以重新显示窗口。",
+            QSystemTrayIcon.Information,
+            2000
+        )
+    
+    def quit_application(self):
+        """退出应用程序"""
+        # 显示确认对话框
+        reply = QMessageBox.question(
+            self, 
+            '确认退出', 
+            '确定要退出程序吗？',
+            QMessageBox.Yes | QMessageBox.No,
+            QMessageBox.No
+        )
+        
+        if reply == QMessageBox.Yes:
+            # 隐藏托盘图标
+            if hasattr(self, 'tray_icon'):
+                self.tray_icon.hide()
+            # 退出应用程序
+            QApplication.quit()
+    
     def closeEvent(self, event):
         """窗口关闭事件"""
+        # 如果启用了最小化到托盘，则隐藏到托盘而不是关闭
+        if self.minimize_to_tray_enabled and hasattr(self, 'tray_icon') and self.tray_icon.isVisible():
+            event.ignore()
+            self.hide_to_tray()
+            return
+        
+        # 否则执行正常的关闭流程
         # 确保在关闭窗口时停止TensorBoard进程
         if hasattr(self, 'evaluation_tab') and hasattr(self.evaluation_tab, 'stop_tensorboard'):
             try:
@@ -527,7 +670,27 @@ class MainWindow(QMainWindow):
         except Exception as e:
             print(f"MainWindow: 终止所有TensorBoard进程时发生错误: {str(e)}")
         
+        # 隐藏托盘图标
+        if hasattr(self, 'tray_icon'):
+            self.tray_icon.hide()
+        
         super().closeEvent(event)
+    
+    def changeEvent(self, event):
+        """窗口状态改变事件"""
+        # 如果窗口被最小化且启用了最小化到托盘
+        if (event.type() == event.WindowStateChange and 
+            self.isMinimized() and 
+            self.minimize_to_tray_enabled and 
+            hasattr(self, 'tray_icon') and 
+            self.tray_icon.isVisible()):
+            
+            # 延迟隐藏到托盘，避免闪烁
+            QTimer.singleShot(100, self.hide_to_tray)
+            event.ignore()
+            return
+        
+        super().changeEvent(event)
         
     def update_prediction_result(self, result):
         """更新预测结果"""

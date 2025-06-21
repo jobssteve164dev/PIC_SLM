@@ -3,7 +3,7 @@
 """
 
 from PyQt5.QtWidgets import (QVBoxLayout, QHBoxLayout, QPushButton, QLabel, 
-                           QTabWidget, QWidget, QMessageBox, QFileDialog)
+                           QTabWidget, QWidget, QMessageBox, QFileDialog, QCheckBox, QGroupBox)
 from PyQt5.QtCore import Qt, pyqtSignal, QTimer
 from PyQt5.QtGui import QFont
 import os
@@ -74,6 +74,12 @@ class SettingsTab(BaseTab):
         self.class_weight_widget = ClassWeightWidget()
         general_layout.addWidget(self.class_weight_widget)
         
+        # 添加系统托盘设置组
+        self._create_system_tray_group(general_layout)
+        
+        # 添加弹性空间
+        general_layout.addStretch()
+        
         # 添加常规设置选项卡
         self.settings_tabs.addTab(general_tab, "常规设置")
         
@@ -96,6 +102,24 @@ class SettingsTab(BaseTab):
         
         # 添加弹性空间
         main_layout.addStretch(1)
+    
+    def _create_system_tray_group(self, parent_layout):
+        """创建系统托盘设置组"""
+        tray_group = QGroupBox("系统托盘设置")
+        tray_group.setFont(QFont('微软雅黑', 10, QFont.Bold))
+        tray_layout = QVBoxLayout(tray_group)
+        
+        # 最小化到托盘选项
+        self.minimize_to_tray_checkbox = QCheckBox("最小化到系统托盘")
+        self.minimize_to_tray_checkbox.setChecked(True)
+        self.minimize_to_tray_checkbox.setToolTip(
+            "勾选后，点击最小化按钮或关闭按钮将程序隐藏到系统托盘而不是退出程序。\n"
+            "双击托盘图标或右键菜单可以重新显示窗口。"
+        )
+        self.minimize_to_tray_checkbox.toggled.connect(self.on_minimize_to_tray_toggled)
+        tray_layout.addWidget(self.minimize_to_tray_checkbox)
+        
+        parent_layout.addWidget(tray_group)
     
     def _create_button_layout(self, parent_layout):
         """创建按钮布局"""
@@ -157,6 +181,13 @@ class SettingsTab(BaseTab):
     def on_strategy_changed(self, strategy: WeightStrategy):
         """处理策略变化"""
         print(f"策略变化: {strategy.value}")
+    
+    def on_minimize_to_tray_toggled(self, checked: bool):
+        """处理最小化到托盘选项变化"""
+        print(f"最小化到托盘选项变化: {checked}")
+        # 通知主窗口更新托盘设置
+        if hasattr(self.main_window, 'set_minimize_to_tray_enabled'):
+            self.main_window.set_minimize_to_tray_enabled(checked)
     
     def on_profile_changed(self, profile_name: str, config_data: dict):
         """处理配置文件改变"""
@@ -226,6 +257,12 @@ class SettingsTab(BaseTab):
         strategy = WeightStrategy.from_value(strategy_value)
         
         self.class_weight_widget.set_classes_config(classes, weights, strategy)
+        
+        # 应用系统托盘配置
+        print(f"SettingsTab._apply_config_to_ui: 应用系统托盘配置...")
+        minimize_to_tray = self.config.get('minimize_to_tray', True)
+        self.minimize_to_tray_checkbox.setChecked(minimize_to_tray)
+        
         print("SettingsTab._apply_config_to_ui: 配置应用完成")
     
     def _collect_current_config(self) -> dict:
@@ -238,6 +275,9 @@ class SettingsTab(BaseTab):
         
         # 获取类别权重配置
         classes, weights, strategy = self.class_weight_widget.get_classes_config()
+        
+        # 获取系统托盘配置
+        minimize_to_tray = self.minimize_to_tray_checkbox.isChecked()
         
         # 创建完整配置
         config = self.config_manager.create_config_dict(
@@ -254,6 +294,9 @@ class SettingsTab(BaseTab):
             class_weights=weights,
             weight_strategy=strategy
         )
+        
+        # 添加系统托盘配置
+        config['minimize_to_tray'] = minimize_to_tray
         
         return config
     
