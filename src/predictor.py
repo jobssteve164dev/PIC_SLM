@@ -490,13 +490,13 @@ class Predictor(QObject):
         
         # 创建新的批量预测线程
         self.batch_prediction_thread = BatchPredictionThread(self, params)
-        
+            
         # 连接线程信号到Predictor的信号
         self.batch_prediction_thread.progress_updated.connect(self.batch_prediction_progress.emit)
         self.batch_prediction_thread.status_updated.connect(self.batch_prediction_status.emit)
         self.batch_prediction_thread.prediction_finished.connect(self.batch_prediction_finished.emit)
         self.batch_prediction_thread.prediction_error.connect(self.prediction_error.emit)
-        
+            
         # 启动线程
         print("🚀 启动批量预测独立线程")
         self.batch_prediction_thread.start()
@@ -704,6 +704,8 @@ class Predictor(QObject):
                 elif model_arch == "Xception":
                     # Xception需要外部库支持
                     try:
+                        # Optional dependency: pretrainedmodels
+                        import pretrainedmodels  # noqa: F401
                         from pretrainedmodels import xception
                         self.model = xception(num_classes=1000, pretrained=None)
                         self.model.last_linear = nn.Linear(self.model.last_linear.in_features, num_classes)
@@ -747,7 +749,8 @@ class Predictor(QObject):
                 if model_arch == "YOLOv5":
                     # 尝试导入YOLOv5
                     try:
-                        import yolov5
+                        # Optional dependency: yolov5
+                        import yolov5  # noqa: F401
                         self.model = yolov5.load(model_path)
                         print(f"使用yolov5库加载模型: {model_path}")
                     except ImportError:
@@ -755,6 +758,8 @@ class Predictor(QObject):
                 elif model_arch == "YOLOv8":
                     # 尝试导入Ultralytics YOLOv8
                     try:
+                        # Optional dependency: ultralytics
+                        import ultralytics  # noqa: F401
                         from ultralytics import YOLO
                         self.model = YOLO(model_path)
                         print(f"使用ultralytics库加载模型: {model_path}")
@@ -878,6 +883,8 @@ class Predictor(QObject):
                     import torch
                     # 尝试使用DETR
                     try:
+                        # Optional dependency: transformers
+                        import transformers  # noqa: F401
                         from transformers import DetrForObjectDetection
                         self.model = DetrForObjectDetection.from_pretrained("facebook/detr-resnet-50")
                         # 修改分类头以适应自定义类别数量
@@ -888,8 +895,11 @@ class Predictor(QObject):
                         )
                     except ImportError:
                         # 备选：使用torchvision的DETR实现
-                        from torchvision.models.detection import detr_resnet50
-                        self.model = detr_resnet50(pretrained=False, num_classes=len(self.class_names) + 1)
+                        try:
+                            from torchvision.models.detection import detr_resnet50
+                            self.model = detr_resnet50(pretrained=False, num_classes=len(self.class_names) + 1)
+                        except ImportError:
+                            raise ImportError("DETR模型需要安装transformers库或较新版本的torchvision: pip install transformers")
                     
                     # 加载模型权重
                     state_dict = torch.load(model_path, map_location=self.device)
