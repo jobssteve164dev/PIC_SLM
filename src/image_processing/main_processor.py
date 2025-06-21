@@ -11,6 +11,7 @@ from .dataset_creator import DatasetCreator
 from .class_balancer import ClassBalancer
 from .sampling_manager import SamplingManager
 from .file_manager import FileManager
+from src.utils.logger import get_logger, log_error, performance_monitor, PerformanceMonitor
 
 
 class ImagePreprocessor(BaseImageProcessor):
@@ -22,6 +23,9 @@ class ImagePreprocessor(BaseImageProcessor):
     def __init__(self):
         super().__init__()
         
+        # 初始化日志记录器
+        self.logger = get_logger(__name__, "image_processor")
+        
         # 初始化所有组件
         self.image_transformer = ImageTransformer()
         self.augmentation_manager = AugmentationManager()
@@ -29,7 +33,10 @@ class ImagePreprocessor(BaseImageProcessor):
         self.class_balancer = ClassBalancer(self.image_transformer, self.augmentation_manager)
         self.sampling_manager = SamplingManager(self.image_transformer, self.augmentation_manager)
         self.file_manager = FileManager()
+        
+        self.logger.info("图像处理器初始化完成")
 
+    @performance_monitor("preprocess_images", "image_processor")
     def preprocess_images(self, params: Dict) -> None:
         """
         预处理图片并创建数据集
@@ -55,6 +62,11 @@ class ImagePreprocessor(BaseImageProcessor):
                 - class_names: 类别名称列表
         """
         try:
+            self.logger.info(f"开始图像预处理，源文件夹: {params.get('source_folder')}")
+            self.logger.info(f"目标文件夹: {params.get('target_folder')}")
+            self.logger.info(f"图像尺寸: {params.get('width')}x{params.get('height')}")
+            self.logger.info(f"类别平衡: {params.get('balance_classes', False)}")
+            self.logger.info(f"采样模式: {params.get('use_sampling', False)}")
             # 重置停止标志
             self._stop_preprocessing = False
             

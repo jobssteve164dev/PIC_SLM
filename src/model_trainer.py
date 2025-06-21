@@ -18,6 +18,7 @@
 
 import warnings
 from PyQt5.QtCore import QObject
+from src.utils.logger import get_logger, log_error, performance_monitor
 
 # 导入新的组件化训练器
 try:

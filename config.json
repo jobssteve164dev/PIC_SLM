@@ -25,5 +25,20 @@
         "Spurious_copper": 1.0
     },
     "weight_strategy": "balanced",
-    "use_class_weights": true
+    "use_class_weights": true,
+    "minimize_to_tray": true,
+    "resource_limits": {
+        "memory_limit_enabled": true,
+        "memory_percent_limit": 90,
+        "memory_absolute_limit_gb": 8.0,
+        "cpu_limit_enabled": true,
+        "cpu_percent_limit": 80,
+        "cpu_cores_limit": 16,
+        "disk_limit_enabled": true,
+        "disk_percent_limit": 85,
+        "temp_files_limit_gb": 10.0,
+        "check_interval": 10.0,
+        "alert_method": "弹窗提醒",
+        "auto_cleanup_enabled": true
+    }
 }

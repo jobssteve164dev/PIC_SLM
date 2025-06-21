@@ -9,6 +9,7 @@
 - weight_strategy: 权重策略枚举
 - config_profile_selector: 配置文件选择器组件
 - resource_limit_widget: 系统资源限制组件
+- log_viewer_widget: 日志查看器组件
 """
 
 from .config_manager import ConfigManager
@@ -18,6 +19,7 @@ from .model_config_widget import ModelConfigWidget
 from .weight_strategy import WeightStrategy
 from .config_profile_selector import ConfigProfileSelector
 from .resource_limit_widget import ResourceLimitWidget
+from .log_viewer_widget import LogViewerWidget
 
 __all__ = [
     'ConfigManager',
@@ -26,5 +28,6 @@ __all__ = [
     'ModelConfigWidget',
     'WeightStrategy',
     'ConfigProfileSelector',
-    'ResourceLimitWidget'
+    'ResourceLimitWidget',
+    'LogViewerWidget'
 ] 

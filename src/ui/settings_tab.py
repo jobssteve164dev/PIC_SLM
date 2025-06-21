@@ -11,7 +11,7 @@ import time
 from .base_tab import BaseTab
 from .components.settings import (ConfigManager, FolderConfigWidget, 
                                 ClassWeightWidget, ModelConfigWidget, WeightStrategy,
-                                ConfigProfileSelector, ResourceLimitWidget)
+                                ConfigProfileSelector, ResourceLimitWidget, LogViewerWidget)
 
 
 class SettingsTab(BaseTab):
@@ -107,6 +107,18 @@ class SettingsTab(BaseTab):
         # 添加资源限制选项卡
         self.settings_tabs.addTab(resource_tab, "资源限制")
         
+        # 创建日志管理选项卡
+        log_tab = QWidget()
+        log_layout = QVBoxLayout(log_tab)
+        log_layout.setContentsMargins(10, 10, 10, 10)
+        
+        # 添加日志查看器组件
+        self.log_viewer_widget = LogViewerWidget()
+        log_layout.addWidget(self.log_viewer_widget)
+        
+        # 添加日志管理选项卡
+        self.settings_tabs.addTab(log_tab, "日志管理")
+        
         main_layout.addWidget(self.settings_tabs)
         
         # 添加按钮组
@@ -154,6 +166,13 @@ class SettingsTab(BaseTab):
         load_config_from_file_btn.clicked.connect(self.load_config_from_file)
         load_config_from_file_btn.setMinimumHeight(40)
         button_layout.addWidget(load_config_from_file_btn)
+        
+        # 验证配置按钮
+        validate_config_btn = QPushButton("验证配置")
+        validate_config_btn.clicked.connect(self.validate_current_config)
+        validate_config_btn.setMinimumHeight(40)
+        validate_config_btn.setToolTip("验证当前所有配置的有效性")
+        button_layout.addWidget(validate_config_btn)
         
         parent_layout.addLayout(button_layout)
     
@@ -355,6 +374,14 @@ class SettingsTab(BaseTab):
             if success:
                 self.config = config
                 print(f"SettingsTab.save_settings: 准备发送settings_saved信号，配置内容 = {config}")
+                
+                # 应用资源限制设置
+                try:
+                    self.resource_limit_widget.apply_limits()
+                    print("SettingsTab.save_settings: 资源限制设置已应用")
+                except Exception as e:
+                    print(f"SettingsTab.save_settings: 应用资源限制设置失败: {str(e)}")
+                
                 self.settings_saved.emit(config)
                 print("SettingsTab.save_settings: settings_saved信号已发送")
                 QMessageBox.information(self, "成功", "设置已保存")
@@ -552,14 +579,33 @@ class SettingsTab(BaseTab):
             self.folder_config_widget.clear_config()
             self.model_config_widget.clear_config()
             self.class_weight_widget.clear_config()
+            self.resource_limit_widget.reset_to_defaults()
             
             QMessageBox.information(self, "完成", "已清空所有设置")
+    
+    def reset_resource_limits_to_defaults(self):
+        """重置资源限制为默认设置"""
+        reply = QMessageBox.question(
+            self, 
+            "重置资源限制", 
+            "确定要将资源限制设置重置为默认值吗？",
+            QMessageBox.Yes | QMessageBox.No
+        )
+        
+        if reply == QMessageBox.Yes:
+            self.resource_limit_widget.reset_to_defaults()
+            QMessageBox.information(self, "完成", "资源限制设置已重置为默认值")
     
     def validate_current_config(self) -> bool:
         """验证当前配置的有效性"""
         try:
             config = self._collect_current_config()
             warnings = self.config_manager.validate_config(config)
+            
+            # 验证资源限制配置
+            resource_valid, resource_errors = self.resource_limit_widget.validate_configuration()
+            if resource_errors:
+                warnings.extend([f"资源限制: {error}" for error in resource_errors])
             
             if warnings:
                 warning_text = "\n".join(warnings)
@@ -570,7 +616,13 @@ class SettingsTab(BaseTab):
                 )
                 return False
             else:
-                QMessageBox.information(self, "配置验证", "当前配置验证通过")
+                # 显示详细的验证通过信息
+                status_summary = self.resource_limit_widget.get_status_summary()
+                QMessageBox.information(
+                    self, 
+                    "配置验证", 
+                    f"当前配置验证通过\n\n资源限制状态:\n{status_summary}"
+                )
                 return True
                 
         except Exception as e:

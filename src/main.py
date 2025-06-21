@@ -5,21 +5,36 @@ import json
 # 将src目录添加到Python路径中
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-print("程序开始执行...")
-print(f"Python版本: {sys.version}")
-print(f"当前工作目录: {os.getcwd()}")
+# 首先设置日志系统
+from src.utils.logger import setup_logging, get_logger, log_error
+
+# 设置日志系统
+setup_logging(
+    log_dir="logs",
+    log_level=20,  # INFO级别
+    console_output=True,
+    file_output=True,
+    structured_logging=True
+)
+
+# 获取主程序日志记录器
+logger = get_logger(__name__, "main")
+
+logger.info("程序开始执行...")
+logger.info(f"Python版本: {sys.version}")
+logger.info(f"当前工作目录: {os.getcwd()}")
 
 from PyQt5.QtWidgets import QApplication, QMessageBox, QTabWidget, QVBoxLayout, QWidget, QMainWindow
-print("PyQt5模块已导入")
+logger.info("PyQt5模块已导入")
 from PyQt5.QtCore import QThread, QObject
 from src.ui.main_window import MainWindow
-print("MainWindow已导入")
+logger.info("MainWindow已导入")
 from src.ui.evaluation_tab import EvaluationTab  # 从ui模块导入EvaluationTab
-print("EvaluationTab已导入")
+logger.info("EvaluationTab已导入")
 from src.data_processor import DataProcessor
-print("DataProcessor已导入")
+logger.info("DataProcessor已导入")
 from src.model_trainer import ModelTrainer
-print("ModelTrainer已导入")
+logger.info("ModelTrainer已导入")
 from src.predictor import Predictor
 from src.image_preprocessor import ImagePreprocessor
 from src.annotation_tool import AnnotationTool
@@ -49,7 +64,7 @@ def main():
     
     def cleanup_tensorboard():
         """退出时清理TensorBoard进程"""
-        print("程序退出，正在清理TensorBoard进程...")
+        logger.info("程序退出，正在清理TensorBoard进程...")
         try:
             import subprocess
             if os.name == 'nt':  # Windows
@@ -58,21 +73,22 @@ def main():
             else:  # Linux/Mac
                 subprocess.call("pkill -f tensorboard", shell=True, 
                               stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-            print("TensorBoard进程清理完成")
+            logger.info("TensorBoard进程清理完成")
         except Exception as e:
-            print(f"清理TensorBoard进程时出错: {str(e)}")
+            logger.error(f"清理TensorBoard进程时出错: {str(e)}")
+            log_error(e, {"operation": "cleanup_tensorboard"}, "main")
     
     # 注册清理函数
     atexit.register(cleanup_tensorboard)
     
     # 检查配置文件
     config_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'config.json')
-    print(f"配置文件路径: {os.path.abspath(config_path)}")
-    print(f"配置文件是否存在: {os.path.exists(config_path)}")
+    logger.info(f"配置文件路径: {os.path.abspath(config_path)}")
+    logger.info(f"配置文件是否存在: {os.path.exists(config_path)}")
     
     # 创建配置文件
     if not os.path.exists(config_path):
-        print("配置文件不存在，创建默认配置")
+        logger.info("配置文件不存在，创建默认配置")
         default_config = {
             'default_source_folder': '',
             'default_output_folder': '',
@@ -94,16 +110,16 @@ def main():
         with open(config_path, 'w', encoding='utf-8') as f:
             json.dump(default_config, f, ensure_ascii=False, indent=4)
         
-        print(f"已创建默认配置文件: {config_path}")
+        logger.info(f"已创建默认配置文件: {config_path}")
     else:
         try:
             with open(config_path, 'r', encoding='utf-8') as f:
                 config_content = json.load(f)
-                print(f"配置文件内容: {config_content}")
+                logger.debug(f"配置文件内容: {config_content}")
                 
                 # 检查是否有默认模型评估文件夹，如果没有则添加
                 if 'default_model_eval_dir' not in config_content or not config_content['default_model_eval_dir']:
-                    print("配置文件中缺少default_model_eval_dir，添加默认值")
+                    logger.info("配置文件中缺少default_model_eval_dir，添加默认值")
                     config_content['default_model_eval_dir'] = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'models', 'saved_models')
                     os.makedirs(config_content['default_model_eval_dir'], exist_ok=True)
                     

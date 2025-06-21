@@ -87,6 +87,64 @@ class ResourceMonitor(QThread):
     def stop(self):
         """停止监控"""
         self.running = False
+    
+    def _get_disk_usage_info(self) -> Dict[str, Any]:
+        """获取磁盘使用信息，支持多驱动器"""
+        try:
+            if os.name == 'nt':  # Windows
+                # 获取所有驱动器
+                drives = []
+                for drive_letter in 'ABCDEFGHIJKLMNOPQRSTUVWXYZ':
+                    drive_path = f'{drive_letter}:\\'
+                    if os.path.exists(drive_path):
+                        try:
+                            usage = psutil.disk_usage(drive_path)
+                            drives.append({
+                                'drive': drive_letter,
+                                'path': drive_path,
+                                'total': usage.total,
+                                'used': usage.used,
+                                'free': usage.free,
+                                'percent': (usage.used / usage.total) * 100 if usage.total > 0 else 0
+                            })
+                        except (OSError, PermissionError):
+                            continue
+                
+                if drives:
+                    # 返回主驱动器（通常是C盘）的信息，同时包含所有驱动器信息
+                    main_drive = next((d for d in drives if d['drive'] == 'C'), drives[0])
+                    return {
+                        'total': main_drive['total'],
+                        'used': main_drive['used'],
+                        'free': main_drive['free'],
+                        'percent': main_drive['percent'],
+                        'main_drive': main_drive['drive'],
+                        'all_drives': drives
+                    }
+            else:  # Unix/Linux
+                # 使用根目录
+                usage = psutil.disk_usage('/')
+                return {
+                    'total': usage.total,
+                    'used': usage.used,
+                    'free': usage.free,
+                    'percent': (usage.used / usage.total) * 100 if usage.total > 0 else 0,
+                    'main_drive': '/',
+                    'all_drives': [{'drive': '/', 'path': '/', 'total': usage.total, 
+                                   'used': usage.used, 'free': usage.free, 
+                                   'percent': (usage.used / usage.total) * 100}]
+                }
+                
+        except Exception as e:
+            print(f"获取磁盘信息错误: {e}")
+            return {
+                'total': 0,
+                'used': 0,
+                'free': 0,
+                'percent': 0,
+                'main_drive': 'Unknown',
+                'all_drives': []
+            }
         
     def _get_resource_info(self) -> Dict[str, Any]:
         """获取系统资源信息"""
@@ -108,13 +166,8 @@ class ResourceMonitor(QThread):
             }
             
             # 磁盘信息
-            disk_usage = psutil.disk_usage('/')
-            info['disk'] = {
-                'total': disk_usage.total,
-                'used': disk_usage.used,
-                'free': disk_usage.free,
-                'percent': (disk_usage.used / disk_usage.total) * 100
-            }
+            disk_info = self._get_disk_usage_info()
+            info['disk'] = disk_info
             
             # 网络信息
             net_io = psutil.net_io_counters()
@@ -181,8 +234,28 @@ class ResourceLimitWidget(QWidget):
         # 当前资源信息
         self.current_resources = {}
         
+        # 资源使用历史记录（最近100个数据点）
+        self.resource_history = {
+            'cpu': [],
+            'memory': [],
+            'disk': [],
+            'timestamps': []
+        }
+        self.max_history_length = 100
+        
+        # 警告状态跟踪
+        self.warning_states = {
+            'memory': False,
+            'cpu': False,
+            'disk': False
+        }
+        
         # 初始化UI
         self.init_ui()
+        
+        # 设置右键菜单
+        self.setContextMenuPolicy(Qt.CustomContextMenu)
+        self.customContextMenuRequested.connect(self.show_context_menu)
         
         # 启动定时器更新显示
         self.update_timer = QTimer()
@@ -224,8 +297,7 @@ class ResourceLimitWidget(QWidget):
         
         layout.addWidget(self.tabs)
         
-        # 控制按钮
-        self.create_control_buttons(layout)
+        # 不再添加独立的控制按钮，使用统一的设置保存逻辑
         
     def create_limits_tab(self):
         """创建资源限制设置选项卡"""
@@ -343,6 +415,12 @@ class ResourceLimitWidget(QWidget):
         self.stop_monitor_btn.setEnabled(False)
         control_layout.addWidget(self.stop_monitor_btn)
         
+        # 手动清理按钮
+        manual_cleanup_btn = QPushButton("手动清理")
+        manual_cleanup_btn.clicked.connect(self.perform_auto_cleanup)
+        manual_cleanup_btn.setToolTip("立即执行系统清理操作")
+        control_layout.addWidget(manual_cleanup_btn)
+        
         control_layout.addStretch()
         layout.addLayout(control_layout)
         
@@ -455,35 +533,7 @@ class ResourceLimitWidget(QWidget):
         
         layout.addStretch()
         
-    def create_control_buttons(self, layout):
-        """创建控制按钮"""
-        button_layout = QHBoxLayout()
-        
-        # 应用设置按钮
-        apply_btn = QPushButton("应用设置")
-        apply_btn.clicked.connect(self.apply_limits)
-        apply_btn.setMinimumHeight(35)
-        button_layout.addWidget(apply_btn)
-        
-        # 重置按钮
-        reset_btn = QPushButton("重置为默认")
-        reset_btn.clicked.connect(self.reset_to_defaults)
-        reset_btn.setMinimumHeight(35)
-        button_layout.addWidget(reset_btn)
-        
-        # 导出配置按钮
-        export_btn = QPushButton("导出配置")
-        export_btn.clicked.connect(self.export_config)
-        export_btn.setMinimumHeight(35)
-        button_layout.addWidget(export_btn)
-        
-        # 导入配置按钮
-        import_btn = QPushButton("导入配置")
-        import_btn.clicked.connect(self.import_config)
-        import_btn.setMinimumHeight(35)
-        button_layout.addWidget(import_btn)
-        
-        layout.addLayout(button_layout)
+
         
     def start_monitoring(self):
         """开始资源监控"""
@@ -526,7 +576,7 @@ class ResourceLimitWidget(QWidget):
         }
         
     def apply_limits(self):
-        """应用资源限制设置"""
+        """应用资源限制设置（内部调用，不显示消息框）"""
         limits = self.get_current_limits()
         
         # 如果监控正在运行，更新监控器的限制
@@ -535,8 +585,6 @@ class ResourceLimitWidget(QWidget):
             
         # 发送限制变化信号
         self.limits_changed.emit(limits)
-        
-        QMessageBox.information(self, "成功", "资源限制设置已应用")
         
     def reset_to_defaults(self):
         """重置为默认设置"""
@@ -555,15 +603,7 @@ class ResourceLimitWidget(QWidget):
         self.disk_limit_enabled.setChecked(True)
         self.auto_cleanup_enabled.setChecked(False)
         
-    def export_config(self):
-        """导出配置"""
-        # TODO: 实现配置导出功能
-        QMessageBox.information(self, "提示", "配置导出功能将在后续版本中实现")
-        
-    def import_config(self):
-        """导入配置"""
-        # TODO: 实现配置导入功能
-        QMessageBox.information(self, "提示", "配置导入功能将在后续版本中实现")
+
         
     def apply_system_limits(self):
         """应用系统级限制"""
@@ -594,37 +634,329 @@ class ResourceLimitWidget(QWidget):
         """处理资源更新"""
         self.current_resources = resource_info
         
+        # 记录历史数据
+        self._record_resource_history(resource_info)
+        
     @pyqtSlot(str, float, float)
     def on_limit_exceeded(self, resource_type: str, current_value: float, limit_value: float):
         """处理资源超限"""
-        alert_method = self.alert_method.currentText()
+        # 避免重复警告（5分钟内不重复弹窗）
+        current_time = time.time()
+        last_warning_key = f"{resource_type}_last_warning"
         
-        message = f"{resource_type.upper()}使用率超限！\n当前: {current_value:.1f}%\n限制: {limit_value:.1f}%"
+        if not hasattr(self, 'last_warnings'):
+            self.last_warnings = {}
+            
+        if (last_warning_key in self.last_warnings and 
+            current_time - self.last_warnings[last_warning_key] < 300):  # 5分钟
+            return
+            
+        self.last_warnings[last_warning_key] = current_time
+        
+        alert_method = self.alert_method.currentText()
+        resource_name = {"memory": "内存", "cpu": "CPU", "disk": "磁盘"}.get(resource_type, resource_type.upper())
+        
+        message = f"{resource_name}使用率超限！\n当前: {current_value:.1f}%\n限制: {limit_value:.1f}%"
+        
+        # 记录警告状态
+        self.warning_states[resource_type] = True
         
         if alert_method in ["弹窗提醒", "全部启用"]:
-            QMessageBox.warning(self, "资源使用警告", message)
+            # 创建更详细的警告对话框
+            msg_box = QMessageBox(self)
+            msg_box.setIcon(QMessageBox.Warning)
+            msg_box.setWindowTitle("资源使用警告")
+            msg_box.setText(message)
+            
+            # 添加建议操作
+            suggestions = self._get_resource_suggestions(resource_type, current_value)
+            if suggestions:
+                msg_box.setDetailedText(f"建议操作:\n{suggestions}")
+                
+            msg_box.addButton("确定", QMessageBox.AcceptRole)
+            if self.auto_cleanup_enabled.isChecked():
+                cleanup_btn = msg_box.addButton("立即清理", QMessageBox.ActionRole)
+                
+            result = msg_box.exec_()
+            
+            # 如果用户选择立即清理
+            if (self.auto_cleanup_enabled.isChecked() and 
+                msg_box.clickedButton().text() == "立即清理"):
+                self.perform_auto_cleanup()
             
         if alert_method in ["日志记录", "全部启用"]:
-            print(f"[资源警告] {message}")
+            timestamp = time.strftime('%Y-%m-%d %H:%M:%S')
+            print(f"[{timestamp}] [资源警告] {message}")
             
         # 自动清理
         if self.auto_cleanup_enabled.isChecked():
             self.perform_auto_cleanup()
+    
+    def _get_resource_suggestions(self, resource_type: str, current_value: float) -> str:
+        """获取资源优化建议"""
+        suggestions = []
+        
+        if resource_type == "memory":
+            suggestions.extend([
+                "• 关闭不必要的程序和浏览器标签页",
+                "• 清理系统垃圾文件和缓存",
+                "• 重启程序释放内存泄漏",
+                "• 考虑增加物理内存"
+            ])
+        elif resource_type == "cpu":
+            suggestions.extend([
+                "• 关闭高CPU占用的程序",
+                "• 检查是否有病毒或恶意软件",
+                "• 降低程序运行优先级",
+                "• 等待当前任务完成"
+            ])
+        elif resource_type == "disk":
+            suggestions.extend([
+                "• 清理磁盘空间，删除不必要的文件",
+                "• 清空回收站和临时文件",
+                "• 移动大文件到其他磁盘",
+                "• 使用磁盘清理工具"
+            ])
+            
+        return "\n".join(suggestions)
             
     def perform_auto_cleanup(self):
         """执行自动清理"""
+        cleanup_results = []
+        
         try:
-            # 清理Python垃圾回收
+            # 1. 清理Python垃圾回收
             import gc
-            gc.collect()
+            collected = gc.collect()
+            cleanup_results.append(f"垃圾回收: 清理了 {collected} 个对象")
             
-            # TODO: 添加更多清理逻辑
-            # - 清理临时文件
-            # - 清理缓存
-            # - 释放不必要的内存
+            # 2. 清理临时文件
+            temp_cleaned = self._cleanup_temp_files()
+            if temp_cleaned > 0:
+                cleanup_results.append(f"临时文件: 清理了 {temp_cleaned} 个文件")
+            
+            # 3. 清理缓存
+            cache_cleaned = self._cleanup_cache()
+            if cache_cleaned > 0:
+                cleanup_results.append(f"缓存清理: 释放了 {cache_cleaned:.1f} MB")
+            
+            # 4. 清理图像处理缓存
+            self._cleanup_image_cache()
+            cleanup_results.append("图像缓存: 已清理")
+            
+            # 5. 强制内存整理
+            if hasattr(gc, 'set_threshold'):
+                gc.set_threshold(700, 10, 10)  # 更激进的垃圾回收
+                
+            # 显示清理结果
+            if cleanup_results:
+                result_text = "\n".join(cleanup_results)
+                print(f"[自动清理] 清理完成:\n{result_text}")
+                
+                # 如果是弹窗提醒模式，显示清理结果
+                if self.alert_method.currentText() in ["弹窗提醒", "全部启用"]:
+                    QMessageBox.information(self, "自动清理完成", f"清理结果:\n{result_text}")
             
         except Exception as e:
-            print(f"自动清理失败: {e}")
+            error_msg = f"自动清理失败: {e}"
+            print(error_msg)
+            if self.alert_method.currentText() in ["弹窗提醒", "全部启用"]:
+                QMessageBox.warning(self, "清理失败", error_msg)
+    
+    def _cleanup_temp_files(self) -> int:
+        """清理临时文件"""
+        import tempfile
+        import glob
+        
+        cleaned_count = 0
+        temp_dirs = [tempfile.gettempdir()]
+        
+        # 添加用户临时目录
+        if os.name == 'nt':  # Windows
+            temp_dirs.extend([
+                os.path.join(os.environ.get('USERPROFILE', ''), 'AppData', 'Local', 'Temp'),
+                os.path.join(os.environ.get('TEMP', ''))
+            ])
+        else:  # Unix/Linux
+            temp_dirs.extend(['/tmp', '/var/tmp'])
+        
+        for temp_dir in temp_dirs:
+            if not os.path.exists(temp_dir):
+                continue
+                
+            try:
+                # 清理Python临时文件
+                for pattern in ['*.tmp', '*.temp', 'tmp*', 'temp*']:
+                    for file_path in glob.glob(os.path.join(temp_dir, pattern)):
+                        try:
+                            if os.path.isfile(file_path):
+                                # 只清理超过1小时的文件
+                                if time.time() - os.path.getmtime(file_path) > 3600:
+                                    os.remove(file_path)
+                                    cleaned_count += 1
+                        except (OSError, PermissionError):
+                            continue
+                            
+            except Exception:
+                continue
+                
+        return cleaned_count
+    
+    def _cleanup_cache(self) -> float:
+        """清理缓存，返回清理的MB数"""
+        cleaned_mb = 0.0
+        
+        try:
+            # 清理matplotlib缓存
+            import matplotlib
+            if hasattr(matplotlib, 'get_cachedir'):
+                cache_dir = matplotlib.get_cachedir()
+                if os.path.exists(cache_dir):
+                    cleaned_mb += self._clean_directory(cache_dir, max_age_hours=24)
+            
+            # 清理PIL/Pillow缓存
+            try:
+                from PIL import Image
+                if hasattr(Image, '_getdecoder'):
+                    # 清理PIL解码器缓存
+                    Image._getdecoder.cache_clear() if hasattr(Image._getdecoder, 'cache_clear') else None
+            except:
+                pass
+            
+            # 清理OpenCV缓存
+            try:
+                import cv2
+                # OpenCV没有直接的缓存清理方法，但可以重置一些全局状态
+                pass
+            except:
+                pass
+                
+        except Exception as e:
+            print(f"缓存清理错误: {e}")
+            
+        return cleaned_mb
+    
+    def _cleanup_image_cache(self):
+        """清理图像处理相关的缓存"""
+        try:
+            # 清理高级采样管理器的缓存
+            from src.image_processing.advanced_sampling import AdvancedSamplingManager
+            from src.image_processing.advanced_oversampling import AdvancedOversamplingManager
+            
+            # 这些类有clear_cache方法
+            sampling_manager = AdvancedSamplingManager()
+            sampling_manager.clear_cache()
+            
+            oversampling_manager = AdvancedOversamplingManager()
+            oversampling_manager.clear_cache()
+            
+        except Exception as e:
+            print(f"图像缓存清理错误: {e}")
+    
+    def _clean_directory(self, directory: str, max_age_hours: int = 24) -> float:
+        """清理目录中的旧文件，返回清理的MB数"""
+        cleaned_mb = 0.0
+        current_time = time.time()
+        max_age_seconds = max_age_hours * 3600
+        
+        try:
+            for root, dirs, files in os.walk(directory):
+                for file in files:
+                    file_path = os.path.join(root, file)
+                    try:
+                        if current_time - os.path.getmtime(file_path) > max_age_seconds:
+                            file_size = os.path.getsize(file_path)
+                            os.remove(file_path)
+                            cleaned_mb += file_size / (1024 * 1024)
+                    except (OSError, PermissionError):
+                        continue
+        except Exception:
+            pass
+            
+        return cleaned_mb
+    
+    def show_context_menu(self, position):
+        """显示右键菜单"""
+        from PyQt5.QtWidgets import QMenu, QAction
+        
+        menu = QMenu(self)
+        
+        # 重置为默认值
+        reset_action = QAction("重置为默认值", self)
+        reset_action.triggered.connect(self.reset_to_defaults)
+        menu.addAction(reset_action)
+        
+        # 手动清理
+        cleanup_action = QAction("立即清理系统", self)
+        cleanup_action.triggered.connect(self.perform_auto_cleanup)
+        menu.addAction(cleanup_action)
+        
+        menu.addSeparator()
+        
+        # 开始/停止监控
+        if self.resource_monitor and self.resource_monitor.running:
+            stop_action = QAction("停止监控", self)
+            stop_action.triggered.connect(self.stop_monitoring)
+            menu.addAction(stop_action)
+        else:
+            start_action = QAction("开始监控", self)
+            start_action.triggered.connect(self.start_monitoring)
+            start_action.setEnabled(self.psutil_available)
+            menu.addAction(start_action)
+        
+        # 显示菜单
+        menu.exec_(self.mapToGlobal(position))
+    
+    def _record_resource_history(self, resource_info: Dict[str, Any]):
+        """记录资源使用历史"""
+        import time
+        
+        current_time = time.time()
+        
+        # 记录CPU使用率
+        cpu_percent = resource_info.get('cpu_percent', 0)
+        self.resource_history['cpu'].append(cpu_percent)
+        
+        # 记录内存使用率
+        memory_info = resource_info.get('memory', {})
+        memory_percent = memory_info.get('percent', 0)
+        self.resource_history['memory'].append(memory_percent)
+        
+        # 记录磁盘使用率
+        disk_info = resource_info.get('disk', {})
+        disk_percent = disk_info.get('percent', 0)
+        self.resource_history['disk'].append(disk_percent)
+        
+        # 记录时间戳
+        self.resource_history['timestamps'].append(current_time)
+        
+        # 保持历史记录长度
+        for key in self.resource_history:
+            if len(self.resource_history[key]) > self.max_history_length:
+                self.resource_history[key] = self.resource_history[key][-self.max_history_length:]
+    
+    def get_resource_trends(self) -> Dict[str, str]:
+        """获取资源使用趋势"""
+        trends = {}
+        
+        for resource_type in ['cpu', 'memory', 'disk']:
+            history = self.resource_history[resource_type]
+            if len(history) < 10:  # 需要至少10个数据点
+                trends[resource_type] = "数据不足"
+                continue
+                
+            # 计算最近10个数据点的平均值和之前10个数据点的平均值
+            recent_avg = sum(history[-10:]) / 10
+            previous_avg = sum(history[-20:-10]) / 10 if len(history) >= 20 else recent_avg
+            
+            if recent_avg > previous_avg + 5:
+                trends[resource_type] = "上升"
+            elif recent_avg < previous_avg - 5:
+                trends[resource_type] = "下降"
+            else:
+                trends[resource_type] = "稳定"
+                
+        return trends
             
     def update_display(self):
         """更新显示"""
@@ -649,20 +981,66 @@ class ResourceLimitWidget(QWidget):
             
             # 更新详细信息
             details = []
-            details.append(f"CPU: {cpu_percent:.1f}% ({self.current_resources.get('cpu_count', 0)} 核心)")
             
+            # CPU信息
+            cpu_count = self.current_resources.get('cpu_count', 0)
+            cpu_freq = self.current_resources.get('cpu_freq', {})
+            cpu_current = cpu_freq.get('current', 0) / 1000 if cpu_freq.get('current') else 0
+            cpu_max = cpu_freq.get('max', 0) / 1000 if cpu_freq.get('max') else 0
+            
+            details.append(f"CPU: {cpu_percent:.1f}% ({cpu_count} 核心)")
+            if cpu_current > 0:
+                details.append(f"CPU频率: {cpu_current:.1f}GHz / {cpu_max:.1f}GHz")
+            
+            # 内存信息
             if memory_info:
                 memory_gb = memory_info.get('used', 0) / (1024**3)
                 total_gb = memory_info.get('total', 0) / (1024**3)
+                free_gb = memory_info.get('free', 0) / (1024**3)
                 details.append(f"内存: {memory_gb:.1f}GB / {total_gb:.1f}GB ({memory_percent:.1f}%)")
+                details.append(f"可用内存: {free_gb:.1f}GB")
                 
+            # 磁盘信息
             if disk_info:
                 disk_gb = disk_info.get('used', 0) / (1024**3)
                 total_disk_gb = disk_info.get('total', 0) / (1024**3)
-                details.append(f"磁盘: {disk_gb:.1f}GB / {total_disk_gb:.1f}GB ({disk_percent:.1f}%)")
+                free_disk_gb = disk_info.get('free', 0) / (1024**3)
+                main_drive = disk_info.get('main_drive', 'Unknown')
                 
+                details.append(f"磁盘 ({main_drive}): {disk_gb:.1f}GB / {total_disk_gb:.1f}GB ({disk_percent:.1f}%)")
+                details.append(f"可用磁盘: {free_disk_gb:.1f}GB")
+                
+                # 显示所有驱动器信息（Windows）
+                all_drives = disk_info.get('all_drives', [])
+                if len(all_drives) > 1:
+                    details.append("所有驱动器:")
+                    for drive in all_drives:
+                        drive_used = drive['used'] / (1024**3)
+                        drive_total = drive['total'] / (1024**3)
+                        drive_percent = drive['percent']
+                        details.append(f"  {drive['drive']}: {drive_used:.1f}GB / {drive_total:.1f}GB ({drive_percent:.1f}%)")
+                
+            # 网络信息
+            network_info = self.current_resources.get('network', {})
+            if network_info:
+                bytes_sent = network_info.get('bytes_sent', 0) / (1024**2)  # MB
+                bytes_recv = network_info.get('bytes_recv', 0) / (1024**2)  # MB
+                details.append(f"网络: 发送 {bytes_sent:.1f}MB, 接收 {bytes_recv:.1f}MB")
+            
+            # 进程信息
             process_count = self.current_resources.get('process_count', 0)
             details.append(f"进程数: {process_count}")
+            
+            # 资源使用趋势
+            trends = self.get_resource_trends()
+            if any(trend != "数据不足" for trend in trends.values()):
+                details.append("")  # 空行分隔
+                details.append("资源使用趋势:")
+                for resource_type, trend in trends.items():
+                    if trend != "数据不足":
+                        resource_name = {"cpu": "CPU", "memory": "内存", "disk": "磁盘"}[resource_type]
+                        trend_icon = {"上升": "↗", "下降": "↘", "稳定": "→"}[trend]
+                        details.append(f"  {resource_name}: {trend} {trend_icon}")
             
             self.details_text.setPlainText('\n'.join(details))
             
@@ -707,6 +1085,89 @@ class ResourceLimitWidget(QWidget):
             
         except Exception as e:
             print(f"设置资源限制配置错误: {e}")
+    
+    def validate_configuration(self) -> tuple[bool, list]:
+        """验证资源限制配置的有效性"""
+        errors = []
+        
+        try:
+            # 检查内存限制设置
+            if self.memory_limit_enabled.isChecked():
+                memory_percent = self.memory_percent_limit.value()
+                memory_absolute = self.memory_absolute_limit.value()
+                
+                if memory_percent < 50:
+                    errors.append("内存使用率限制不应低于50%")
+                if memory_absolute < 0.5:
+                    errors.append("内存绝对限制不应低于0.5GB")
+                    
+            # 检查CPU限制设置
+            if self.cpu_limit_enabled.isChecked():
+                cpu_percent = self.cpu_percent_limit.value()
+                cpu_cores = self.cpu_cores_limit.value()
+                
+                if cpu_percent < 30:
+                    errors.append("CPU使用率限制不应低于30%")
+                if cpu_cores < 1:
+                    errors.append("CPU核心数限制不应低于1")
+                    
+            # 检查磁盘限制设置
+            if self.disk_limit_enabled.isChecked():
+                disk_percent = self.disk_percent_limit.value()
+                temp_files = self.temp_files_limit.value()
+                
+                if disk_percent < 70:
+                    errors.append("磁盘使用率限制不应低于70%")
+                if temp_files < 1.0:
+                    errors.append("临时文件大小限制不应低于1GB")
+                    
+            # 检查监控间隔
+            check_interval = self.check_interval_spin.value()
+            if check_interval < 0.5:
+                errors.append("检查间隔不应低于0.5秒")
+            elif check_interval > 10.0:
+                errors.append("检查间隔不应超过10秒")
+                
+        except Exception as e:
+            errors.append(f"配置验证时出错: {str(e)}")
+            
+        return len(errors) == 0, errors
+    
+    def get_status_summary(self) -> str:
+        """获取资源限制状态摘要"""
+        try:
+            status_parts = []
+            
+            # 监控状态
+            if self.resource_monitor and self.resource_monitor.running:
+                status_parts.append("监控: 运行中")
+            else:
+                status_parts.append("监控: 已停止")
+                
+            # 启用的限制
+            enabled_limits = []
+            if self.memory_limit_enabled.isChecked():
+                enabled_limits.append(f"内存({self.memory_percent_limit.value()}%)")
+            if self.cpu_limit_enabled.isChecked():
+                enabled_limits.append(f"CPU({self.cpu_percent_limit.value()}%)")
+            if self.disk_limit_enabled.isChecked():
+                enabled_limits.append(f"磁盘({self.disk_percent_limit.value()}%)")
+                
+            if enabled_limits:
+                status_parts.append(f"限制: {', '.join(enabled_limits)}")
+            else:
+                status_parts.append("限制: 无")
+                
+            # 警告状态
+            active_warnings = [k for k, v in self.warning_states.items() if v]
+            if active_warnings:
+                warning_names = [{"memory": "内存", "cpu": "CPU", "disk": "磁盘"}[w] for w in active_warnings]
+                status_parts.append(f"警告: {', '.join(warning_names)}")
+                
+            return " | ".join(status_parts)
+            
+        except Exception as e:
+            return f"状态获取失败: {str(e)}"
             
     def closeEvent(self, event):
         """窗口关闭事件"""
