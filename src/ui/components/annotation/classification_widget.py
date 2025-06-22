@@ -4,7 +4,6 @@ from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QPushButton, QLabel, QFileDia
 from PyQt5.QtCore import Qt, pyqtSignal
 from PyQt5.QtGui import QFont
 import os
-from ....utils.logger import get_logger, PerformanceMonitor, log_error
 
 class ClassificationWidget(QWidget):
     """图像分类标注组件"""
@@ -17,10 +16,6 @@ class ClassificationWidget(QWidget):
         super().__init__(parent)
         self.defect_classes = []  # 缺陷类别列表
         self.processed_folder = ""  # 处理后的图片文件夹
-        
-        # 初始化日志记录器
-        self.logger = get_logger(__name__, component="ClassificationWidget")
-        self.logger.info("分类标注组件初始化", extra={"operation": "init"})
         
         self.init_ui()
         
@@ -124,14 +119,10 @@ class ClassificationWidget(QWidget):
         main_layout.addWidget(help_label)
         main_layout.addStretch()
         
-        self.logger.debug("分类标注组件UI初始化完成", extra={"operation": "init_ui"})
-        
     def select_processed_folder(self):
         """选择处理后的图片文件夹"""
         folder = QFileDialog.getExistingDirectory(self, "选择处理后的图片文件夹")
         if folder:
-            self.logger.info(f"用户选择了处理后的图片文件夹: {folder}", 
-                           extra={"operation": "select_folder", "folder": folder})
             self.processed_path_edit.setText(folder)
             self.processed_folder = folder
             self.check_annotation_ready()
@@ -142,14 +133,10 @@ class ClassificationWidget(QWidget):
         if ok and class_name:
             # 检查是否已存在
             if class_name in self.defect_classes:
-                self.logger.warning(f"尝试添加已存在的类别: {class_name}", 
-                                  extra={"operation": "add_duplicate_class"})
                 QMessageBox.warning(self, "警告", f"类别 '{class_name}' 已存在!")
                 return
             self.defect_classes.append(class_name)
             self.class_list.addItem(class_name)
-            self.logger.info(f"添加了新的缺陷类别: {class_name}", 
-                           extra={"operation": "add_class", "class_name": class_name})
             self.check_annotation_ready()
             
     def remove_defect_class(self):
@@ -159,8 +146,6 @@ class ClassificationWidget(QWidget):
             class_name = current_item.text()
             self.defect_classes.remove(class_name)
             self.class_list.takeItem(self.class_list.row(current_item))
-            self.logger.info(f"删除了缺陷类别: {class_name}", 
-                           extra={"operation": "remove_class", "class_name": class_name})
             self.check_annotation_ready()
             
     def check_annotation_ready(self):
@@ -169,42 +154,22 @@ class ClassificationWidget(QWidget):
         self.annotation_btn.setEnabled(is_ready)
         self.val_folder_btn.setEnabled(is_ready)  # 同时启用/禁用验证集按钮
         
-        status = "已准备好" if is_ready else "未准备好"
-        self.logger.debug(f"标注状态: {status}, 文件夹: {bool(self.processed_folder)}, 类别: {len(self.defect_classes)}", 
-                        extra={
-                            "operation": "check_ready", 
-                            "is_ready": is_ready,
-                            "has_folder": bool(self.processed_folder),
-                            "class_count": len(self.defect_classes)
-                        })
-        
     def start_annotation(self):
         """开始图片分类标注"""
         if not self.processed_folder:
-            self.logger.warning("尝试开始标注但未选择文件夹", extra={"operation": "start_annotation_no_folder"})
             QMessageBox.warning(self, "警告", "请先选择处理后的图片文件夹!")
             return
             
         if not self.defect_classes:
-            self.logger.warning("尝试开始标注但未添加类别", extra={"operation": "start_annotation_no_classes"})
             QMessageBox.warning(self, "警告", "请先添加至少一个缺陷类别!")
             return
             
-        self.logger.info(f"开始分类标注，文件夹: {self.processed_folder}, 类别数: {len(self.defect_classes)}", 
-                       extra={
-                           "operation": "start_annotation", 
-                           "folder": self.processed_folder,
-                           "classes": self.defect_classes
-                       })
-        
         # 创建分类文件夹
-        with PerformanceMonitor("创建分类文件夹", component="ClassificationWidget"):
-            if not self.create_classification_folders():
-                return  # 如果创建文件夹失败，终止操作
+        if not self.create_classification_folders():
+            return  # 如果创建文件夹失败，终止操作
         
         # 发出标注开始信号
         self.annotation_started.emit(self.processed_folder)
-        self.logger.info("已发出标注开始信号", extra={"operation": "annotation_signal_emitted"})
         
     def create_classification_folders(self):
         """创建分类文件夹"""
@@ -216,13 +181,8 @@ class ClassificationWidget(QWidget):
             train_folder = os.path.join(dataset_folder, 'train')
             val_folder = os.path.join(dataset_folder, 'val')
             
-            self.logger.debug(f"检查数据集文件夹结构: {dataset_folder}", 
-                            extra={"operation": "check_dataset_folders"})
-            
             # 检查必要的文件夹是否存在
             if not os.path.exists(train_folder) or not os.path.exists(val_folder):
-                self.logger.error(f"数据集文件夹结构不完整: {dataset_folder}", 
-                                extra={"operation": "invalid_dataset_structure"})
                 QMessageBox.warning(self, "警告", "数据集文件夹结构不完整，请先完成数据预处理步骤")
                 return False
 
@@ -232,16 +192,12 @@ class ClassificationWidget(QWidget):
                 if not os.path.exists(train_class_folder):
                     os.makedirs(train_class_folder)
                     created_count += 1
-                    self.logger.debug(f"创建训练集类别文件夹: {train_class_folder}", 
-                                    extra={"operation": "create_train_folder", "class": class_name})
                 
                 # 同时在val文件夹中也创建对应的类别文件夹
                 val_class_folder = os.path.join(val_folder, class_name)
                 if not os.path.exists(val_class_folder):
                     os.makedirs(val_class_folder)
                     created_count += 1
-                    self.logger.debug(f"创建验证集类别文件夹: {val_class_folder}", 
-                                    extra={"operation": "create_val_folder", "class": class_name})
                     
             # 根据复选框状态决定是否创建未分类文件夹
             if self.create_unclassified_checkbox.isChecked():
@@ -250,53 +206,36 @@ class ClassificationWidget(QWidget):
                 if not os.path.exists(train_unclassified_folder):
                     os.makedirs(train_unclassified_folder)
                     created_count += 1
-                    self.logger.debug(f"创建训练集未分类文件夹: {train_unclassified_folder}", 
-                                    extra={"operation": "create_train_unclassified"})
                 
                 val_unclassified_folder = os.path.join(val_folder, "未分类")
                 if not os.path.exists(val_unclassified_folder):
                     os.makedirs(val_unclassified_folder)
                     created_count += 1
-                    self.logger.debug(f"创建验证集未分类文件夹: {val_unclassified_folder}", 
-                                    extra={"operation": "create_val_unclassified"})
                 
             # 添加成功提示
             if created_count > 0:
-                self.logger.info(f"成功创建 {created_count} 个分类文件夹", 
-                               extra={"operation": "folders_created", "count": created_count})
                 QMessageBox.information(self, "成功", f"已成功创建 {created_count} 个分类文件夹")
             else:
-                self.logger.info("所有分类文件夹已存在，无需重新创建", 
-                               extra={"operation": "folders_exist"})
                 QMessageBox.information(self, "提示", "所有分类文件夹已存在，无需重新创建")
                 
             return True
         except Exception as e:
-            error_msg = f"创建分类文件夹失败: {str(e)}"
-            self.logger.error(error_msg, extra={"operation": "create_folders_error"})
-            log_error(e, context={"folder": self.processed_folder}, component="ClassificationWidget")
-            QMessageBox.critical(self, "错误", error_msg)
+            QMessageBox.critical(self, "错误", f"创建分类文件夹失败: {str(e)}")
             return False
             
     def open_validation_folder(self):
         """打开验证集文件夹"""
         if not self.processed_folder:
-            self.logger.warning("尝试打开验证集文件夹但未选择处理后文件夹", 
-                              extra={"operation": "open_val_no_folder"})
             QMessageBox.warning(self, "警告", "请先选择处理后的图片文件夹!")
             return
             
         # 发出打开验证集文件夹信号
-        self.logger.info(f"打开验证集文件夹: {self.processed_folder}", 
-                       extra={"operation": "open_val_folder"})
         self.open_validation_folder_signal.emit(self.processed_folder)
         
     def set_processed_folder(self, folder):
         """设置处理后文件夹路径"""
         self.processed_folder = folder
         self.processed_path_edit.setText(folder)
-        self.logger.info(f"设置处理后文件夹路径: {folder}", 
-                       extra={"operation": "set_folder", "folder": folder})
         self.check_annotation_ready()
         
     def set_defect_classes(self, classes):
@@ -305,13 +244,11 @@ class ClassificationWidget(QWidget):
         self.class_list.clear()
         for class_name in self.defect_classes:
             self.class_list.addItem(class_name)
-        self.logger.info(f"设置缺陷类别列表: {classes}", 
-                       extra={"operation": "set_classes", "class_count": len(classes)})
         self.check_annotation_ready()
         
     def get_defect_classes(self):
         """获取缺陷类别列表"""
-        return self.defect_classes
+        return self.defect_classes.copy()
         
     def get_processed_folder(self):
         """获取处理后文件夹路径"""
