@@ -5,4 +5,7 @@ __pycache__/
 # 打包生成的文件
 dist/
 build/
-*.spec 
+*.spec
+# 训练相关文件夹
+runs/
+train_config/ 
