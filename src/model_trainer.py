@@ -365,7 +365,13 @@ else:
             try:
                 print("⚠️ 警告：正在使用后备训练实现！")
                 print(f"   这表明新的组件化训练器导入失败")
-                print(f"   配置参数: {config}")
+                print("=" * 60)
+                print("⚠️ 后备训练实现参数接收情况")
+                print("=" * 60)
+                print(f"   共接收参数: {len(config)} 个")
+                print(f"   主要参数: {list(config.keys())[:10]}...")
+                print(f"   完整配置: {config}")
+                print("=" * 60)
                 self.status_updated.emit("使用后备训练实现...")
                 
                 # 简单验证

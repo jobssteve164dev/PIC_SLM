@@ -3428,3 +3428,151 @@
 {"timestamp":"2025-06-28T00:06:53.337035","level":"INFO","logger":"__mp_main__","message":"Python版本: 3.9.13 (tags/v3.9.13:6de2ca5, May 17 2022, 16:36:42) [MSC v.1929 64 bit (AMD64)]","module":"main","function":"<module>","line":24}
 {"timestamp":"2025-06-28T00:06:53.337035","level":"INFO","logger":"__mp_main__","message":"当前工作目录: f:\\Qsync\\00.AI_PROJECT\\图片分类模型训练\\C1","module":"main","function":"<module>","line":25}
 {"timestamp":"2025-06-28T00:06:53.373235","level":"INFO","logger":"__mp_main__","message":"PyQt5模块已导入","module":"main","function":"<module>","line":28}
+{"timestamp":"2025-06-28T00:06:58.705790","level":"INFO","logger":"__mp_main__","message":"MainWindow已导入","module":"main","function":"<module>","line":31}
+{"timestamp":"2025-06-28T00:06:58.706788","level":"INFO","logger":"__mp_main__","message":"EvaluationTab已导入","module":"main","function":"<module>","line":33}
+{"timestamp":"2025-06-28T00:06:58.707788","level":"INFO","logger":"__mp_main__","message":"DataProcessor已导入","module":"main","function":"<module>","line":35}
+{"timestamp":"2025-06-28T00:06:58.894979","level":"INFO","logger":"__mp_main__","message":"ModelTrainer已导入","module":"main","function":"<module>","line":37}
+{"timestamp":"2025-06-28T00:06:59.173514","level":"INFO","logger":"__mp_main__","message":"程序开始执行...","module":"main","function":"<module>","line":23}
+{"timestamp":"2025-06-28T00:06:59.173514","level":"INFO","logger":"__mp_main__","message":"Python版本: 3.9.13 (tags/v3.9.13:6de2ca5, May 17 2022, 16:36:42) [MSC v.1929 64 bit (AMD64)]","module":"main","function":"<module>","line":24}
+{"timestamp":"2025-06-28T00:06:59.174514","level":"INFO","logger":"__mp_main__","message":"当前工作目录: f:\\Qsync\\00.AI_PROJECT\\图片分类模型训练\\C1","module":"main","function":"<module>","line":25}
+{"timestamp":"2025-06-28T00:06:59.209322","level":"INFO","logger":"__mp_main__","message":"PyQt5模块已导入","module":"main","function":"<module>","line":28}
+{"timestamp":"2025-06-28T00:07:04.642746","level":"INFO","logger":"__mp_main__","message":"MainWindow已导入","module":"main","function":"<module>","line":31}
+{"timestamp":"2025-06-28T00:07:04.643746","level":"INFO","logger":"__mp_main__","message":"EvaluationTab已导入","module":"main","function":"<module>","line":33}
+{"timestamp":"2025-06-28T00:07:04.644753","level":"INFO","logger":"__mp_main__","message":"DataProcessor已导入","module":"main","function":"<module>","line":35}
+{"timestamp":"2025-06-28T00:07:04.814288","level":"INFO","logger":"__mp_main__","message":"ModelTrainer已导入","module":"main","function":"<module>","line":37}
+{"timestamp":"2025-06-28T00:07:04.912481","level":"INFO","logger":"__mp_main__","message":"程序开始执行...","module":"main","function":"<module>","line":23}
+{"timestamp":"2025-06-28T00:07:04.913508","level":"INFO","logger":"__mp_main__","message":"Python版本: 3.9.13 (tags/v3.9.13:6de2ca5, May 17 2022, 16:36:42) [MSC v.1929 64 bit (AMD64)]","module":"main","function":"<module>","line":24}
+{"timestamp":"2025-06-28T00:07:04.913508","level":"INFO","logger":"__mp_main__","message":"当前工作目录: f:\\Qsync\\00.AI_PROJECT\\图片分类模型训练\\C1","module":"main","function":"<module>","line":25}
+{"timestamp":"2025-06-28T00:07:04.950259","level":"INFO","logger":"__mp_main__","message":"PyQt5模块已导入","module":"main","function":"<module>","line":28}
+{"timestamp":"2025-06-28T00:07:10.449558","level":"INFO","logger":"__mp_main__","message":"MainWindow已导入","module":"main","function":"<module>","line":31}
+{"timestamp":"2025-06-28T00:07:10.449558","level":"INFO","logger":"__mp_main__","message":"EvaluationTab已导入","module":"main","function":"<module>","line":33}
+{"timestamp":"2025-06-28T00:07:10.450566","level":"INFO","logger":"__mp_main__","message":"DataProcessor已导入","module":"main","function":"<module>","line":35}
+{"timestamp":"2025-06-28T00:07:10.621961","level":"INFO","logger":"__mp_main__","message":"ModelTrainer已导入","module":"main","function":"<module>","line":37}
+{"timestamp":"2025-06-28T00:07:49.676873","level":"INFO","logger":"__mp_main__","message":"程序开始执行...","module":"main","function":"<module>","line":23}
+{"timestamp":"2025-06-28T00:07:49.676873","level":"INFO","logger":"__mp_main__","message":"Python版本: 3.9.13 (tags/v3.9.13:6de2ca5, May 17 2022, 16:36:42) [MSC v.1929 64 bit (AMD64)]","module":"main","function":"<module>","line":24}
+{"timestamp":"2025-06-28T00:07:49.677893","level":"INFO","logger":"__mp_main__","message":"当前工作目录: f:\\Qsync\\00.AI_PROJECT\\图片分类模型训练\\C1","module":"main","function":"<module>","line":25}
+{"timestamp":"2025-06-28T00:07:49.710307","level":"INFO","logger":"__mp_main__","message":"PyQt5模块已导入","module":"main","function":"<module>","line":28}
+{"timestamp":"2025-06-28T00:07:55.065988","level":"INFO","logger":"__mp_main__","message":"MainWindow已导入","module":"main","function":"<module>","line":31}
+{"timestamp":"2025-06-28T00:07:55.066989","level":"INFO","logger":"__mp_main__","message":"EvaluationTab已导入","module":"main","function":"<module>","line":33}
+{"timestamp":"2025-06-28T00:07:55.067990","level":"INFO","logger":"__mp_main__","message":"DataProcessor已导入","module":"main","function":"<module>","line":35}
+{"timestamp":"2025-06-28T00:07:55.238753","level":"INFO","logger":"__mp_main__","message":"ModelTrainer已导入","module":"main","function":"<module>","line":37}
+{"timestamp":"2025-06-28T00:07:55.333390","level":"INFO","logger":"__mp_main__","message":"程序开始执行...","module":"main","function":"<module>","line":23}
+{"timestamp":"2025-06-28T00:07:55.334393","level":"INFO","logger":"__mp_main__","message":"Python版本: 3.9.13 (tags/v3.9.13:6de2ca5, May 17 2022, 16:36:42) [MSC v.1929 64 bit (AMD64)]","module":"main","function":"<module>","line":24}
+{"timestamp":"2025-06-28T00:07:55.334393","level":"INFO","logger":"__mp_main__","message":"当前工作目录: f:\\Qsync\\00.AI_PROJECT\\图片分类模型训练\\C1","module":"main","function":"<module>","line":25}
+{"timestamp":"2025-06-28T00:07:55.367672","level":"INFO","logger":"__mp_main__","message":"PyQt5模块已导入","module":"main","function":"<module>","line":28}
+{"timestamp":"2025-06-28T00:08:00.964326","level":"INFO","logger":"__mp_main__","message":"MainWindow已导入","module":"main","function":"<module>","line":31}
+{"timestamp":"2025-06-28T00:08:00.965326","level":"INFO","logger":"__mp_main__","message":"EvaluationTab已导入","module":"main","function":"<module>","line":33}
+{"timestamp":"2025-06-28T00:08:00.965326","level":"INFO","logger":"__mp_main__","message":"DataProcessor已导入","module":"main","function":"<module>","line":35}
+{"timestamp":"2025-06-28T00:08:01.138574","level":"INFO","logger":"__mp_main__","message":"ModelTrainer已导入","module":"main","function":"<module>","line":37}
+{"timestamp":"2025-06-28T00:08:01.234462","level":"INFO","logger":"__mp_main__","message":"程序开始执行...","module":"main","function":"<module>","line":23}
+{"timestamp":"2025-06-28T00:08:01.234462","level":"INFO","logger":"__mp_main__","message":"Python版本: 3.9.13 (tags/v3.9.13:6de2ca5, May 17 2022, 16:36:42) [MSC v.1929 64 bit (AMD64)]","module":"main","function":"<module>","line":24}
+{"timestamp":"2025-06-28T00:08:01.235463","level":"INFO","logger":"__mp_main__","message":"当前工作目录: f:\\Qsync\\00.AI_PROJECT\\图片分类模型训练\\C1","module":"main","function":"<module>","line":25}
+{"timestamp":"2025-06-28T00:08:01.274232","level":"INFO","logger":"__mp_main__","message":"PyQt5模块已导入","module":"main","function":"<module>","line":28}
+{"timestamp":"2025-06-28T00:08:06.697838","level":"INFO","logger":"__mp_main__","message":"MainWindow已导入","module":"main","function":"<module>","line":31}
+{"timestamp":"2025-06-28T00:08:06.697838","level":"INFO","logger":"__mp_main__","message":"EvaluationTab已导入","module":"main","function":"<module>","line":33}
+{"timestamp":"2025-06-28T00:08:06.698842","level":"INFO","logger":"__mp_main__","message":"DataProcessor已导入","module":"main","function":"<module>","line":35}
+{"timestamp":"2025-06-28T00:08:06.870652","level":"INFO","logger":"__mp_main__","message":"ModelTrainer已导入","module":"main","function":"<module>","line":37}
+{"timestamp":"2025-06-28T00:08:06.968455","level":"INFO","logger":"__mp_main__","message":"程序开始执行...","module":"main","function":"<module>","line":23}
+{"timestamp":"2025-06-28T00:08:06.968455","level":"INFO","logger":"__mp_main__","message":"Python版本: 3.9.13 (tags/v3.9.13:6de2ca5, May 17 2022, 16:36:42) [MSC v.1929 64 bit (AMD64)]","module":"main","function":"<module>","line":24}
+{"timestamp":"2025-06-28T00:08:06.969622","level":"INFO","logger":"__mp_main__","message":"当前工作目录: f:\\Qsync\\00.AI_PROJECT\\图片分类模型训练\\C1","module":"main","function":"<module>","line":25}
+{"timestamp":"2025-06-28T00:08:07.002271","level":"INFO","logger":"__mp_main__","message":"PyQt5模块已导入","module":"main","function":"<module>","line":28}
+{"timestamp":"2025-06-28T00:08:12.834903","level":"INFO","logger":"__mp_main__","message":"MainWindow已导入","module":"main","function":"<module>","line":31}
+{"timestamp":"2025-06-28T00:08:12.835900","level":"INFO","logger":"__mp_main__","message":"EvaluationTab已导入","module":"main","function":"<module>","line":33}
+{"timestamp":"2025-06-28T00:08:12.836901","level":"INFO","logger":"__mp_main__","message":"DataProcessor已导入","module":"main","function":"<module>","line":35}
+{"timestamp":"2025-06-28T00:08:13.010065","level":"INFO","logger":"__mp_main__","message":"ModelTrainer已导入","module":"main","function":"<module>","line":37}
+{"timestamp":"2025-06-28T00:08:17.283165","level":"INFO","logger":"__mp_main__","message":"程序开始执行...","module":"main","function":"<module>","line":23}
+{"timestamp":"2025-06-28T00:08:17.284150","level":"INFO","logger":"__mp_main__","message":"Python版本: 3.9.13 (tags/v3.9.13:6de2ca5, May 17 2022, 16:36:42) [MSC v.1929 64 bit (AMD64)]","module":"main","function":"<module>","line":24}
+{"timestamp":"2025-06-28T00:08:17.284150","level":"INFO","logger":"__mp_main__","message":"当前工作目录: f:\\Qsync\\00.AI_PROJECT\\图片分类模型训练\\C1","module":"main","function":"<module>","line":25}
+{"timestamp":"2025-06-28T00:08:17.324479","level":"INFO","logger":"__mp_main__","message":"PyQt5模块已导入","module":"main","function":"<module>","line":28}
+{"timestamp":"2025-06-28T00:08:23.077298","level":"INFO","logger":"__mp_main__","message":"MainWindow已导入","module":"main","function":"<module>","line":31}
+{"timestamp":"2025-06-28T00:08:23.077298","level":"INFO","logger":"__mp_main__","message":"EvaluationTab已导入","module":"main","function":"<module>","line":33}
+{"timestamp":"2025-06-28T00:08:23.078298","level":"INFO","logger":"__mp_main__","message":"DataProcessor已导入","module":"main","function":"<module>","line":35}
+{"timestamp":"2025-06-28T00:08:23.248333","level":"INFO","logger":"__mp_main__","message":"ModelTrainer已导入","module":"main","function":"<module>","line":37}
+{"timestamp":"2025-06-28T00:08:23.341505","level":"INFO","logger":"__mp_main__","message":"程序开始执行...","module":"main","function":"<module>","line":23}
+{"timestamp":"2025-06-28T00:08:23.341505","level":"INFO","logger":"__mp_main__","message":"Python版本: 3.9.13 (tags/v3.9.13:6de2ca5, May 17 2022, 16:36:42) [MSC v.1929 64 bit (AMD64)]","module":"main","function":"<module>","line":24}
+{"timestamp":"2025-06-28T00:08:23.342505","level":"INFO","logger":"__mp_main__","message":"当前工作目录: f:\\Qsync\\00.AI_PROJECT\\图片分类模型训练\\C1","module":"main","function":"<module>","line":25}
+{"timestamp":"2025-06-28T00:08:23.375571","level":"INFO","logger":"__mp_main__","message":"PyQt5模块已导入","module":"main","function":"<module>","line":28}
+{"timestamp":"2025-06-28T00:08:28.868426","level":"INFO","logger":"__mp_main__","message":"MainWindow已导入","module":"main","function":"<module>","line":31}
+{"timestamp":"2025-06-28T00:08:28.869425","level":"INFO","logger":"__mp_main__","message":"EvaluationTab已导入","module":"main","function":"<module>","line":33}
+{"timestamp":"2025-06-28T00:08:28.870427","level":"INFO","logger":"__mp_main__","message":"DataProcessor已导入","module":"main","function":"<module>","line":35}
+{"timestamp":"2025-06-28T00:08:29.045401","level":"INFO","logger":"__mp_main__","message":"ModelTrainer已导入","module":"main","function":"<module>","line":37}
+{"timestamp":"2025-06-28T00:08:29.141455","level":"INFO","logger":"__mp_main__","message":"程序开始执行...","module":"main","function":"<module>","line":23}
+{"timestamp":"2025-06-28T00:08:29.142455","level":"INFO","logger":"__mp_main__","message":"Python版本: 3.9.13 (tags/v3.9.13:6de2ca5, May 17 2022, 16:36:42) [MSC v.1929 64 bit (AMD64)]","module":"main","function":"<module>","line":24}
+{"timestamp":"2025-06-28T00:08:29.142455","level":"INFO","logger":"__mp_main__","message":"当前工作目录: f:\\Qsync\\00.AI_PROJECT\\图片分类模型训练\\C1","module":"main","function":"<module>","line":25}
+{"timestamp":"2025-06-28T00:08:29.174658","level":"INFO","logger":"__mp_main__","message":"PyQt5模块已导入","module":"main","function":"<module>","line":28}
+{"timestamp":"2025-06-28T00:08:34.720566","level":"INFO","logger":"__mp_main__","message":"MainWindow已导入","module":"main","function":"<module>","line":31}
+{"timestamp":"2025-06-28T00:08:34.720566","level":"INFO","logger":"__mp_main__","message":"EvaluationTab已导入","module":"main","function":"<module>","line":33}
+{"timestamp":"2025-06-28T00:08:34.722208","level":"INFO","logger":"__mp_main__","message":"DataProcessor已导入","module":"main","function":"<module>","line":35}
+{"timestamp":"2025-06-28T00:08:34.899276","level":"INFO","logger":"__mp_main__","message":"ModelTrainer已导入","module":"main","function":"<module>","line":37}
+{"timestamp":"2025-06-28T00:08:35.154656","level":"INFO","logger":"__mp_main__","message":"程序开始执行...","module":"main","function":"<module>","line":23}
+{"timestamp":"2025-06-28T00:08:35.154656","level":"INFO","logger":"__mp_main__","message":"Python版本: 3.9.13 (tags/v3.9.13:6de2ca5, May 17 2022, 16:36:42) [MSC v.1929 64 bit (AMD64)]","module":"main","function":"<module>","line":24}
+{"timestamp":"2025-06-28T00:08:35.155659","level":"INFO","logger":"__mp_main__","message":"当前工作目录: f:\\Qsync\\00.AI_PROJECT\\图片分类模型训练\\C1","module":"main","function":"<module>","line":25}
+{"timestamp":"2025-06-28T00:08:35.193793","level":"INFO","logger":"__mp_main__","message":"PyQt5模块已导入","module":"main","function":"<module>","line":28}
+{"timestamp":"2025-06-28T00:08:40.633134","level":"INFO","logger":"__mp_main__","message":"MainWindow已导入","module":"main","function":"<module>","line":31}
+{"timestamp":"2025-06-28T00:08:40.633134","level":"INFO","logger":"__mp_main__","message":"EvaluationTab已导入","module":"main","function":"<module>","line":33}
+{"timestamp":"2025-06-28T00:08:40.634138","level":"INFO","logger":"__mp_main__","message":"DataProcessor已导入","module":"main","function":"<module>","line":35}
+{"timestamp":"2025-06-28T00:08:40.807056","level":"INFO","logger":"__mp_main__","message":"ModelTrainer已导入","module":"main","function":"<module>","line":37}
+{"timestamp":"2025-06-28T00:08:46.842366","level":"INFO","logger":"__mp_main__","message":"程序开始执行...","module":"main","function":"<module>","line":23}
+{"timestamp":"2025-06-28T00:08:46.843363","level":"INFO","logger":"__mp_main__","message":"Python版本: 3.9.13 (tags/v3.9.13:6de2ca5, May 17 2022, 16:36:42) [MSC v.1929 64 bit (AMD64)]","module":"main","function":"<module>","line":24}
+{"timestamp":"2025-06-28T00:08:46.843363","level":"INFO","logger":"__mp_main__","message":"当前工作目录: f:\\Qsync\\00.AI_PROJECT\\图片分类模型训练\\C1","module":"main","function":"<module>","line":25}
+{"timestamp":"2025-06-28T00:08:46.878707","level":"INFO","logger":"__mp_main__","message":"PyQt5模块已导入","module":"main","function":"<module>","line":28}
+{"timestamp":"2025-06-28T00:08:52.723165","level":"INFO","logger":"__mp_main__","message":"MainWindow已导入","module":"main","function":"<module>","line":31}
+{"timestamp":"2025-06-28T00:08:52.724173","level":"INFO","logger":"__mp_main__","message":"EvaluationTab已导入","module":"main","function":"<module>","line":33}
+{"timestamp":"2025-06-28T00:08:52.725176","level":"INFO","logger":"__mp_main__","message":"DataProcessor已导入","module":"main","function":"<module>","line":35}
+{"timestamp":"2025-06-28T00:08:52.910387","level":"INFO","logger":"__mp_main__","message":"ModelTrainer已导入","module":"main","function":"<module>","line":37}
+{"timestamp":"2025-06-28T00:08:53.188063","level":"INFO","logger":"__mp_main__","message":"程序开始执行...","module":"main","function":"<module>","line":23}
+{"timestamp":"2025-06-28T00:08:53.188063","level":"INFO","logger":"__mp_main__","message":"Python版本: 3.9.13 (tags/v3.9.13:6de2ca5, May 17 2022, 16:36:42) [MSC v.1929 64 bit (AMD64)]","module":"main","function":"<module>","line":24}
+{"timestamp":"2025-06-28T00:08:53.188063","level":"INFO","logger":"__mp_main__","message":"当前工作目录: f:\\Qsync\\00.AI_PROJECT\\图片分类模型训练\\C1","module":"main","function":"<module>","line":25}
+{"timestamp":"2025-06-28T00:08:53.223662","level":"INFO","logger":"__mp_main__","message":"PyQt5模块已导入","module":"main","function":"<module>","line":28}
+{"timestamp":"2025-06-28T00:08:58.670930","level":"INFO","logger":"__mp_main__","message":"MainWindow已导入","module":"main","function":"<module>","line":31}
+{"timestamp":"2025-06-28T00:08:58.671937","level":"INFO","logger":"__mp_main__","message":"EvaluationTab已导入","module":"main","function":"<module>","line":33}
+{"timestamp":"2025-06-28T00:08:58.672938","level":"INFO","logger":"__mp_main__","message":"DataProcessor已导入","module":"main","function":"<module>","line":35}
+{"timestamp":"2025-06-28T00:08:58.849468","level":"INFO","logger":"__mp_main__","message":"ModelTrainer已导入","module":"main","function":"<module>","line":37}
+{"timestamp":"2025-06-28T00:08:58.947860","level":"INFO","logger":"__mp_main__","message":"程序开始执行...","module":"main","function":"<module>","line":23}
+{"timestamp":"2025-06-28T00:08:58.947860","level":"INFO","logger":"__mp_main__","message":"Python版本: 3.9.13 (tags/v3.9.13:6de2ca5, May 17 2022, 16:36:42) [MSC v.1929 64 bit (AMD64)]","module":"main","function":"<module>","line":24}
+{"timestamp":"2025-06-28T00:08:58.947860","level":"INFO","logger":"__mp_main__","message":"当前工作目录: f:\\Qsync\\00.AI_PROJECT\\图片分类模型训练\\C1","module":"main","function":"<module>","line":25}
+{"timestamp":"2025-06-28T00:08:58.981150","level":"INFO","logger":"__mp_main__","message":"PyQt5模块已导入","module":"main","function":"<module>","line":28}
+{"timestamp":"2025-06-28T00:09:04.874344","level":"INFO","logger":"__mp_main__","message":"MainWindow已导入","module":"main","function":"<module>","line":31}
+{"timestamp":"2025-06-28T00:09:04.874344","level":"INFO","logger":"__mp_main__","message":"EvaluationTab已导入","module":"main","function":"<module>","line":33}
+{"timestamp":"2025-06-28T00:09:04.876552","level":"INFO","logger":"__mp_main__","message":"DataProcessor已导入","module":"main","function":"<module>","line":35}
+{"timestamp":"2025-06-28T00:09:05.048768","level":"INFO","logger":"__mp_main__","message":"ModelTrainer已导入","module":"main","function":"<module>","line":37}
+{"timestamp":"2025-06-28T00:09:05.294199","level":"INFO","logger":"__mp_main__","message":"程序开始执行...","module":"main","function":"<module>","line":23}
+{"timestamp":"2025-06-28T00:09:05.295198","level":"INFO","logger":"__mp_main__","message":"Python版本: 3.9.13 (tags/v3.9.13:6de2ca5, May 17 2022, 16:36:42) [MSC v.1929 64 bit (AMD64)]","module":"main","function":"<module>","line":24}
+{"timestamp":"2025-06-28T00:09:05.295198","level":"INFO","logger":"__mp_main__","message":"当前工作目录: f:\\Qsync\\00.AI_PROJECT\\图片分类模型训练\\C1","module":"main","function":"<module>","line":25}
+{"timestamp":"2025-06-28T00:09:05.331011","level":"INFO","logger":"__mp_main__","message":"PyQt5模块已导入","module":"main","function":"<module>","line":28}
+{"timestamp":"2025-06-28T00:09:11.124026","level":"INFO","logger":"__mp_main__","message":"MainWindow已导入","module":"main","function":"<module>","line":31}
+{"timestamp":"2025-06-28T00:09:11.124026","level":"INFO","logger":"__mp_main__","message":"EvaluationTab已导入","module":"main","function":"<module>","line":33}
+{"timestamp":"2025-06-28T00:09:11.125033","level":"INFO","logger":"__mp_main__","message":"DataProcessor已导入","module":"main","function":"<module>","line":35}
+{"timestamp":"2025-06-28T00:09:11.300068","level":"INFO","logger":"__mp_main__","message":"ModelTrainer已导入","module":"main","function":"<module>","line":37}
+{"timestamp":"2025-06-28T00:09:49.764677","level":"INFO","logger":"__mp_main__","message":"程序开始执行...","module":"main","function":"<module>","line":23}
+{"timestamp":"2025-06-28T00:09:49.765677","level":"INFO","logger":"__mp_main__","message":"Python版本: 3.9.13 (tags/v3.9.13:6de2ca5, May 17 2022, 16:36:42) [MSC v.1929 64 bit (AMD64)]","module":"main","function":"<module>","line":24}
+{"timestamp":"2025-06-28T00:09:49.765677","level":"INFO","logger":"__mp_main__","message":"当前工作目录: f:\\Qsync\\00.AI_PROJECT\\图片分类模型训练\\C1","module":"main","function":"<module>","line":25}
+{"timestamp":"2025-06-28T00:09:49.799919","level":"INFO","logger":"__mp_main__","message":"PyQt5模块已导入","module":"main","function":"<module>","line":28}
+{"timestamp":"2025-06-28T00:09:55.823356","level":"INFO","logger":"__mp_main__","message":"MainWindow已导入","module":"main","function":"<module>","line":31}
+{"timestamp":"2025-06-28T00:09:55.823356","level":"INFO","logger":"__mp_main__","message":"EvaluationTab已导入","module":"main","function":"<module>","line":33}
+{"timestamp":"2025-06-28T00:09:55.824368","level":"INFO","logger":"__mp_main__","message":"DataProcessor已导入","module":"main","function":"<module>","line":35}
+{"timestamp":"2025-06-28T00:09:56.001724","level":"INFO","logger":"__mp_main__","message":"ModelTrainer已导入","module":"main","function":"<module>","line":37}
+{"timestamp":"2025-06-28T00:09:56.100391","level":"INFO","logger":"__mp_main__","message":"程序开始执行...","module":"main","function":"<module>","line":23}
+{"timestamp":"2025-06-28T00:09:56.101399","level":"INFO","logger":"__mp_main__","message":"Python版本: 3.9.13 (tags/v3.9.13:6de2ca5, May 17 2022, 16:36:42) [MSC v.1929 64 bit (AMD64)]","module":"main","function":"<module>","line":24}
+{"timestamp":"2025-06-28T00:09:56.101399","level":"INFO","logger":"__mp_main__","message":"当前工作目录: f:\\Qsync\\00.AI_PROJECT\\图片分类模型训练\\C1","module":"main","function":"<module>","line":25}
+{"timestamp":"2025-06-28T00:09:56.134874","level":"INFO","logger":"__mp_main__","message":"PyQt5模块已导入","module":"main","function":"<module>","line":28}
+{"timestamp":"2025-06-28T00:10:01.468148","level":"INFO","logger":"__mp_main__","message":"MainWindow已导入","module":"main","function":"<module>","line":31}
+{"timestamp":"2025-06-28T00:10:01.469147","level":"INFO","logger":"__mp_main__","message":"EvaluationTab已导入","module":"main","function":"<module>","line":33}
+{"timestamp":"2025-06-28T00:10:01.470522","level":"INFO","logger":"__mp_main__","message":"DataProcessor已导入","module":"main","function":"<module>","line":35}
+{"timestamp":"2025-06-28T00:10:01.644981","level":"INFO","logger":"__mp_main__","message":"ModelTrainer已导入","module":"main","function":"<module>","line":37}
+{"timestamp":"2025-06-28T00:10:01.742019","level":"INFO","logger":"__mp_main__","message":"程序开始执行...","module":"main","function":"<module>","line":23}
+{"timestamp":"2025-06-28T00:10:01.743027","level":"INFO","logger":"__mp_main__","message":"Python版本: 3.9.13 (tags/v3.9.13:6de2ca5, May 17 2022, 16:36:42) [MSC v.1929 64 bit (AMD64)]","module":"main","function":"<module>","line":24}
+{"timestamp":"2025-06-28T00:10:01.743027","level":"INFO","logger":"__mp_main__","message":"当前工作目录: f:\\Qsync\\00.AI_PROJECT\\图片分类模型训练\\C1","module":"main","function":"<module>","line":25}
+{"timestamp":"2025-06-28T00:10:01.776099","level":"INFO","logger":"__mp_main__","message":"PyQt5模块已导入","module":"main","function":"<module>","line":28}
+{"timestamp":"2025-06-28T00:10:07.250014","level":"INFO","logger":"__mp_main__","message":"MainWindow已导入","module":"main","function":"<module>","line":31}
+{"timestamp":"2025-06-28T00:10:07.251056","level":"INFO","logger":"__mp_main__","message":"EvaluationTab已导入","module":"main","function":"<module>","line":33}
+{"timestamp":"2025-06-28T00:10:07.252214","level":"INFO","logger":"__mp_main__","message":"DataProcessor已导入","module":"main","function":"<module>","line":35}
+{"timestamp":"2025-06-28T00:10:07.424296","level":"INFO","logger":"__mp_main__","message":"ModelTrainer已导入","module":"main","function":"<module>","line":37}
+{"timestamp":"2025-06-28T00:10:07.524160","level":"INFO","logger":"__mp_main__","message":"程序开始执行...","module":"main","function":"<module>","line":23}
+{"timestamp":"2025-06-28T00:10:07.524160","level":"INFO","logger":"__mp_main__","message":"Python版本: 3.9.13 (tags/v3.9.13:6de2ca5, May 17 2022, 16:36:42) [MSC v.1929 64 bit (AMD64)]","module":"main","function":"<module>","line":24}
+{"timestamp":"2025-06-28T00:10:07.525164","level":"INFO","logger":"__mp_main__","message":"当前工作目录: f:\\Qsync\\00.AI_PROJECT\\图片分类模型训练\\C1","module":"main","function":"<module>","line":25}
+{"timestamp":"2025-06-28T00:10:07.564302","level":"INFO","logger":"__mp_main__","message":"PyQt5模块已导入","module":"main","function":"<module>","line":28}
+{"timestamp":"2025-06-28T00:10:12.998429","level":"INFO","logger":"__mp_main__","message":"MainWindow已导入","module":"main","function":"<module>","line":31}
+{"timestamp":"2025-06-28T00:10:12.998429","level":"INFO","logger":"__mp_main__","message":"EvaluationTab已导入","module":"main","function":"<module>","line":33}
+{"timestamp":"2025-06-28T00:10:12.999426","level":"INFO","logger":"__mp_main__","message":"DataProcessor已导入","module":"main","function":"<module>","line":35}
+{"timestamp":"2025-06-28T00:10:13.172713","level":"INFO","logger":"__mp_main__","message":"ModelTrainer已导入","module":"main","function":"<module>","line":37}

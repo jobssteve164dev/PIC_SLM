@@ -139,6 +139,73 @@ class TrainingThread(QThread):
             # 重置停止标志
             self.stop_training = False
             
+            # 🔍 完整的参数接收验证
+            print("=" * 60)
+            print("🔍 训练线程参数接收验证")
+            print("=" * 60)
+            
+            # 基础训练参数
+            print("📋 基础训练参数:")
+            basic_params = ['data_dir', 'model_name', 'num_epochs', 'batch_size', 'learning_rate', 
+                          'model_save_dir', 'task_type', 'use_tensorboard']
+            for param in basic_params:
+                value = self.config.get(param, '未设置')
+                print(f"   {param}: {value}")
+            
+            # 高级训练参数
+            print("\n🔧 高级训练参数:")
+            advanced_params = ['optimizer', 'weight_decay', 'lr_scheduler', 'use_augmentation',
+                             'early_stopping', 'early_stopping_patience', 'gradient_clipping',
+                             'gradient_clipping_value', 'mixed_precision', 'dropout_rate',
+                             'activation_function']
+            for param in advanced_params:
+                value = self.config.get(param, '未设置')
+                print(f"   {param}: {value}")
+            
+            # 预训练模型参数
+            print("\n🏗️ 预训练模型参数:")
+            pretrained_params = ['use_pretrained', 'pretrained_path', 'use_local_pretrained', 'pretrained_model']
+            for param in pretrained_params:
+                value = self.config.get(param, '未设置')
+                print(f"   {param}: {value}")
+            
+            # 类别权重参数
+            print("\n⚖️ 类别权重参数:")
+            weight_params = ['use_class_weights', 'weight_strategy', 'class_weights', 'custom_class_weights']
+            for param in weight_params:
+                value = self.config.get(param, '未设置')
+                print(f"   {param}: {value}")
+            
+            # 目标检测特有参数（如果是检测任务）
+            if self.config.get('task_type') == 'detection':
+                print("\n🎯 目标检测特有参数:")
+                detection_params = ['iou_threshold', 'conf_threshold', 'resolution', 'use_mosaic',
+                                  'use_multiscale', 'use_ema', 'nms_threshold', 'use_fpn']
+                for param in detection_params:
+                    value = self.config.get(param, '未设置')
+                    print(f"   {param}: {value}")
+            
+            # 资源限制参数
+            print("\n💾 资源与控制参数:")
+            resource_params = ['enable_resource_limits', 'metrics', 'model_note', 'layer_config']
+            for param in resource_params:
+                value = self.config.get(param, '未设置')
+                if param == 'layer_config' and isinstance(value, dict):
+                    print(f"   {param}: 已配置层参数 (共{len(value)}项)")
+                else:
+                    print(f"   {param}: {value}")
+            
+            # 目录配置参数
+            print("\n📁 目录配置参数:")
+            dir_params = ['default_param_save_dir', 'tensorboard_log_dir']
+            for param in dir_params:
+                value = self.config.get(param, '未设置')
+                print(f"   {param}: {value}")
+            
+            print("=" * 60)
+            print(f"✅ 参数接收验证完成，共接收 {len(self.config)} 个参数")
+            print("=" * 60)
+            
             # 启动资源限制器监控
             if self.resource_limiter:
                 self.resource_limiter.start_monitoring()
@@ -157,6 +224,8 @@ class TrainingThread(QThread):
             model_save_dir = self.config.get('model_save_dir', 'models/saved_models')
             task_type = self.config.get('task_type', 'classification')
             use_tensorboard = self.config.get('use_tensorboard', True)
+            
+            print(f"🚀 开始执行训练流程...")
             
             # 调用训练流程
             self.train_model(
