@@ -22,14 +22,16 @@ from src.utils.logger import get_logger, log_error, performance_monitor
 
 # 导入新的组件化训练器
 try:
-    from training_components import ModelTrainer as NewModelTrainer
-    from training_components import TrainingThread as NewTrainingThread
+    from src.training_components import ModelTrainer as NewModelTrainer
+    from src.training_components import TrainingThread as NewTrainingThread
     COMPONENTS_AVAILABLE = True
-except ImportError:
+    print("✅ 成功导入新的组件化训练器")
+except ImportError as e:
     COMPONENTS_AVAILABLE = False
+    print(f"❌ 新的训练组件导入失败: {e}")
     warnings.warn(
         "新的训练组件不可用，将使用原始实现。"
-        "请确保 training_components 包已正确安装。",
+        "请确保 src.training_components 包已正确安装。",
         ImportWarning
     )
 
@@ -63,6 +65,14 @@ if COMPONENTS_AVAILABLE:
                 task_type: 任务类型
                 use_tensorboard: 是否使用TensorBoard
             """
+            print(f"🔄 使用新组件化训练器，参数:")
+            print(f"   data_dir: {data_dir}")
+            print(f"   model_name: {model_name}")
+            print(f"   num_epochs: {num_epochs}")
+            print(f"   batch_size: {batch_size}")
+            print(f"   learning_rate: {learning_rate}")
+            print(f"   task_type: {task_type}")
+            
             # 构建配置字典
             config = {
                 'data_dir': data_dir,
@@ -79,6 +89,8 @@ if COMPONENTS_AVAILABLE:
                 'dropout_rate': 0.0,  # 默认无dropout
                 'model_note': ''  # 默认无备注
             }
+            
+            print(f"📋 完整配置字典: {config}")
             
             # 调用新的配置接口
             self.train_model_with_config(config)
@@ -351,6 +363,9 @@ else:
         def train_model_with_config(self, config):
             """使用配置训练模型"""
             try:
+                print("⚠️ 警告：正在使用后备训练实现！")
+                print(f"   这表明新的组件化训练器导入失败")
+                print(f"   配置参数: {config}")
                 self.status_updated.emit("使用后备训练实现...")
                 
                 # 简单验证
