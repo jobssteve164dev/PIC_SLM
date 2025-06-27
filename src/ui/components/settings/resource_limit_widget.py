@@ -1,6 +1,7 @@
 """
 系统资源限制组件
 提供内存、CPU、硬盘占用的限制设置功能
+现在集成了真正的资源限制器
 """
 
 import os
@@ -26,6 +27,12 @@ try:
     import resource
 except ImportError:
     resource = None
+
+# 导入真正的资源限制器
+from ....utils.resource_limiter import (
+    ResourceLimiter, ResourceLimits, ResourceLimitException,
+    initialize_resource_limiter, get_resource_limiter
+)
 
 
 class ResourceMonitor(QThread):
@@ -224,7 +231,10 @@ class ResourceLimitWidget(QWidget):
         self.psutil_available = psutil is not None
         self.resource_available = resource is not None
         
-        # 资源监控器
+        # 真正的资源限制器
+        self.resource_limiter = None
+        
+        # 资源监控器（兼容原有功能）
         self.resource_monitor = None
         if self.psutil_available:
             self.resource_monitor = ResourceMonitor()
@@ -496,6 +506,33 @@ class ResourceLimitWidget(QWidget):
         
         layout.addWidget(monitor_settings_group)
         
+        # 真正的资源限制设置组
+        real_limits_group = QGroupBox("强制资源限制")
+        real_limits_layout = QGridLayout(real_limits_group)
+        
+        # 启用强制限制
+        self.enforce_limits_enabled = QCheckBox("启用强制资源限制")
+        self.enforce_limits_enabled.setChecked(False)
+        self.enforce_limits_enabled.setToolTip("启用后将真正限制程序的资源使用，而不仅仅是监控")
+        real_limits_layout.addWidget(self.enforce_limits_enabled, 0, 0, 1, 2)
+        
+        # 强制限制说明
+        limits_info = QLabel("⚠️ 强制限制将实际限制程序资源使用，可能影响性能")
+        limits_info.setStyleSheet("color: orange; font-size: 12px;")
+        limits_info.setWordWrap(True)
+        real_limits_layout.addWidget(limits_info, 1, 0, 1, 2)
+        
+        # Windows Job Object说明
+        if os.name == 'nt':
+            job_info = QLabel("✅ Windows系统支持Job Object内存限制")
+            job_info.setStyleSheet("color: green; font-size: 12px;")
+        else:
+            job_info = QLabel("ℹ️ Unix/Linux系统支持基础进程限制")
+            job_info.setStyleSheet("color: blue; font-size: 12px;")
+        real_limits_layout.addWidget(job_info, 2, 0, 1, 2)
+        
+        layout.addWidget(real_limits_group)
+        
         # 系统限制设置组（仅Linux/Unix）
         if self.resource_available and hasattr(resource, 'setrlimit'):
             system_limits_group = QGroupBox("系统级限制设置")
@@ -531,35 +568,111 @@ class ResourceLimitWidget(QWidget):
         
     def start_monitoring(self):
         """开始资源监控"""
-        if not self.psutil_available or not self.resource_monitor:
+        if not self.psutil_available:
             QMessageBox.warning(self, "警告", "psutil模块不可用，无法启动监控")
             return
             
-        # 设置监控参数
-        limits = self.get_current_limits()
-        self.resource_monitor.set_limits(limits)
-        self.resource_monitor.set_check_interval(self.check_interval_spin.value())
-        
-        # 启动监控线程
-        self.resource_monitor.start()
-        
-        # 更新按钮状态
-        self.start_monitor_btn.setEnabled(False)
-        self.stop_monitor_btn.setEnabled(True)
-        
-        self.monitoring_toggled.emit(True)
+        try:
+            # 启动真正的资源限制器
+            if self.enforce_limits_enabled.isChecked():
+                limits = ResourceLimits(
+                    max_memory_gb=self.memory_absolute_limit.value(),
+                    max_cpu_percent=self.cpu_percent_limit.value(),
+                    max_disk_usage_gb=self.temp_files_limit.value(),
+                    max_processes=4,
+                    max_threads=self.cpu_cores_limit.value(),
+                    check_interval=self.check_interval_spin.value(),
+                    enforce_limits=True,
+                    auto_cleanup=self.auto_cleanup_enabled.isChecked()
+                )
+                
+                self.resource_limiter = initialize_resource_limiter(limits)
+                
+                # 添加回调处理资源超限
+                self.resource_limiter.add_callback('memory_limit', self._on_real_limit_exceeded)
+                self.resource_limiter.add_callback('cpu_limit', self._on_real_limit_exceeded)
+                self.resource_limiter.add_callback('disk_limit', self._on_real_limit_exceeded)
+                self.resource_limiter.add_callback('process_limit', self._on_real_limit_exceeded)
+                
+                self.resource_limiter.start_monitoring()
+                
+                QMessageBox.information(self, "成功", "强制资源限制已启动！")
+            
+            # 启动传统监控器（用于显示）
+            if self.resource_monitor:
+                limits = self.get_current_limits()
+                self.resource_monitor.set_limits(limits)
+                self.resource_monitor.set_check_interval(self.check_interval_spin.value())
+                self.resource_monitor.start()
+            
+            # 更新按钮状态
+            self.start_monitor_btn.setEnabled(False)
+            self.stop_monitor_btn.setEnabled(True)
+            
+            self.monitoring_toggled.emit(True)
+            
+        except Exception as e:
+            QMessageBox.critical(self, "错误", f"启动监控失败: {str(e)}")
         
     def stop_monitoring(self):
         """停止资源监控"""
-        if self.resource_monitor and self.resource_monitor.running:
-            self.resource_monitor.stop()
-            self.resource_monitor.wait(3000)  # 等待最多3秒
+        try:
+            # 停止真正的资源限制器
+            if self.resource_limiter:
+                self.resource_limiter.stop_monitoring()
+                self.resource_limiter = None
+                
+            # 停止传统监控器
+            if self.resource_monitor and self.resource_monitor.running:
+                self.resource_monitor.stop()
+                self.resource_monitor.wait(3000)  # 等待最多3秒
+                
+            # 更新按钮状态
+            self.start_monitor_btn.setEnabled(True)
+            self.stop_monitor_btn.setEnabled(False)
             
-        # 更新按钮状态
-        self.start_monitor_btn.setEnabled(True)
-        self.stop_monitor_btn.setEnabled(False)
-        
-        self.monitoring_toggled.emit(False)
+            self.monitoring_toggled.emit(False)
+            
+        except Exception as e:
+            print(f"停止监控错误: {e}")
+    
+    def _on_real_limit_exceeded(self, event_type: str, current_value: float, limit_value: float):
+        """处理真正的资源限制超限"""
+        try:
+            resource_name = {"memory_limit": "内存", "cpu_limit": "CPU", 
+                           "disk_limit": "磁盘", "process_limit": "进程"}
+            resource_name = resource_name.get(event_type, event_type)
+            
+            # 创建警告对话框
+            msg_box = QMessageBox(self)
+            msg_box.setIcon(QMessageBox.Critical)
+            msg_box.setWindowTitle("强制资源限制触发")
+            
+            message = f"🚨 {resource_name}使用超过强制限制！\n"
+            message += f"当前值: {current_value:.2f}\n"
+            message += f"限制值: {limit_value:.2f}\n\n"
+            message += "系统已自动执行限制措施。"
+            
+            msg_box.setText(message)
+            msg_box.addButton("确定", QMessageBox.AcceptRole)
+            
+            emergency_btn = msg_box.addButton("紧急清理", QMessageBox.ActionRole)
+            stop_btn = msg_box.addButton("停止所有操作", QMessageBox.DestructiveRole)
+            
+            result = msg_box.exec_()
+            
+            # 处理用户选择
+            clicked_button = msg_box.clickedButton()
+            if clicked_button == emergency_btn:
+                if self.resource_limiter:
+                    self.resource_limiter.emergency_cleanup()
+            elif clicked_button == stop_btn:
+                if self.resource_limiter:
+                    self.resource_limiter.request_stop()
+                    QMessageBox.information(self, "停止请求", "已请求停止所有正在进行的操作")
+                    
+        except Exception as e:
+            print(f"处理资源限制超限错误: {e}")
         
     def get_current_limits(self) -> Dict[str, float]:
         """获取当前设置的限制"""
@@ -1056,6 +1169,7 @@ class ResourceLimitWidget(QWidget):
             'check_interval': self.check_interval_spin.value(),
             'alert_method': self.alert_method.currentText(),
             'auto_cleanup_enabled': self.auto_cleanup_enabled.isChecked(),
+            'enforce_limits_enabled': self.enforce_limits_enabled.isChecked(),
         }
         
     def set_resource_limits_config(self, config: Dict[str, Any]):
@@ -1076,6 +1190,7 @@ class ResourceLimitWidget(QWidget):
             self.check_interval_spin.setValue(config.get('check_interval', 2.0))
             self.alert_method.setCurrentText(config.get('alert_method', '弹窗提醒'))
             self.auto_cleanup_enabled.setChecked(config.get('auto_cleanup_enabled', False))
+            self.enforce_limits_enabled.setChecked(config.get('enforce_limits_enabled', False))
             
         except Exception as e:
             print(f"设置资源限制配置错误: {e}")

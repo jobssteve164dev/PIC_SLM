@@ -64,7 +64,8 @@ class DatasetEvaluationTab(BaseTab):
         
     def init_ui(self):
         """初始化UI界面"""
-        main_layout = QVBoxLayout()
+        # 使用BaseTab提供的滚动内容区域
+        main_layout = QVBoxLayout(self.scroll_content)
         
         # 数据集选择区域
         dataset_group = self.create_dataset_selection_group()
@@ -92,8 +93,6 @@ class DatasetEvaluationTab(BaseTab):
         # 结果显示区域
         results_group = self.create_results_display_group()
         main_layout.addWidget(results_group)
-        
-        self.setLayout(main_layout)
         
     def create_dataset_selection_group(self):
         """创建数据集选择区域"""

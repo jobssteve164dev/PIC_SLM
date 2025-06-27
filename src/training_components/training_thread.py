@@ -23,6 +23,10 @@ from .weight_calculator import WeightCalculator
 from .model_configurator import ModelConfigurator
 from .tensorboard_logger import TensorBoardLogger
 from .training_validator import TrainingValidator
+from .resource_limited_trainer import ResourceLimitedTrainer, enable_resource_limited_training
+from ..utils.resource_limiter import (
+    initialize_resource_limiter, ResourceLimits, ResourceLimitException, get_resource_limiter
+)
 
 
 class TrainingThread(QThread):
@@ -52,8 +56,68 @@ class TrainingThread(QThread):
         self.tensorboard_logger = TensorBoardLogger()
         self.validator = TrainingValidator()
         
+        # 初始化资源限制器
+        self.resource_limiter = None
+        self.resource_limited_trainer = None
+        self._setup_resource_limiter()
+        
         # 连接组件信号
         self._connect_component_signals()
+    
+    def _setup_resource_limiter(self):
+        """设置资源限制器"""
+        try:
+            # 从配置中获取资源限制设置
+            resource_limits_config = self.config.get('resource_limits', {})
+            
+            # 检查是否启用强制资源限制（从训练界面或设置界面）
+            enable_from_ui = self.config.get('enable_resource_limits', False)  # 从训练界面
+            enable_from_settings = resource_limits_config.get('enforce_limits_enabled', False)  # 从设置界面
+            
+            if enable_from_ui or enable_from_settings:
+                # 创建资源限制配置
+                limits = ResourceLimits(
+                    max_memory_gb=resource_limits_config.get('memory_absolute_limit_gb', 8.0),
+                    max_cpu_percent=resource_limits_config.get('cpu_percent_limit', 80.0),
+                    max_disk_usage_gb=resource_limits_config.get('temp_files_limit_gb', 10.0),
+                    max_processes=4,
+                    max_threads=resource_limits_config.get('cpu_cores_limit', 8),
+                    check_interval=resource_limits_config.get('check_interval', 2.0),
+                    enforce_limits=True,
+                    auto_cleanup=resource_limits_config.get('auto_cleanup_enabled', True)
+                )
+                
+                # 初始化全局资源限制器
+                self.resource_limiter = initialize_resource_limiter(limits)
+                
+                # 添加回调处理资源超限
+                self.resource_limiter.add_callback('memory_limit', self._on_resource_limit_exceeded)
+                self.resource_limiter.add_callback('cpu_limit', self._on_resource_limit_exceeded)
+                self.resource_limiter.add_callback('disk_limit', self._on_resource_limit_exceeded)
+                self.resource_limiter.add_callback('process_limit', self._on_resource_limit_exceeded)
+                
+                source = "训练界面" if enable_from_ui else "设置界面"
+                print(f"✅ 训练进程启用强制资源限制(来源: {source}): 内存{limits.max_memory_gb}GB, CPU{limits.max_cpu_percent}%")
+            else:
+                print("ℹ️ 训练进程未启用强制资源限制，仅使用监控模式")
+                
+        except Exception as e:
+            print(f"⚠️ 设置资源限制器失败: {e}")
+            self.resource_limiter = None
+    
+    def _on_resource_limit_exceeded(self, event_type: str, current_value: float, limit_value: float):
+        """处理资源限制超限"""
+        resource_name = {"memory_limit": "内存", "cpu_limit": "CPU", 
+                        "disk_limit": "磁盘", "process_limit": "进程"}
+        resource_name = resource_name.get(event_type, event_type)
+        
+        error_msg = f"🚨 训练过程{resource_name}资源超限！当前: {current_value:.2f}, 限制: {limit_value:.2f}"
+        print(error_msg)
+        self.status_updated.emit(error_msg)
+        
+        # 停止训练
+        self.stop_training = True
+        self.training_error.emit(f"训练因{resource_name}资源超限而中断")
     
     def _connect_component_signals(self):
         """连接各个组件的信号"""
@@ -74,6 +138,11 @@ class TrainingThread(QThread):
         try:
             # 重置停止标志
             self.stop_training = False
+            
+            # 启动资源限制器监控
+            if self.resource_limiter:
+                self.resource_limiter.start_monitoring()
+                self.status_updated.emit("✅ 强制资源限制已启动")
             
             # 验证配置
             if not self.validator.validate_config(self.config):
@@ -108,10 +177,21 @@ class TrainingThread(QThread):
             self.training_error.emit(f"训练过程中发生错误: {str(e)}")
             import traceback
             traceback.print_exc()
+        finally:
+            # 确保停止资源限制器
+            if self.resource_limiter:
+                self.resource_limiter.stop_monitoring()
+                self.status_updated.emit("🔚 资源限制器已停止")
     
     def stop(self):
         """停止训练过程"""
         self.stop_training = True
+        
+        # 停止资源限制器
+        if self.resource_limiter:
+            self.resource_limiter.request_stop()
+            self.status_updated.emit("🛑 已请求资源限制器停止所有操作")
+        
         self.status_updated.emit("训练线程正在停止...")
     
     def train_model(self, data_dir, model_name, num_epochs, batch_size, learning_rate, 
@@ -164,11 +244,20 @@ class TrainingThread(QThread):
             if self.stop_training:
                 return
             
-            # 执行训练循环
-            best_acc = self._training_loop(
-                dataloaders, dataset_sizes, class_names, num_epochs, 
-                criterion, optimizer, model_name, model_save_dir
-            )
+            # 执行训练循环（使用资源限制的训练器如果启用）
+            if self.resource_limiter:
+                # 使用资源限制的训练器
+                self.resource_limited_trainer = enable_resource_limited_training(self)
+                best_acc = self._resource_limited_training_loop(
+                    dataloaders, dataset_sizes, class_names, num_epochs, 
+                    criterion, optimizer, model_name, model_save_dir
+                )
+            else:
+                # 使用标准训练循环
+                best_acc = self._training_loop(
+                    dataloaders, dataset_sizes, class_names, num_epochs, 
+                    criterion, optimizer, model_name, model_save_dir
+                )
             
             if self.stop_training:
                 return
@@ -305,6 +394,69 @@ class TrainingThread(QThread):
                 self._save_best_model(model_name, model_save_dir, epoch, best_acc)
         
         return best_acc
+    
+    def _resource_limited_training_loop(self, dataloaders, dataset_sizes, class_names, num_epochs, 
+                                       criterion, optimizer, model_name, model_save_dir):
+        """执行带资源限制的训练循环"""
+        try:
+            best_acc = 0.0
+            
+            def save_callback(epoch, model, optimizer, train_result, val_result):
+                """保存回调函数"""
+                nonlocal best_acc
+                val_acc = val_result.get('val_accuracy', 0) / 100.0  # 转换为小数
+                
+                if val_acc > best_acc:
+                    best_acc = val_acc
+                    self._save_best_model(model_name, model_save_dir, epoch, best_acc)
+                
+                # 记录到TensorBoard
+                if hasattr(self, 'tensorboard_logger'):
+                    self.tensorboard_logger.log_epoch_metrics(epoch-1, 'train', 
+                                                            train_result['loss'], train_result['accuracy']/100.0)
+                    self.tensorboard_logger.log_epoch_metrics(epoch-1, 'val', 
+                                                            val_result['val_loss'], val_result['val_accuracy']/100.0)
+                    self.tensorboard_logger.flush()
+                
+                # 发送epoch结果
+                epoch_data = {
+                    'epoch': epoch,
+                    'phase': 'val',
+                    'loss': val_result['val_loss'],
+                    'accuracy': val_result['val_accuracy'],
+                    'batch': len(dataloaders['val']),
+                    'total_batches': len(dataloaders['val'])
+                }
+                self.epoch_finished.emit(epoch_data)
+                
+                # 更新进度
+                progress = int((epoch / num_epochs) * 100)
+                self.progress_updated.emit(progress)
+            
+            # 使用资源限制的训练器
+            self.resource_limited_trainer.train_with_resource_limits(
+                epochs=num_epochs,
+                train_loader=dataloaders['train'],
+                val_loader=dataloaders['val'],
+                model=self.model,
+                optimizer=optimizer,
+                criterion=criterion,
+                device=self.device,
+                save_callback=save_callback
+            )
+            
+            return best_acc
+            
+        except ResourceLimitException as e:
+            error_msg = f"训练因资源限制中断: {e}"
+            self.status_updated.emit(error_msg)
+            self.training_error.emit(error_msg)
+            return 0.0
+        except Exception as e:
+            error_msg = f"资源限制训练循环出错: {e}"
+            self.status_updated.emit(error_msg)
+            self.training_error.emit(error_msg)
+            return 0.0
     
     def _train_epoch(self, phase, dataloaders, dataset_sizes, criterion, optimizer, epoch, num_epochs):
         """训练一个epoch"""

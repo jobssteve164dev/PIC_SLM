@@ -197,45 +197,48 @@ class WeightConfigDisplayWidget(QWidget):
     def init_ui(self):
         """初始化UI"""
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(10, 15, 10, 15)
-        layout.setSpacing(8)
+        layout.setContentsMargins(5, 5, 5, 5)  # 减小边距
+        layout.setSpacing(3)  # 减小间距
         
-        # 权重策略显示行
+        # 合并权重策略和配置源到一行
+        info_layout = QHBoxLayout()
+        info_layout.setSpacing(5)  # 减小水平间距
+        
+        # 权重策略显示
         strategy_layout = QHBoxLayout()
+        strategy_layout.setSpacing(2)  # 减小组件间距
         strategy_layout.addWidget(QLabel("权重策略:"))
         self.weight_strategy_label = QLabel("未配置")
         self.weight_strategy_label.setStyleSheet("color: #666; font-weight: bold;")
         self.weight_strategy_label.setToolTip("当前使用的类别权重策略")
         strategy_layout.addWidget(self.weight_strategy_label)
-        strategy_layout.addStretch()
+        strategy_layout.addStretch(1)
+        info_layout.addLayout(strategy_layout, 3)  # 分配比例权重
         
         # 权重配置源显示
         source_layout = QHBoxLayout()
+        source_layout.setSpacing(2)  # 减小组件间距
         source_layout.addWidget(QLabel("配置源:"))
         self.weight_source_label = QLabel("无")
         self.weight_source_label.setStyleSheet("color: #666;")
         self.weight_source_label.setToolTip("权重配置的来源")
         source_layout.addWidget(self.weight_source_label)
-        source_layout.addStretch()
+        source_layout.addStretch(1)
+        info_layout.addLayout(source_layout, 3)  # 分配比例权重
         
         # 刷新权重配置按钮
-        refresh_weight_btn = QPushButton("刷新权重配置")
-        refresh_weight_btn.setFixedWidth(120)
+        refresh_weight_btn = QPushButton("刷新配置")  # 缩短按钮文本
+        refresh_weight_btn.setFixedWidth(80)  # 减小按钮宽度
         refresh_weight_btn.setToolTip("重新检测和加载类别权重配置")
         refresh_weight_btn.clicked.connect(self.refresh_weight_config)
-        source_layout.addWidget(refresh_weight_btn)
+        info_layout.addWidget(refresh_weight_btn, 1)  # 分配比例权重
         
-        layout.addLayout(strategy_layout)
-        layout.addLayout(source_layout)
-        
-        # 权重详细信息显示
-        self.weight_details_label = QLabel("权重配置详情:")
-        layout.addWidget(self.weight_details_label)
+        layout.addLayout(info_layout)
         
         # 权重信息文本框
         self.weight_info_text = QTextBrowser()
-        self.weight_info_text.setMaximumHeight(100)
-        self.weight_info_text.setStyleSheet("background-color: #F8F9FA; border: 1px solid #E0E0E0; font-family: monospace; font-size: 11px;")
+        self.weight_info_text.setMaximumHeight(80)  # 减小高度
+        self.weight_info_text.setStyleSheet("background-color: #F8F9FA; border: 1px solid #E0E0E0; font-family: monospace; font-size: 10px;")  # 减小字体
         self.weight_info_text.setToolTip("显示详细的类别权重配置信息")
         layout.addWidget(self.weight_info_text)
     

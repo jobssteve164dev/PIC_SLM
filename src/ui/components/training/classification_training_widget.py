@@ -56,9 +56,13 @@ class ClassificationTrainingWidget(QWidget):
         
         # 创建类别权重信息显示组
         weight_info_group = QGroupBox("类别权重配置")
+        weight_info_layout = QVBoxLayout()
+        weight_info_layout.setContentsMargins(5, 5, 5, 5)  # 减小边距
+        weight_info_layout.setSpacing(2)  # 减小间距
         self.weight_config_widget = WeightConfigDisplayWidget(self)
-        weight_info_group.setLayout(QVBoxLayout())
-        weight_info_group.layout().addWidget(self.weight_config_widget)
+        weight_info_layout.addWidget(self.weight_config_widget)
+        weight_info_group.setLayout(weight_info_layout)
+        weight_info_group.setMaximumHeight(140)  # 限制最大高度
         main_layout.addWidget(weight_info_group)
         
         # 创建预训练模型组
@@ -239,6 +243,12 @@ class ClassificationTrainingWidget(QWidget):
         self.augmentation_checkbox.setChecked(True)
         self.augmentation_checkbox.setToolTip("通过随机变换（旋转、裁剪、翻转等）增加训练数据多样性：\n- 减少过拟合\n- 提高模型泛化能力\n- 尤其在训练数据较少时非常有效")
         basic_layout.addWidget(self.augmentation_checkbox, 11, 0, 1, 2)
+        
+        # 启用真正的资源限制
+        self.enable_resource_limits_checkbox = QCheckBox("启用强制资源限制")
+        self.enable_resource_limits_checkbox.setChecked(False)
+        self.enable_resource_limits_checkbox.setToolTip("启用真正的资源限制功能：\n- 实际限制程序的内存和CPU使用\n- 自动在资源不足时暂停训练\n- 提供紧急清理和保存机制\n- 注意：可能影响训练性能")
+        basic_layout.addWidget(self.enable_resource_limits_checkbox, 12, 0, 1, 2)
         
         basic_group.setLayout(basic_layout)
         main_layout.addWidget(basic_group)
@@ -439,6 +449,7 @@ class ClassificationTrainingWidget(QWidget):
             "pretrained_model": pretrained_model,
             "use_augmentation": self.augmentation_checkbox.isChecked(),
             "model_note": model_note,
+            "enable_resource_limits": self.enable_resource_limits_checkbox.isChecked(),
             
             # 添加已有但之前未收集的参数
             "weight_decay": self.weight_decay_spin.value(),
