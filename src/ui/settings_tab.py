@@ -38,8 +38,13 @@ class SettingsTab(BaseTab):
         self._rebuild_timer.setSingleShot(True)
         self._rebuild_timer.timeout.connect(self._fix_layout)
         
-        # 加载当前设置
-        self.load_current_settings()
+        # 使用新的智能配置系统
+        config = self.get_config_from_manager()
+        if config:
+            self.apply_config(config)
+        else:
+            # 如果没有配置，则加载当前设置
+            self.load_current_settings()
         
     def init_ui(self):
         """初始化UI"""
@@ -175,6 +180,18 @@ class SettingsTab(BaseTab):
         button_layout.addWidget(validate_config_btn)
         
         parent_layout.addLayout(button_layout)
+    
+    def _do_apply_config(self, config):
+        """实现具体的配置应用逻辑 - 智能配置系统"""
+        print(f"SettingsTab: 智能应用配置，包含 {len(config)} 个配置项")
+        
+        # 保存配置
+        self.config = config.copy()
+        
+        # 应用配置到UI
+        self._apply_config_to_ui()
+        
+        print("SettingsTab: 智能配置应用完成")
     
     def _connect_signals(self):
         """连接所有组件的信号"""

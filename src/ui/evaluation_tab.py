@@ -37,6 +37,11 @@ class EvaluationTab(BaseTab):
         
         self.init_ui()
         
+        # 使用新的智能配置系统
+        config = self.get_config_from_manager()
+        if config:
+            self.apply_config(config)
+        
     def init_ui(self):
         """初始化UI"""
         # 创建主布局
@@ -178,11 +183,10 @@ class EvaluationTab(BaseTab):
         if self.visualization_container:
             self.visualization_container.set_model(model, class_names)
     
-    def apply_config(self, config):
-        """应用配置，包括各种目录设置（兼容原有接口）"""
-        if not config:
-            return
-            
+    def _do_apply_config(self, config):
+        """实现具体的配置应用逻辑 - 智能配置系统"""
+        print(f"EvaluationTab: 智能应用配置，包含 {len(config)} 个配置项")
+        
         try:
             # 为各个组件应用配置
             if self.enhanced_model_eval_widget:
@@ -197,6 +201,8 @@ class EvaluationTab(BaseTab):
             if self.visualization_container:
                 self.visualization_container.apply_config(config)
                 
+            print("EvaluationTab: 智能配置应用完成")
+            
         except Exception as e:
             import traceback
             print(f"应用配置时出错: {str(e)}")

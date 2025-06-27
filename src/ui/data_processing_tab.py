@@ -38,41 +38,10 @@ class DataProcessingTab(BaseTab):
         self.organize_target_folder = ""
         self.init_ui()
         
-        # 尝试从配置文件中加载完整配置信息（包括文件夹路径和类别信息）
-        config_file = get_config_file_path()
-        if os.path.exists(config_file):
-            try:
-                with open(config_file, 'r', encoding='utf-8') as f:
-                    config = json.load(f)
-                    print(f"DataProcessingTab.__init__: 加载配置文件成功")
-                    
-                    # 加载文件夹路径信息
-                    if 'default_source_folder' in config and config['default_source_folder']:
-                        self.source_folder = config['default_source_folder']
-                        self.source_path_edit.setText(config['default_source_folder'])
-                        print(f"DataProcessingTab.__init__: 设置源文件夹路径: {config['default_source_folder']}")
-                    
-                    if 'default_output_folder' in config and config['default_output_folder']:
-                        self.output_folder = config['default_output_folder']
-                        self.output_path_edit.setText(config['default_output_folder'])
-                        print(f"DataProcessingTab.__init__: 设置输出文件夹路径: {config['default_output_folder']}")
-                    
-                    # 加载类别信息
-                    if 'default_classes' in config and config['default_classes']:
-                        self.defect_classes = config['default_classes'].copy()
-                        self.class_list.clear()
-                        for class_name in self.defect_classes:
-                            self.class_list.addItem(class_name)
-                        print(f"DataProcessingTab.__init__: 从配置文件加载了{len(self.defect_classes)}个类别")
-                    
-                    # 检查预处理准备状态
-                    self.check_preprocess_ready()
-                    print(f"DataProcessingTab.__init__: 初始化完成，预处理按钮状态: {self.preprocess_btn.isEnabled() if hasattr(self, 'preprocess_btn') else '未创建'}")
-                    
-            except Exception as e:
-                print(f"DataProcessingTab.__init__: 加载配置文件出错: {str(e)}")
-                import traceback
-                traceback.print_exc()
+        # 使用新的智能配置系统
+        config = self.get_config_from_manager()
+        if config:
+            self.apply_config(config)
     
     def init_ui(self):
         """初始化UI"""
@@ -868,47 +837,48 @@ class DataProcessingTab(BaseTab):
         self.update_status("预处理完成，可以再次开始新的预处理。")
         # 注意：弹窗提示已移至MainWindow.preprocessing_finished方法中
     
-    def apply_config(self, config):
-        """应用配置信息"""
-        print(f"DataProcessingTab.apply_config被调用，配置内容: {config}")
-        if config:
-            # 应用文件夹路径配置
-            if 'default_source_folder' in config and config['default_source_folder']:
-                print(f"DataProcessingTab: 应用源文件夹配置: {config['default_source_folder']}")
-                self.source_folder = config['default_source_folder']
-                if hasattr(self, 'source_path_edit'):
-                    self.source_path_edit.setText(config['default_source_folder'])
-                
-            if 'default_output_folder' in config and config['default_output_folder']:
-                print(f"DataProcessingTab: 应用输出文件夹配置: {config['default_output_folder']}")
-                self.output_folder = config['default_output_folder']
-                if hasattr(self, 'output_path_edit'):
-                    self.output_path_edit.setText(config['default_output_folder'])
-                # 如果输出文件夹存在，启用打开文件夹按钮
-                if hasattr(self, 'open_output_btn') and os.path.exists(config['default_output_folder']):
-                    self.open_output_btn.setEnabled(True)
+    def _do_apply_config(self, config):
+        """实现具体的配置应用逻辑 - 智能配置系统"""
+        print(f"DataProcessingTab: 智能应用配置，包含 {len(config)} 个配置项")
+        
+        # 应用文件夹路径配置
+        if 'default_source_folder' in config and config['default_source_folder']:
+            print(f"DataProcessingTab: 应用源文件夹配置: {config['default_source_folder']}")
+            self.source_folder = config['default_source_folder']
+            if hasattr(self, 'source_path_edit'):
+                self.source_path_edit.setText(config['default_source_folder'])
             
-            # 应用类别配置
-            if 'default_classes' in config and config['default_classes']:
-                print(f"DataProcessingTab: 找到default_classes字段: {config['default_classes']}")
-                self.defect_classes = config['default_classes'].copy()
+        if 'default_output_folder' in config and config['default_output_folder']:
+            print(f"DataProcessingTab: 应用输出文件夹配置: {config['default_output_folder']}")
+            self.output_folder = config['default_output_folder']
+            if hasattr(self, 'output_path_edit'):
+                self.output_path_edit.setText(config['default_output_folder'])
+            # 如果输出文件夹存在，启用打开文件夹按钮
+            if hasattr(self, 'open_output_btn') and os.path.exists(config['default_output_folder']):
+                self.open_output_btn.setEnabled(True)
+        
+        # 应用类别配置
+        if 'default_classes' in config and config['default_classes']:
+            print(f"DataProcessingTab: 找到default_classes字段: {config['default_classes']}")
+            self.defect_classes = config['default_classes'].copy()
+            if hasattr(self, 'class_list'):
                 self.class_list.clear()
                 for class_name in self.defect_classes:
                     self.class_list.addItem(class_name)
-                print(f"DataProcessingTab: 已加载{len(self.defect_classes)}个类别到类别列表中，类别列表项数: {self.class_list.count()}")
-            elif 'classes' in config and config['classes']:
-                print(f"DataProcessingTab: 找到classes字段: {config['classes']}")
-                self.defect_classes = config['classes'].copy()
+            print(f"DataProcessingTab: 已加载{len(self.defect_classes)}个类别")
+        elif 'classes' in config and config['classes']:
+            print(f"DataProcessingTab: 找到classes字段: {config['classes']}")
+            self.defect_classes = config['classes'].copy()
+            if hasattr(self, 'class_list'):
                 self.class_list.clear()
                 for class_name in self.defect_classes:
                     self.class_list.addItem(class_name)
-                print(f"DataProcessingTab: 已加载{len(self.defect_classes)}个类别到类别列表中，类别列表项数: {self.class_list.count()}")
-            else:
-                print("DataProcessingTab: 配置文件中未找到有效的类别信息")
-            
-            # 配置应用完成后，检查预处理准备状态
-            print("DataProcessingTab: 配置应用完成，检查预处理准备状态...")
-            self.check_preprocess_ready() 
+            print(f"DataProcessingTab: 已加载{len(self.defect_classes)}个类别")
+        
+        # 配置应用完成后，检查预处理准备状态
+        if hasattr(self, 'check_preprocess_ready'):
+            self.check_preprocess_ready()
+        print("DataProcessingTab: 智能配置应用完成") 
 
     def stop_preprocessing(self):
         """停止预处理"""

@@ -26,6 +26,11 @@ class PredictionTab(BaseTab):
         self.top_k = 3  # 默认显示前3个类别
         self.init_ui()
         
+        # 使用新的智能配置系统
+        config = self.get_config_from_manager()
+        if config:
+            self.apply_config(config)
+        
     def init_ui(self):
         """初始化UI"""
         # 创建主布局
@@ -133,6 +138,42 @@ class PredictionTab(BaseTab):
         
         # 添加弹性空间
         main_layout.addStretch()
+    
+    def _do_apply_config(self, config):
+        """实现具体的配置应用逻辑 - 智能配置系统"""
+        print(f"PredictionTab: 智能应用配置，包含 {len(config)} 个配置项")
+        
+        # 应用默认模型文件
+        if 'default_model_file' in config and config['default_model_file']:
+            print(f"PredictionTab: 应用模型文件配置: {config['default_model_file']}")
+            self.model_file = config['default_model_file']
+            if hasattr(self, 'model_path_edit'):
+                self.model_path_edit.setText(config['default_model_file'])
+        
+        # 应用默认类别信息文件
+        if 'default_class_info_file' in config and config['default_class_info_file']:
+            print(f"PredictionTab: 应用类别信息文件配置: {config['default_class_info_file']}")
+            self.class_info_file = config['default_class_info_file']
+            if hasattr(self, 'class_info_path_edit'):
+                self.class_info_path_edit.setText(config['default_class_info_file'])
+                
+            # 如果类别信息文件有效，加载类别信息
+            if os.path.exists(config['default_class_info_file']):
+                try:
+                    import json
+                    with open(config['default_class_info_file'], 'r', encoding='utf-8') as f:
+                        class_info = json.load(f)
+                        if hasattr(self, 'class_info'):
+                            self.class_info = class_info
+                            print("PredictionTab: 成功加载类别信息")
+                except Exception as e:
+                    print(f"PredictionTab: 加载类别信息文件失败: {str(e)}")
+        
+        # 检查是否可以加载模型
+        if hasattr(self, 'check_model_ready'):
+            self.check_model_ready()
+            
+        print("PredictionTab: 智能配置应用完成")
     
     def init_single_prediction_ui(self):
         """初始化单张预测UI"""

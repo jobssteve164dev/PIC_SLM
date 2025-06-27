@@ -16,6 +16,11 @@ class ModelAnalysisTab(BaseTab):
         self.setWindowTitle("模型分析")
         self.init_ui()
         
+        # 使用新的智能配置系统
+        config = self.get_config_from_manager()
+        if config:
+            self.apply_config(config)
+        
     def init_ui(self):
         """初始化UI"""
         try:
@@ -55,10 +60,17 @@ class ModelAnalysisTab(BaseTab):
             error_label = QLabel(f"模型分析组件初始化失败：\n{str(e)}")
             layout.addWidget(error_label)
         
-    def apply_config(self, config):
-        """应用配置"""
+    def _do_apply_config(self, config):
+        """实现具体的配置应用逻辑 - 智能配置系统"""
+        print(f"ModelAnalysisTab: 智能应用配置，包含 {len(config)} 个配置项")
+        
         # 如果需要应用配置到模型分析组件，可以在这里实现
-        pass
+        if hasattr(self, 'model_analysis_widget') and self.model_analysis_widget:
+            # 可以将配置传递给模型分析组件
+            if hasattr(self.model_analysis_widget, 'apply_config'):
+                self.model_analysis_widget.apply_config(config)
+                
+        print("ModelAnalysisTab: 智能配置应用完成")
         
     def get_status(self):
         """获取当前状态"""

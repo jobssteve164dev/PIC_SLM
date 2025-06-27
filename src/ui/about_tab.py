@@ -11,6 +11,11 @@ class AboutTab(BaseTab):
         super().__init__(parent, main_window)
         self.init_ui()
         
+        # 使用新的智能配置系统（可选，关于页面通常不需要配置）
+        config = self.get_config_from_manager()
+        if config:
+            self.apply_config(config)
+        
     def init_ui(self):
         """初始化UI"""
         # 创建主布局
@@ -117,4 +122,13 @@ class AboutTab(BaseTab):
         main_layout.addStretch()
         
         # 设置滚动区域
-        self.layout.addWidget(self.scroll_content) 
+        self.layout.addWidget(self.scroll_content)
+    
+    def _do_apply_config(self, config):
+        """实现具体的配置应用逻辑 - 智能配置系统"""
+        print(f"AboutTab: 智能应用配置，包含 {len(config)} 个配置项")
+        
+        # 关于页面通常不需要配置，但保持接口一致性
+        # 可以在这里添加任何需要的配置应用逻辑
+        
+        print("AboutTab: 智能配置应用完成") 

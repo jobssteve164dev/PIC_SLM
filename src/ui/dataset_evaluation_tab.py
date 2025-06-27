@@ -17,13 +17,14 @@ import matplotlib.pyplot as plt
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 
 # 导入拆分的组件模块
+from .base_tab import BaseTab
 from .components.dataset_evaluation import ClassificationAnalyzer, DetectionAnalyzer
 from .components.dataset_evaluation import WeightGenerator
 from .components.dataset_evaluation import ChartManager
 from .components.dataset_evaluation import ResultDisplayManager
 
 
-class DatasetEvaluationTab(QWidget):
+class DatasetEvaluationTab(BaseTab):
     """重构后的数据集评估标签页
     
     主要改进:
@@ -39,7 +40,7 @@ class DatasetEvaluationTab(QWidget):
     progress_updated = pyqtSignal(int)  # 进度更新信号
     
     def __init__(self, tabs, parent=None):
-        super().__init__(parent)
+        super().__init__(parent, parent)  # 调用BaseTab的构造函数
         self.tabs = tabs
         self.dataset_path = ""
         
@@ -55,6 +56,11 @@ class DatasetEvaluationTab(QWidget):
         
         self.init_ui()
         self.connect_signals()
+        
+        # 使用新的智能配置系统
+        config = self.get_config_from_manager()
+        if config:
+            self.apply_config(config)
         
     def init_ui(self):
         """初始化UI界面"""
@@ -579,8 +585,10 @@ class DatasetEvaluationTab(QWidget):
         self.status_label.setText(message)
         self.status_updated.emit(message)
         
-    def apply_config(self, config):
-        """应用配置到数据集评估标签页"""
+    def _do_apply_config(self, config):
+        """实现具体的配置应用逻辑 - 智能配置系统"""
+        print(f"DatasetEvaluationTab: 智能应用配置，包含 {len(config)} 个配置项")
+        
         # 从配置中获取默认数据集评估文件夹路径
         default_dataset_path = config.get('default_dataset_dir', '')
         
@@ -588,11 +596,17 @@ class DatasetEvaluationTab(QWidget):
             # 验证路径是否存在
             if os.path.exists(default_dataset_path):
                 self.dataset_path = default_dataset_path
-                self.dataset_path_label.setText(default_dataset_path)
-                self.evaluate_btn.setEnabled(True)
+                if hasattr(self, 'dataset_path_label'):
+                    self.dataset_path_label.setText(default_dataset_path)
+                if hasattr(self, 'evaluate_btn'):
+                    self.evaluate_btn.setEnabled(True)
+                print(f"DatasetEvaluationTab: 已加载默认数据集路径: {default_dataset_path}")
                 self.status_updated.emit(f"已加载默认数据集路径: {default_dataset_path}")
             else:
+                print(f"DatasetEvaluationTab: 配置中的数据集路径不存在: {default_dataset_path}")
                 self.status_updated.emit(f"配置中的数据集路径不存在: {default_dataset_path}")
+                
+        print("DatasetEvaluationTab: 智能配置应用完成")
                 
     def get_component_info(self):
         """获取组件信息 - 用于调试和监控"""

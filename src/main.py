@@ -173,75 +173,24 @@ def main():
             import traceback
             traceback.print_exc()
     
-    # 加载配置
-    config_loader = ConfigLoader(config_path)  # 直接传入已知的配置文件路径
-    config = config_loader.get_config() if hasattr(config_loader, 'get_config') else config_loader.load_config()
-    ui_config = config_loader.get_ui_config() if hasattr(config_loader, 'get_ui_config') else {}
+    # 导入集中化配置管理器
+    from src.utils.config_manager import config_manager
+    
+    # 设置配置管理器路径
+    config_manager.set_config_path(config_path)
     
     # 创建应用程序
     app = QApplication(sys.argv)
     
     # 设置应用程序样式
-    if ui_config:
-        app.setStyle(ui_config.get('style', 'Fusion'))
+    app.setStyle('Fusion')
     
     # 创建主窗口
     window = MainWindow()
     
-    # 应用配置 - 确保在初始化完成后应用配置
-    if config:
-        print("正在应用配置...")
-        print(f"配置内容: {config}")
-        window.apply_config(config)
-    else:
-        # 如果config_loader没有加载到配置，直接从config.json加载
-        try:
-            with open(config_path, 'r', encoding='utf-8') as f:
-                direct_config = json.load(f)
-                print("通过直接读取config.json加载配置...")
-                print(f"直接配置内容: {direct_config}")
-                window.apply_config(direct_config)
-        except Exception as e:
-            print(f"直接加载配置文件失败: {str(e)}")
-            import traceback
-            traceback.print_exc()
-            
-    # 强制应用标注界面的配置，确保目标检测界面路径正确设置
-    if hasattr(window, 'annotation_tab') and hasattr(window.annotation_tab, 'apply_config'):
-        print("正在强制应用配置到标注界面...")
-        if config:
-            window.annotation_tab.apply_config(config)
-        elif 'direct_config' in locals():
-            window.annotation_tab.apply_config(direct_config)
+    print("主窗口已创建，配置将在窗口初始化时自动加载")
     
-    # 强制应用训练界面的配置，确保训练界面标注文件夹路径正确设置
-    if hasattr(window, 'training_tab'):
-        print(f"训练标签页存在: {window.training_tab}")
-        print(f"训练标签页类型: {type(window.training_tab)}")
-        
-        # 确保训练标签页有apply_config方法
-        if hasattr(window.training_tab, 'apply_config'):
-            print("训练标签页有apply_config方法，正在应用配置...")
-            window.training_tab.apply_config(config)
-            print(f"训练标签页配置应用完成，标注文件夹: {window.training_tab.annotation_folder}")
-            
-            # 检查路径控件是否有文本 - 修复：使用新的组件结构
-            if (hasattr(window.training_tab, 'classification_widget') and 
-                hasattr(window.training_tab.classification_widget, 'path_edit')):
-                print(f"分类路径控件文本: {window.training_tab.classification_widget.path_edit.text()}")
-            if (hasattr(window.training_tab, 'detection_widget') and 
-                hasattr(window.training_tab.detection_widget, 'path_edit')):
-                print(f"检测路径控件文本: {window.training_tab.detection_widget.path_edit.text()}")
-        else:
-            print("警告: 训练标签页没有apply_config方法")
-            
-    # 应用评估标签页的配置
-    if hasattr(window, 'evaluation_tab') and hasattr(window.evaluation_tab, 'apply_config'):
-        print("正在应用配置到评估标签页...")
-        if config:
-            window.evaluation_tab.apply_config(config)
-        elif 'direct_config' in locals():
-            window.evaluation_tab.apply_config(direct_config)
+    print("所有组件将通过MainWindow自动获取配置，无需重复应用")
     
     # 创建工作线程
     thread = QThread()

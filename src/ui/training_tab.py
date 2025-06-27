@@ -37,9 +37,11 @@ class TrainingTab(BaseTab):
         self.task_type = "classification"  # 默认为图片分类任务
         self.init_ui()
         
-        # 尝试直接从配置文件加载默认输出文件夹
-        self.load_default_config()
-        
+        # 使用新的智能配置系统
+        config = self.get_config_from_manager()
+        if config:
+            self.apply_config(config)
+            
         # 初始化权重配置显示
         self.refresh_weight_config()
         
@@ -73,37 +75,35 @@ class TrainingTab(BaseTab):
             import traceback
             traceback.print_exc()
         
-    def apply_config(self, config):
-        """应用配置设置到训练标签页"""
-        try:
-            print(f"训练标签页apply_config被调用，配置内容：{config}")
+    def _do_apply_config(self, config):
+        """实现具体的配置应用逻辑 - 智能配置系统"""
+        print(f"TrainingTab: 智能应用配置，包含 {len(config)} 个配置项")
+        
+        # 加载默认输出文件夹路径作为标注文件夹
+        if 'default_output_folder' in config and config['default_output_folder']:
+            print(f"TrainingTab: 应用输出文件夹配置: {config['default_output_folder']}")
+            self.annotation_folder = config['default_output_folder']
             
-            # 加载默认输出文件夹路径作为标注文件夹
-            if 'default_output_folder' in config and config['default_output_folder']:
-                print(f"发现默认输出文件夹配置: {config['default_output_folder']}")
-                self.annotation_folder = config['default_output_folder']
-                
-                # 设置相应的路径输入框
-                if hasattr(self, 'classification_widget'):
-                    dataset_folder = os.path.join(self.annotation_folder, 'dataset')
-                    self.classification_widget.set_folder_path(dataset_folder)
-                    print(f"设置分类路径输入框: {dataset_folder}")
-                
-                if hasattr(self, 'detection_widget'):
-                    detection_folder = os.path.join(self.annotation_folder, 'detection_data')
-                    self.detection_widget.set_folder_path(detection_folder)
-                    print(f"设置检测路径输入框: {detection_folder}")
-                
-                # 检查是否可以开始训练
+            # 设置相应的路径输入框
+            if hasattr(self, 'classification_widget'):
+                dataset_folder = os.path.join(self.annotation_folder, 'dataset')
+                self.classification_widget.set_folder_path(dataset_folder)
+                print(f"TrainingTab: 设置分类路径: {dataset_folder}")
+            
+            if hasattr(self, 'detection_widget'):
+                detection_folder = os.path.join(self.annotation_folder, 'detection_data')
+                self.detection_widget.set_folder_path(detection_folder)
+                print(f"TrainingTab: 设置检测路径: {detection_folder}")
+            
+            # 检查是否可以开始训练
+            if hasattr(self, 'check_training_ready'):
                 self.check_training_ready()
-                
-            # 刷新权重配置显示
+            
+        # 刷新权重配置显示
+        if hasattr(self, 'refresh_weight_config'):
             self.refresh_weight_config()
-                
-        except Exception as e:
-            print(f"训练标签页apply_config出错: {str(e)}")
-            import traceback
-            traceback.print_exc()
+            
+        print("TrainingTab: 智能配置应用完成")
         
     def init_ui(self):
         """初始化UI"""

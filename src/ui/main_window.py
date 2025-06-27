@@ -11,6 +11,7 @@ from typing import Dict
 # 导入统一的配置路径工具
 sys.path.append(os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), 'src'))
 from utils.config_path import get_config_file_path
+from utils.config_manager import config_manager
 
 from .data_processing_tab import DataProcessingTab
 from .annotation_tab import AnnotationTab
@@ -58,7 +59,8 @@ class MainWindow(QMainWindow):
         self.setWindowTitle('图片模型训练系统 - AGPL-3.0许可')
         self.setGeometry(100, 100, 1200, 800)
         
-        # 初始化配置
+        # 初始化配置标志，避免重复初始化
+        self._config_initialized = False
         self.config = {}
         
         # 初始化预处理线程
@@ -70,11 +72,13 @@ class MainWindow(QMainWindow):
         # 初始化UI
         self.init_ui()
         
-        # 加载配置
+        # 加载配置 - 只在初始化时加载一次
         self.load_config()
         
-        # 确保所有tab都已收到配置信息，使用定时器延迟一点再次强制应用配置
-        QTimer.singleShot(100, self._ensure_all_tabs_configured)
+        # 标记配置已初始化
+        self._config_initialized = True
+        
+        print("MainWindow: 初始化完成，跳过重复配置检查")
 
     def init_system_tray(self):
         """初始化系统托盘"""
@@ -447,31 +451,39 @@ class MainWindow(QMainWindow):
             traceback.print_exc()
     
     def load_config(self):
-        """加载配置"""
+        """加载配置 - 使用集中化配置管理器"""
         try:
-            # 获取配置文件路径（使用统一工具）
             config_file = get_config_file_path()
+            print(f"MainWindow: 使用集中化配置管理器加载配置: {config_file}")
             
-            # 如果配置文件存在，则加载配置
-            if os.path.exists(config_file):
-                with open(config_file, 'r', encoding='utf-8') as f:
-                    config = json.load(f)
-                
-                # 应用配置
+            # 设置配置管理器路径
+            config_manager.set_config_path(config_file)
+            
+            # 获取配置
+            config = config_manager.get_config()
+            
+            if config:
+                print(f"MainWindow: 成功通过配置管理器加载配置，包含 {len(config)} 个配置项")
                 self.apply_config(config)
-                print(f"MainWindow成功加载配置文件: {config_file}")
-                print(f"配置内容: {config}")
+            else:
+                print("MainWindow: 配置为空或加载失败")
                 
         except Exception as e:
-            print(f"MainWindow加载配置失败: {str(e)}")
+            print(f"MainWindow: 加载配置文件失败: {str(e)}")
             import traceback
             traceback.print_exc()
 
     def apply_config(self, config):
         """应用配置"""
-        print(f"MainWindow.apply_config被调用，配置内容: {config}")
+        # 检查是否已经初始化完成，避免重复应用配置
+        if self._config_initialized and self.config == config:
+            print("MainWindow.apply_config: 配置未变化，跳过重复应用")
+            return
+            
+        print(f"MainWindow.apply_config被调用，配置内容: {len(config)} 个配置项")
         print(f"MainWindow.apply_config: 源文件夹配置 = {config.get('default_source_folder', 'NOT_SET')}")
         print(f"MainWindow.apply_config: 输出文件夹配置 = {config.get('default_output_folder', 'NOT_SET')}")
+        
         # 保存配置到实例变量中，以便其他标签页可以访问
         self.config = config
         
@@ -749,47 +761,28 @@ class MainWindow(QMainWindow):
         QTimer.singleShot(50, lambda: self.resize(current_size))
         
     def _ensure_all_tabs_configured(self):
-        """确保所有tab都正确配置"""
-        print("MainWindow._ensure_all_tabs_configured: 开始强制确保所有tab配置正确...")
-        
-        if hasattr(self, 'config') and self.config:
-            print(f"MainWindow._ensure_all_tabs_configured: 使用已加载的配置")
+        """确保所有tab都正确配置 - 简化版本，减少重复操作"""
+        if not self._config_initialized:
+            print("MainWindow._ensure_all_tabs_configured: 初始化尚未完成，跳过")
+            return
             
-            # 强制重新应用配置到数据处理tab
-            if hasattr(self, 'data_processing_tab'):
-                print("MainWindow._ensure_all_tabs_configured: 强制配置数据处理tab...")
+        if not hasattr(self, 'config') or not self.config:
+            print("MainWindow._ensure_all_tabs_configured: 没有可用的配置，跳过")
+            return
+            
+        print("MainWindow._ensure_all_tabs_configured: 执行最小必要的配置检查...")
+        
+        # 只检查关键配置是否正确应用，不重复应用整个配置
+        if hasattr(self, 'data_processing_tab'):
+            source_set = getattr(self.data_processing_tab, 'source_folder', None)
+            output_set = getattr(self.data_processing_tab, 'output_folder', None)
+            
+            if not source_set or not output_set:
+                print("MainWindow._ensure_all_tabs_configured: 数据处理tab缺少关键配置，执行一次修复")
                 if hasattr(self.data_processing_tab, 'apply_config'):
                     self.data_processing_tab.apply_config(self.config)
-                else:
-                    # 手动设置关键配置
-                    if 'default_source_folder' in self.config and self.config['default_source_folder']:
-                        self.data_processing_tab.source_folder = self.config['default_source_folder']
-                        if hasattr(self.data_processing_tab, 'source_path_edit'):
-                            self.data_processing_tab.source_path_edit.setText(self.config['default_source_folder'])
                     
-                    if 'default_output_folder' in self.config and self.config['default_output_folder']:
-                        self.data_processing_tab.output_folder = self.config['default_output_folder']
-                        if hasattr(self.data_processing_tab, 'output_path_edit'):
-                            self.data_processing_tab.output_path_edit.setText(self.config['default_output_folder'])
-                    
-                    # 检查预处理准备状态
-                    if hasattr(self.data_processing_tab, 'check_preprocess_ready'):
-                        self.data_processing_tab.check_preprocess_ready()
-                
-                print(f"MainWindow._ensure_all_tabs_configured: 数据处理tab配置完成")
-                print(f"  源文件夹: '{getattr(self.data_processing_tab, 'source_folder', 'NOT_SET')}'")
-                print(f"  输出文件夹: '{getattr(self.data_processing_tab, 'output_folder', 'NOT_SET')}'")
-                print(f"  预处理按钮状态: {getattr(self.data_processing_tab, 'preprocess_btn', None) and self.data_processing_tab.preprocess_btn.isEnabled()}")
-            
-            # 同样确保其他tab的配置
-            for tab_name in ['annotation_tab', 'training_tab', 'prediction_tab', 'evaluation_tab', 'dataset_evaluation_tab', 'model_analysis_tab']:
-                if hasattr(self, tab_name):
-                    tab = getattr(self, tab_name)
-                    if hasattr(tab, 'apply_config'):
-                        print(f"MainWindow._ensure_all_tabs_configured: 强制配置 {tab_name}...")
-                        tab.apply_config(self.config)
-        else:
-            print("MainWindow._ensure_all_tabs_configured: 警告 - 没有可用的配置")
+        print("MainWindow._ensure_all_tabs_configured: 配置检查完成")
 
     def showEvent(self, event):
         """窗口显示事件，确保所有标签页布局正确"""

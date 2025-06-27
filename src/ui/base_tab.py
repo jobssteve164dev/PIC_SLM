@@ -1,5 +1,7 @@
 from PyQt5.QtWidgets import QWidget, QVBoxLayout, QScrollArea, QSizePolicy, QApplication
 from PyQt5.QtCore import pyqtSignal, QTimer, Qt
+from typing import Dict, Any
+from src.utils.config_manager import config_manager
 
 class BaseTab(QWidget):
     """所有标签页的基类，提供通用功能"""
@@ -11,6 +13,8 @@ class BaseTab(QWidget):
     def __init__(self, parent=None, main_window=None):
         super().__init__(parent)
         self.main_window = main_window
+        self._config_applied = False
+        self._config_hash = None
         self.layout = QVBoxLayout(self)
         self.layout.setContentsMargins(0, 0, 0, 0)  # 减少边距
         self.layout.setSpacing(0)  # 减少间距
@@ -24,6 +28,8 @@ class BaseTab(QWidget):
         # 连接标签页切换信号，确保在标签页激活时刷新布局
         if main_window and hasattr(main_window, 'tabs'):
             main_window.tabs.currentChanged.connect(self.on_tab_changed)
+        
+        print(f"{self.__class__.__name__}: BaseTab初始化完成")
         
     def create_scroll_area(self):
         """创建一个滚动区域"""
@@ -104,3 +110,50 @@ class BaseTab(QWidget):
         
         # 简单更新UI
         self.update() 
+
+    def apply_config(self, config: Dict[str, Any]):
+        """智能配置应用，避免重复操作"""
+        if not config:
+            print(f"{self.__class__.__name__}: 配置为空，跳过应用")
+            return
+            
+        # 计算配置哈希值
+        current_hash = hash(str(sorted(config.items())))
+        
+        # 检查配置是否有变化
+        if self._config_applied and self._config_hash == current_hash:
+            print(f"{self.__class__.__name__}: 配置未变化，跳过重复应用")
+            return
+            
+        print(f"{self.__class__.__name__}: 应用新配置...")
+        
+        # 调用子类的配置应用方法
+        try:
+            self._do_apply_config(config)
+            self._config_applied = True
+            self._config_hash = current_hash
+            print(f"{self.__class__.__name__}: 配置应用成功")
+        except Exception as e:
+            print(f"{self.__class__.__name__}: 配置应用失败: {str(e)}")
+            import traceback
+            traceback.print_exc()
+    
+    def _do_apply_config(self, config: Dict[str, Any]):
+        """子类需要重写此方法来实现具体的配置应用逻辑"""
+        pass
+    
+    def get_config_from_manager(self) -> Dict[str, Any]:
+        """从集中化配置管理器获取配置"""
+        return config_manager.get_config()
+    
+    def force_reload_config(self):
+        """强制重新加载配置"""
+        self._config_applied = False
+        self._config_hash = None
+        config = self.get_config_from_manager()
+        if config:
+            self.apply_config(config)
+    
+    def is_config_applied(self) -> bool:
+        """检查配置是否已应用"""
+        return self._config_applied 

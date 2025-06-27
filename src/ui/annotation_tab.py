@@ -32,22 +32,10 @@ class AnnotationTab(BaseTab):
         # 先初始化UI
         self.init_ui()
         
-        # 然后尝试从配置文件加载默认设置（修改为项目根目录）
-        config_file = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), 'config.json')
-        print(f"尝试加载配置文件: {config_file}")
-        if os.path.exists(config_file):
-            try:
-                with open(config_file, 'r', encoding='utf-8') as f:
-                    config = json.load(f)
-                    print(f"成功加载配置: {config}")
-                    
-                    # 应用配置到子组件
-                    self.apply_config_to_components(config)
-                    
-            except Exception as e:
-                print(f"加载配置失败: {str(e)}")
-                import traceback
-                traceback.print_exc()
+        # 使用新的智能配置系统
+        config = self.get_config_from_manager()
+        if config:
+            self.apply_config(config)
         
     def init_ui(self):
         """初始化UI"""
@@ -148,21 +136,14 @@ class AnnotationTab(BaseTab):
         except Exception as e:
             print(f"更新主窗口状态时出错: {str(e)}")
 
-    def apply_config(self, config):
-        """应用配置设置"""
-        try:
-            print(f"AnnotationTab.apply_config被调用，配置内容: {config}")
-            
-            # 应用配置到子组件
-            self.apply_config_to_components(config)
-            
-            print("AnnotationTab.apply_config应用完成")
-            return True
-        except Exception as e:
-            print(f"应用配置到标注标签页时出错: {str(e)}")
-            import traceback
-            traceback.print_exc()
-            return False
+    def _do_apply_config(self, config):
+        """实现具体的配置应用逻辑 - 智能配置系统"""
+        print(f"AnnotationTab: 智能应用配置，包含 {len(config)} 个配置项")
+        
+        # 应用配置到子组件
+        self.apply_config_to_components(config)
+        
+        print("AnnotationTab: 智能配置应用完成")
             
     def apply_config_to_components(self, config):
         """应用配置到子组件"""

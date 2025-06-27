@@ -2,6 +2,7 @@ from PyQt5.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButt
 import os
 import json
 from src.config_loader import ConfigLoader
+from src.utils.config_manager import config_manager
 
 
 class WeightConfigManager:
@@ -9,23 +10,27 @@ class WeightConfigManager:
     
     def __init__(self):
         self.config_loader = ConfigLoader()
+        self._last_config_hash = None  # 用于检测配置变化
     
     def _load_config_directly(self):
-        """直接从文件加载配置，不使用缓存"""
+        """使用集中化配置管理器加载配置"""
         try:
-            config_path = self.config_loader.config_path
-            print(f"WeightConfigManager: 直接读取配置文件: {config_path}")
+            # 使用集中化配置管理器
+            config = config_manager.get_config()
             
-            if os.path.exists(config_path):
-                with open(config_path, 'r', encoding='utf-8') as f:
-                    config = json.load(f)
-                print(f"WeightConfigManager: 成功读取配置，weight_strategy = {config.get('weight_strategy', 'NOT_FOUND')}")
-                return config
+            # 生成配置哈希值以检测变化
+            current_hash = hash(str(sorted(config.items())))
+            
+            if self._last_config_hash != current_hash:
+                print(f"WeightConfigManager: 配置已更新，weight_strategy = {config.get('weight_strategy', 'NOT_FOUND')}")
+                self._last_config_hash = current_hash
             else:
-                print(f"WeightConfigManager: 配置文件不存在: {config_path}")
-                return {}
+                print(f"WeightConfigManager: 使用缓存的配置")
+                
+            return config
+            
         except Exception as e:
-            print(f"WeightConfigManager: 直接读取配置文件失败: {str(e)}")
+            print(f"WeightConfigManager: 读取配置失败: {str(e)}")
             return {}
     
     def load_weight_config(self):
