@@ -41,6 +41,7 @@ class AutoReviewThread(QThread):
             'classified': 0,
             'unclassified': 0,
             'errors': 0,
+            'skipped_lots': 0,
             'class_counts': {},
             'start_time': None,
             'last_scan_time': None
@@ -179,9 +180,17 @@ class AutoReviewThread(QThread):
                 if self._stop_processing:
                     break
                 
-                # 检查是否已处理过此文件夹
+                # 检查是否已处理过此文件夹（内存中记录）
                 if path_info['full_path'] in self.processed_files:
                     continue
+                
+                # 检查是否需要跳过已Review的LotID
+                if self.config.get('skip_processed', True):
+                    if self._is_lot_already_reviewed(path_info['recipe_id'], path_info['lot_id']):
+                        self.status_updated.emit(f"跳过已Review的LotID: {path_info['recipe_id']}/{path_info['lot_id']}")
+                        self.processed_files.add(path_info['full_path'])
+                        self.stats['skipped_lots'] += 1
+                        continue
                 
                 self._process_wafer_folder_new_structure(path_info)
                 self.processed_files.add(path_info['full_path'])
@@ -332,6 +341,43 @@ class AutoReviewThread(QThread):
             
         except Exception as e:
             raise Exception(f"创建输出结构失败: {str(e)}")
+    
+    def _is_lot_already_reviewed(self, recipe_id: str, lot_id: str) -> bool:
+        """检查指定的LotID是否已经被Review过"""
+        try:
+            review_folder = self.config['review_folder']
+            lot_review_path = os.path.join(review_folder, recipe_id, lot_id)
+            
+            # 检查Review文件夹中是否存在对应的LotID路径
+            if not os.path.exists(lot_review_path):
+                return False
+            
+            # 检查是否包含任何分类文件夹和图片
+            if not os.path.isdir(lot_review_path):
+                return False
+            
+            # 遍历缺陷类别文件夹
+            defect_folders = [f for f in os.listdir(lot_review_path) 
+                            if os.path.isdir(os.path.join(lot_review_path, f))]
+            
+            if not defect_folders:
+                return False
+            
+            # 检查是否包含图片文件
+            for defect_folder in defect_folders:
+                defect_path = os.path.join(lot_review_path, defect_folder)
+                image_files = [f for f in os.listdir(defect_path) 
+                             if f.lower().endswith(('.jpg', '.jpeg', '.png'))]
+                if image_files:
+                    # 找到至少一个图片文件，说明已经Review过
+                    self.logger.info(f"LotID {recipe_id}/{lot_id} 已存在Review结果，包含 {len(image_files)} 个图片")
+                    return True
+            
+            return False
+            
+        except Exception as e:
+            self.logger.warning(f"检查LotID {recipe_id}/{lot_id} Review状态时出错: {str(e)}")
+            return False
 
 
 class AutoReviewWidget(QWidget):
@@ -350,7 +396,8 @@ class AutoReviewWidget(QWidget):
             'scan_interval': 10,
             'confidence_threshold': 80.0,
             'copy_mode': 'copy',
-            'auto_start': False
+            'auto_start': False,
+            'skip_processed': True
         }
         
         self.init_ui()
@@ -434,10 +481,16 @@ class AutoReviewWidget(QWidget):
         self.copy_mode_combo.setCurrentText("复制" if self.config['copy_mode'] == 'copy' else "移动")
         param_layout.addWidget(self.copy_mode_combo, 1, 1)
         
+        # 重复处理选项
+        self.skip_processed_check = QCheckBox("跳过已Review的LotID")
+        self.skip_processed_check.setChecked(self.config.get('skip_processed', True))
+        self.skip_processed_check.setToolTip("检查Review文件夹，跳过已经处理过的LotID")
+        param_layout.addWidget(self.skip_processed_check, 1, 2)
+        
         # 自动启动选项
         self.auto_start_check = QCheckBox("程序启动时自动开始")
         self.auto_start_check.setChecked(self.config['auto_start'])
-        param_layout.addWidget(self.auto_start_check, 1, 2, 1, 2)
+        param_layout.addWidget(self.auto_start_check, 1, 3)
         
         param_group.setLayout(param_layout)
         layout.addWidget(param_group)
@@ -463,9 +516,14 @@ class AutoReviewWidget(QWidget):
         self.load_config_btn = QPushButton("加载配置")
         self.load_config_btn.clicked.connect(self.load_config)
         
+        self.clear_processed_btn = QPushButton("清理已处理记录")
+        self.clear_processed_btn.clicked.connect(self.clear_processed_records)
+        self.clear_processed_btn.setToolTip("清理内存中的已处理记录，重新扫描所有文件夹")
+        
         button_layout.addWidget(self.start_btn)
         button_layout.addWidget(self.pause_btn)
         button_layout.addWidget(self.stop_btn)
+        button_layout.addWidget(self.clear_processed_btn)
         button_layout.addStretch()
         button_layout.addWidget(self.save_config_btn)
         button_layout.addWidget(self.load_config_btn)
@@ -528,6 +586,7 @@ class AutoReviewWidget(QWidget):
         self.classified_label = QLabel("0")
         self.unclassified_label = QLabel("0")
         self.errors_label = QLabel("0")
+        self.skipped_lots_label = QLabel("0")
         self.runtime_label = QLabel("00:00:00")
         
         general_layout.addWidget(QLabel("总处理数:"), 0, 0)
@@ -538,8 +597,10 @@ class AutoReviewWidget(QWidget):
         general_layout.addWidget(self.unclassified_label, 1, 1)
         general_layout.addWidget(QLabel("错误数:"), 1, 2)
         general_layout.addWidget(self.errors_label, 1, 3)
-        general_layout.addWidget(QLabel("运行时间:"), 2, 0)
-        general_layout.addWidget(self.runtime_label, 2, 1, 1, 3)
+        general_layout.addWidget(QLabel("跳过LotID:"), 2, 0)
+        general_layout.addWidget(self.skipped_lots_label, 2, 1)
+        general_layout.addWidget(QLabel("运行时间:"), 2, 2)
+        general_layout.addWidget(self.runtime_label, 2, 3)
         
         general_stats_group.setLayout(general_layout)
         layout.addWidget(general_stats_group)
@@ -571,6 +632,7 @@ class AutoReviewWidget(QWidget):
         self.config['confidence_threshold'] = self.confidence_spin.value()
         self.config['copy_mode'] = 'copy' if self.copy_mode_combo.currentText() == '复制' else 'move'
         self.config['auto_start'] = self.auto_start_check.isChecked()
+        self.config['skip_processed'] = self.skip_processed_check.isChecked()
     
     def start_auto_review(self):
         """开始自动Review"""
@@ -672,6 +734,7 @@ class AutoReviewWidget(QWidget):
         self.classified_label.setText(str(stats['classified']))
         self.unclassified_label.setText(str(stats['unclassified']))
         self.errors_label.setText(str(stats['errors']))
+        self.skipped_lots_label.setText(str(stats['skipped_lots']))
         
         # 更新运行时间
         if stats['start_time']:
@@ -723,10 +786,31 @@ class AutoReviewWidget(QWidget):
                 copy_mode_text = "复制" if self.config.get('copy_mode', 'copy') == 'copy' else "移动"
                 self.copy_mode_combo.setCurrentText(copy_mode_text)
                 self.auto_start_check.setChecked(self.config.get('auto_start', False))
+                self.skip_processed_check.setChecked(self.config.get('skip_processed', True))
                 
                 QMessageBox.information(self, "成功", "配置文件加载成功！")
             except Exception as e:
                 QMessageBox.critical(self, "错误", f"加载配置文件失败: {str(e)}")
+    
+    def clear_processed_records(self):
+        """清理已处理记录"""
+        if self.auto_review_thread:
+            reply = QMessageBox.question(
+                self, "确认清理", 
+                "清理已处理记录后，下次扫描时会重新检查所有文件夹。\n"
+                "如果服务正在运行，建议先停止服务。\n\n"
+                "是否继续清理？",
+                QMessageBox.Yes | QMessageBox.No,
+                QMessageBox.No
+            )
+            
+            if reply == QMessageBox.Yes:
+                if hasattr(self.auto_review_thread, 'processed_files'):
+                    self.auto_review_thread.processed_files.clear()
+                    self.log_text.append(f"[{time.strftime('%H:%M:%S')}] 已清理内存中的处理记录")
+                    QMessageBox.information(self, "完成", "已清理处理记录！")
+        else:
+            QMessageBox.information(self, "提示", "当前没有运行的Review服务。")
     
     def closeEvent(self, event):
         """关闭事件处理"""

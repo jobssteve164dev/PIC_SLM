@@ -320,3 +320,82 @@
 {"timestamp":"2025-06-28T00:10:33.761619","level":"INFO","logger":"src.data_processor","message":"数据处理器初始化完成","module":"data_processor","function":"__init__","line":26}
 {"timestamp":"2025-06-28T00:10:33.762619","level":"INFO","logger":"src.predictor","message":"预测器初始化完成，使用设备: cpu","module":"predictor","function":"__init__","line":249}
 {"timestamp":"2025-06-28T00:10:33.766619","level":"INFO","logger":"src.image_processing.main_processor","message":"图像处理器初始化完成","module":"main_processor","function":"__init__","line":37}
+{"timestamp":"2025-06-28T00:10:33.766619","level":"INFO","logger":"src.annotation_tool","message":"标注工具初始化完成","module":"annotation_tool","function":"__init__","line":19}
+{"timestamp":"2025-06-28T00:11:42.589958","level":"INFO","logger":"__main__","message":"程序退出，正在清理TensorBoard进程...","module":"main","function":"cleanup_tensorboard","line":67}
+{"timestamp":"2025-06-28T00:11:42.672760","level":"INFO","logger":"__main__","message":"TensorBoard进程清理完成","module":"main","function":"cleanup_tensorboard","line":76}
+{"timestamp":"2025-06-28T00:11:46.457723","level":"INFO","logger":"__main__","message":"程序开始执行...","module":"main","function":"<module>","line":23}
+{"timestamp":"2025-06-28T00:11:46.457723","level":"INFO","logger":"__main__","message":"Python版本: 3.9.13 (tags/v3.9.13:6de2ca5, May 17 2022, 16:36:42) [MSC v.1929 64 bit (AMD64)]","module":"main","function":"<module>","line":24}
+{"timestamp":"2025-06-28T00:11:46.458739","level":"INFO","logger":"__main__","message":"当前工作目录: F:\\Qsync\\00.AI_PROJECT\\图片分类模型训练\\C1\\src","module":"main","function":"<module>","line":25}
+{"timestamp":"2025-06-28T00:11:46.494580","level":"INFO","logger":"__main__","message":"PyQt5模块已导入","module":"main","function":"<module>","line":28}
+{"timestamp":"2025-06-28T00:11:51.704146","level":"INFO","logger":"__main__","message":"MainWindow已导入","module":"main","function":"<module>","line":31}
+{"timestamp":"2025-06-28T00:11:51.705171","level":"INFO","logger":"__main__","message":"EvaluationTab已导入","module":"main","function":"<module>","line":33}
+{"timestamp":"2025-06-28T00:11:51.706512","level":"INFO","logger":"__main__","message":"DataProcessor已导入","module":"main","function":"<module>","line":35}
+{"timestamp":"2025-06-28T00:11:51.871726","level":"INFO","logger":"__main__","message":"ModelTrainer已导入","module":"main","function":"<module>","line":37}
+{"timestamp":"2025-06-28T00:11:51.873742","level":"INFO","logger":"__main__","message":"配置文件路径: f:\\Qsync\\00.AI_PROJECT\\图片分类模型训练\\C1\\config.json","module":"main","function":"main","line":86}
+{"timestamp":"2025-06-28T00:11:51.874764","level":"INFO","logger":"__main__","message":"配置文件是否存在: True","module":"main","function":"main","line":87}
+{"timestamp":"2025-06-28T00:11:53.118166","level":"INFO","logger":"src.data_processor","message":"数据处理器初始化完成","module":"data_processor","function":"__init__","line":26}
+{"timestamp":"2025-06-28T00:11:53.119164","level":"INFO","logger":"src.predictor","message":"预测器初始化完成，使用设备: cpu","module":"predictor","function":"__init__","line":249}
+{"timestamp":"2025-06-28T00:11:53.123176","level":"INFO","logger":"src.image_processing.main_processor","message":"图像处理器初始化完成","module":"main_processor","function":"__init__","line":37}
+{"timestamp":"2025-06-28T00:11:53.124170","level":"INFO","logger":"src.annotation_tool","message":"标注工具初始化完成","module":"annotation_tool","function":"__init__","line":19}
+{"timestamp":"2025-06-28T00:12:15.594412","level":"INFO","logger":"src.ui.components.evaluation.utils.metrics_data_manager","message":"指标数据已重置","module":"metrics_data_manager","function":"reset_data","line":307}
+{"timestamp":"2025-06-28T00:13:08.309751","level":"INFO","logger":"src.ui.components.evaluation.utils.metrics_data_manager","message":"任务类型设置为: classification","module":"metrics_data_manager","function":"determine_task_type","line":71}
+{"timestamp":"2025-06-28T05:11:02.024456","level":"INFO","logger":"__main__","message":"程序退出，正在清理TensorBoard进程...","module":"main","function":"cleanup_tensorboard","line":67}
+{"timestamp":"2025-06-28T05:11:02.120969","level":"INFO","logger":"__main__","message":"TensorBoard进程清理完成","module":"main","function":"cleanup_tensorboard","line":76}
+{"timestamp":"2025-06-28T05:14:10.081375","level":"INFO","logger":"__main__","message":"程序开始执行...","module":"main","function":"<module>","line":23}
+{"timestamp":"2025-06-28T05:14:10.081375","level":"INFO","logger":"__main__","message":"Python版本: 3.9.13 (tags/v3.9.13:6de2ca5, May 17 2022, 16:36:42) [MSC v.1929 64 bit (AMD64)]","module":"main","function":"<module>","line":24}
+{"timestamp":"2025-06-28T05:14:10.082375","level":"INFO","logger":"__main__","message":"当前工作目录: F:\\Qsync\\00.AI_PROJECT\\图片分类模型训练\\C1\\src","module":"main","function":"<module>","line":25}
+{"timestamp":"2025-06-28T05:14:10.130785","level":"INFO","logger":"__main__","message":"PyQt5模块已导入","module":"main","function":"<module>","line":28}
+{"timestamp":"2025-06-28T05:14:15.213828","level":"INFO","logger":"__main__","message":"MainWindow已导入","module":"main","function":"<module>","line":31}
+{"timestamp":"2025-06-28T05:14:15.214828","level":"INFO","logger":"__main__","message":"EvaluationTab已导入","module":"main","function":"<module>","line":33}
+{"timestamp":"2025-06-28T05:14:15.215831","level":"INFO","logger":"__main__","message":"DataProcessor已导入","module":"main","function":"<module>","line":35}
+{"timestamp":"2025-06-28T05:14:15.393408","level":"INFO","logger":"__main__","message":"ModelTrainer已导入","module":"main","function":"<module>","line":37}
+{"timestamp":"2025-06-28T05:14:15.395408","level":"INFO","logger":"__main__","message":"配置文件路径: f:\\Qsync\\00.AI_PROJECT\\图片分类模型训练\\C1\\config.json","module":"main","function":"main","line":86}
+{"timestamp":"2025-06-28T05:14:15.396464","level":"INFO","logger":"__main__","message":"配置文件是否存在: True","module":"main","function":"main","line":87}
+{"timestamp":"2025-06-28T05:14:16.667745","level":"INFO","logger":"src.data_processor","message":"数据处理器初始化完成","module":"data_processor","function":"__init__","line":26}
+{"timestamp":"2025-06-28T05:14:16.668745","level":"INFO","logger":"src.predictor","message":"预测器初始化完成，使用设备: cpu","module":"predictor","function":"__init__","line":249}
+{"timestamp":"2025-06-28T05:14:16.672069","level":"INFO","logger":"src.image_processing.main_processor","message":"图像处理器初始化完成","module":"main_processor","function":"__init__","line":37}
+{"timestamp":"2025-06-28T05:14:16.672069","level":"INFO","logger":"src.annotation_tool","message":"标注工具初始化完成","module":"annotation_tool","function":"__init__","line":19}
+{"timestamp":"2025-06-28T05:26:19.903548","level":"INFO","logger":"__main__","message":"程序退出，正在清理TensorBoard进程...","module":"main","function":"cleanup_tensorboard","line":67}
+{"timestamp":"2025-06-28T05:26:19.994310","level":"INFO","logger":"__main__","message":"TensorBoard进程清理完成","module":"main","function":"cleanup_tensorboard","line":76}
+{"timestamp":"2025-06-28T05:26:40.529134","level":"INFO","logger":"__main__","message":"程序开始执行...","module":"main","function":"<module>","line":23}
+{"timestamp":"2025-06-28T05:26:40.529134","level":"INFO","logger":"__main__","message":"Python版本: 3.9.13 (tags/v3.9.13:6de2ca5, May 17 2022, 16:36:42) [MSC v.1929 64 bit (AMD64)]","module":"main","function":"<module>","line":24}
+{"timestamp":"2025-06-28T05:26:40.530141","level":"INFO","logger":"__main__","message":"当前工作目录: F:\\Qsync\\00.AI_PROJECT\\图片分类模型训练\\C1\\src","module":"main","function":"<module>","line":25}
+{"timestamp":"2025-06-28T05:26:40.567655","level":"INFO","logger":"__main__","message":"PyQt5模块已导入","module":"main","function":"<module>","line":28}
+{"timestamp":"2025-06-28T05:26:45.748780","level":"INFO","logger":"__main__","message":"MainWindow已导入","module":"main","function":"<module>","line":31}
+{"timestamp":"2025-06-28T05:26:45.748780","level":"INFO","logger":"__main__","message":"EvaluationTab已导入","module":"main","function":"<module>","line":33}
+{"timestamp":"2025-06-28T05:26:45.750779","level":"INFO","logger":"__main__","message":"DataProcessor已导入","module":"main","function":"<module>","line":35}
+{"timestamp":"2025-06-28T05:26:45.937222","level":"INFO","logger":"__main__","message":"ModelTrainer已导入","module":"main","function":"<module>","line":37}
+{"timestamp":"2025-06-28T05:26:45.940404","level":"INFO","logger":"__main__","message":"配置文件路径: f:\\Qsync\\00.AI_PROJECT\\图片分类模型训练\\C1\\config.json","module":"main","function":"main","line":86}
+{"timestamp":"2025-06-28T05:26:45.940404","level":"INFO","logger":"__main__","message":"配置文件是否存在: True","module":"main","function":"main","line":87}
+{"timestamp":"2025-06-28T05:26:46.505612","level":"INFO","logger":"__main__","message":"程序退出，正在清理TensorBoard进程...","module":"main","function":"cleanup_tensorboard","line":67}
+{"timestamp":"2025-06-28T05:26:46.589490","level":"INFO","logger":"__main__","message":"TensorBoard进程清理完成","module":"main","function":"cleanup_tensorboard","line":76}
+{"timestamp":"2025-06-28T05:28:04.035836","level":"INFO","logger":"__main__","message":"程序开始执行...","module":"main","function":"<module>","line":23}
+{"timestamp":"2025-06-28T05:28:04.035836","level":"INFO","logger":"__main__","message":"Python版本: 3.9.13 (tags/v3.9.13:6de2ca5, May 17 2022, 16:36:42) [MSC v.1929 64 bit (AMD64)]","module":"main","function":"<module>","line":24}
+{"timestamp":"2025-06-28T05:28:04.036841","level":"INFO","logger":"__main__","message":"当前工作目录: F:\\Qsync\\00.AI_PROJECT\\图片分类模型训练\\C1\\src","module":"main","function":"<module>","line":25}
+{"timestamp":"2025-06-28T05:28:04.073466","level":"INFO","logger":"__main__","message":"PyQt5模块已导入","module":"main","function":"<module>","line":28}
+{"timestamp":"2025-06-28T05:28:08.983530","level":"INFO","logger":"__main__","message":"MainWindow已导入","module":"main","function":"<module>","line":31}
+{"timestamp":"2025-06-28T05:28:08.984811","level":"INFO","logger":"__main__","message":"EvaluationTab已导入","module":"main","function":"<module>","line":33}
+{"timestamp":"2025-06-28T05:28:08.985883","level":"INFO","logger":"__main__","message":"DataProcessor已导入","module":"main","function":"<module>","line":35}
+{"timestamp":"2025-06-28T05:28:09.152367","level":"INFO","logger":"__main__","message":"ModelTrainer已导入","module":"main","function":"<module>","line":37}
+{"timestamp":"2025-06-28T05:28:09.154664","level":"INFO","logger":"__main__","message":"配置文件路径: f:\\Qsync\\00.AI_PROJECT\\图片分类模型训练\\C1\\config.json","module":"main","function":"main","line":86}
+{"timestamp":"2025-06-28T05:28:09.155425","level":"INFO","logger":"__main__","message":"配置文件是否存在: True","module":"main","function":"main","line":87}
+{"timestamp":"2025-06-28T05:28:10.432256","level":"INFO","logger":"src.data_processor","message":"数据处理器初始化完成","module":"data_processor","function":"__init__","line":26}
+{"timestamp":"2025-06-28T05:28:10.433256","level":"INFO","logger":"src.predictor","message":"预测器初始化完成，使用设备: cpu","module":"predictor","function":"__init__","line":249}
+{"timestamp":"2025-06-28T05:28:10.437277","level":"INFO","logger":"src.image_processing.main_processor","message":"图像处理器初始化完成","module":"main_processor","function":"__init__","line":37}
+{"timestamp":"2025-06-28T05:28:10.438275","level":"INFO","logger":"src.annotation_tool","message":"标注工具初始化完成","module":"annotation_tool","function":"__init__","line":19}
+{"timestamp":"2025-06-28T05:51:23.601149","level":"INFO","logger":"__main__","message":"程序退出，正在清理TensorBoard进程...","module":"main","function":"cleanup_tensorboard","line":67}
+{"timestamp":"2025-06-28T05:51:23.690945","level":"INFO","logger":"__main__","message":"TensorBoard进程清理完成","module":"main","function":"cleanup_tensorboard","line":76}
+{"timestamp":"2025-06-28T05:52:22.249075","level":"INFO","logger":"__main__","message":"程序开始执行...","module":"main","function":"<module>","line":23}
+{"timestamp":"2025-06-28T05:52:22.249586","level":"INFO","logger":"__main__","message":"Python版本: 3.9.13 (tags/v3.9.13:6de2ca5, May 17 2022, 16:36:42) [MSC v.1929 64 bit (AMD64)]","module":"main","function":"<module>","line":24}
+{"timestamp":"2025-06-28T05:52:22.249586","level":"INFO","logger":"__main__","message":"当前工作目录: F:\\Qsync\\00.AI_PROJECT\\图片分类模型训练\\C1\\src","module":"main","function":"<module>","line":25}
+{"timestamp":"2025-06-28T05:52:22.291148","level":"INFO","logger":"__main__","message":"PyQt5模块已导入","module":"main","function":"<module>","line":28}
+{"timestamp":"2025-06-28T05:52:27.405546","level":"INFO","logger":"__main__","message":"MainWindow已导入","module":"main","function":"<module>","line":31}
+{"timestamp":"2025-06-28T05:52:27.405546","level":"INFO","logger":"__main__","message":"EvaluationTab已导入","module":"main","function":"<module>","line":33}
+{"timestamp":"2025-06-28T05:52:27.407546","level":"INFO","logger":"__main__","message":"DataProcessor已导入","module":"main","function":"<module>","line":35}
+{"timestamp":"2025-06-28T05:52:27.578739","level":"INFO","logger":"__main__","message":"ModelTrainer已导入","module":"main","function":"<module>","line":37}
+{"timestamp":"2025-06-28T05:52:27.580738","level":"INFO","logger":"__main__","message":"配置文件路径: f:\\Qsync\\00.AI_PROJECT\\图片分类模型训练\\C1\\config.json","module":"main","function":"main","line":86}
+{"timestamp":"2025-06-28T05:52:27.581739","level":"INFO","logger":"__main__","message":"配置文件是否存在: True","module":"main","function":"main","line":87}
+{"timestamp":"2025-06-28T05:52:28.878789","level":"INFO","logger":"src.data_processor","message":"数据处理器初始化完成","module":"data_processor","function":"__init__","line":26}
+{"timestamp":"2025-06-28T05:52:28.880114","level":"INFO","logger":"src.predictor","message":"预测器初始化完成，使用设备: cpu","module":"predictor","function":"__init__","line":249}
+{"timestamp":"2025-06-28T05:52:28.884137","level":"INFO","logger":"src.image_processing.main_processor","message":"图像处理器初始化完成","module":"main_processor","function":"__init__","line":37}
+{"timestamp":"2025-06-28T05:52:28.884137","level":"INFO","logger":"src.annotation_tool","message":"标注工具初始化完成","module":"annotation_tool","function":"__init__","line":19}

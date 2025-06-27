@@ -5,6 +5,7 @@
   "confidence_threshold": 80.0,
   "copy_mode": "copy",
   "auto_start": false,
+  "skip_processed": true,
   "description": "自动Review配置文件示例 - 适配实际AOI生产线路径结构",
   "note": "此配置文件定义了自动Review系统的运行参数，适配recipeID/setup1/lotID/waferID路径结构",
   "parameters": {
@@ -13,7 +14,8 @@
     "scan_interval": "扫描间隔（秒），设置多长时间扫描一次新文件",
     "confidence_threshold": "置信度阈值（%），只有超过此阈值的预测才会被分类",
     "copy_mode": "文件操作模式，copy=复制文件，move=移动文件",
-    "auto_start": "是否在程序启动时自动开始Review服务"
+    "auto_start": "是否在程序启动时自动开始Review服务",
+    "skip_processed": "是否跳过已Review的LotID，避免重复处理"
   },
   "directory_structure": {
     "input": "ScanResults\\recipeID\\setup1\\lotID\\waferID\\*.jpeg",
