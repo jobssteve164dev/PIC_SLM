@@ -130,6 +130,14 @@ class LoggerManager:
         """设置主日志记录器"""
         main_log_file = os.path.join(self.config.log_dir, 'main.log')
         
+        # 避免重复添加处理器
+        root_logger = logging.getLogger()
+        
+        # 如果已经有处理器，先清理
+        if root_logger.handlers:
+            for handler in root_logger.handlers[:]:
+                root_logger.removeHandler(handler)
+        
         # 文件处理器（带轮转）
         if self.config.file_output:
             file_handler = logging.handlers.RotatingFileHandler(
@@ -144,13 +152,13 @@ class LoggerManager:
             else:
                 file_handler.setFormatter(ConsoleFormatter())
             
-            logging.getLogger().addHandler(file_handler)
+            root_logger.addHandler(file_handler)
         
         # 控制台处理器
         if self.config.console_output:
             console_handler = logging.StreamHandler(sys.stdout)
             console_handler.setFormatter(ConsoleFormatter())
-            logging.getLogger().addHandler(console_handler)
+            root_logger.addHandler(console_handler)
     
     def _setup_error_logger(self):
         """设置错误日志记录器"""

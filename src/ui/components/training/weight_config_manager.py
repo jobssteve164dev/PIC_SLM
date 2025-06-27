@@ -1,7 +1,6 @@
 from PyQt5.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QTextBrowser
 import os
 import json
-from src.config_loader import ConfigLoader
 from src.utils.config_manager import config_manager
 
 
@@ -9,26 +8,28 @@ class WeightConfigManager:
     """权重配置管理器，负责加载和显示权重配置信息"""
     
     def __init__(self):
-        self.config_loader = ConfigLoader()
         self._last_config_hash = None  # 用于检测配置变化
     
     def _load_config_directly(self):
         """使用集中化配置管理器加载配置"""
         try:
-            # 使用集中化配置管理器
             config = config_manager.get_config()
             
             # 生成配置哈希值以检测变化
-            current_hash = hash(str(sorted(config.items())))
-            
-            if self._last_config_hash != current_hash:
-                print(f"WeightConfigManager: 配置已更新，weight_strategy = {config.get('weight_strategy', 'NOT_FOUND')}")
-                self._last_config_hash = current_hash
-            else:
-                print(f"WeightConfigManager: 使用缓存的配置")
+            if config:
+                current_hash = hash(str(sorted(config.items())))
                 
-            return config
-            
+                if self._last_config_hash != current_hash:
+                    print(f"WeightConfigManager: 配置已更新，weight_strategy = {config.get('weight_strategy', 'balanced')}")
+                    self._last_config_hash = current_hash
+                else:
+                    print(f"WeightConfigManager: 使用缓存的配置")
+                    
+                return config
+            else:
+                print(f"WeightConfigManager: 配置管理器返回空配置")
+                return {}
+                
         except Exception as e:
             print(f"WeightConfigManager: 读取配置失败: {str(e)}")
             return {}

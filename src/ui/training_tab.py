@@ -99,10 +99,6 @@ class TrainingTab(BaseTab):
             if hasattr(self, 'check_training_ready'):
                 self.check_training_ready()
             
-        # 刷新权重配置显示
-        if hasattr(self, 'refresh_weight_config'):
-            self.refresh_weight_config()
-            
         print("TrainingTab: 智能配置应用完成")
         
     def init_ui(self):
@@ -554,9 +550,16 @@ class TrainingTab(BaseTab):
             traceback.print_exc()
 
     def refresh_weight_config(self):
-        """刷新类别权重配置信息"""
+        """刷新类别权重配置信息 - 带防重复调用逻辑"""
         try:
-            self.update_status("正在刷新权重配置...")
+            # 防止短时间内重复调用
+            import time
+            current_time = time.time()
+            if hasattr(self, '_last_weight_refresh') and (current_time - self._last_weight_refresh) < 1.0:
+                print("TrainingTab: 权重配置刷新过于频繁，跳过本次调用")
+                return
+                
+            self._last_weight_refresh = current_time
             
             # 刷新当前显示的组件的权重配置
             if self.task_type == "classification":
@@ -565,11 +568,8 @@ class TrainingTab(BaseTab):
             else:
                 if hasattr(self.detection_widget, 'weight_config_widget'):
                     self.detection_widget.weight_config_widget.refresh_weight_config()
-                    
-            self.update_status("权重配置刷新完成")
             
         except Exception as e:
-            self.update_status(f"刷新权重配置失败: {str(e)}")
             print(f"刷新权重配置时出错: {str(e)}")
             import traceback
             traceback.print_exc()
