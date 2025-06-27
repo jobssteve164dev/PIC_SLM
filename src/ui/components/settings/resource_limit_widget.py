@@ -268,12 +268,6 @@ class ResourceLimitWidget(QWidget):
         layout.setContentsMargins(10, 10, 10, 10)
         layout.setSpacing(10)
         
-        # 添加标题
-        title_label = QLabel("系统资源使用限制")
-        title_label.setFont(QFont('微软雅黑', 12, QFont.Bold))
-        title_label.setAlignment(Qt.AlignCenter)
-        layout.addWidget(title_label)
-        
         # 检查依赖
         if not self.psutil_available:
             warning_label = QLabel("⚠️ 缺少psutil模块，无法监控系统资源")
