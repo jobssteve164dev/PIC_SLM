@@ -6,6 +6,7 @@ from PyQt5.QtCore import Qt, pyqtSignal
 from PyQt5.QtGui import QFont, QPixmap, QImage
 import os
 from .base_tab import BaseTab
+from .components.prediction.auto_review_widget import AutoReviewWidget
 
 class PredictionTab(BaseTab):
     """预测标签页，负责模型预测功能，包括单张预测和批量预测"""
@@ -51,15 +52,18 @@ class PredictionTab(BaseTab):
         self.mode_group = QButtonGroup(self)
         self.single_mode_radio = QRadioButton("单张预测")
         self.batch_mode_radio = QRadioButton("批量预测")
+        self.auto_review_mode_radio = QRadioButton("自动Review")
         self.single_mode_radio.setChecked(True)
         
         self.mode_group.addButton(self.single_mode_radio, 0)
         self.mode_group.addButton(self.batch_mode_radio, 1)
+        self.mode_group.addButton(self.auto_review_mode_radio, 2)
         
         self.mode_group.buttonClicked.connect(self.switch_prediction_mode)
         
         mode_layout.addWidget(self.single_mode_radio)
         mode_layout.addWidget(self.batch_mode_radio)
+        mode_layout.addWidget(self.auto_review_mode_radio)
         mode_layout.addStretch()
         
         mode_group.setLayout(mode_layout)
@@ -119,7 +123,7 @@ class PredictionTab(BaseTab):
         model_group.setLayout(model_layout)
         main_layout.addWidget(model_group)
         
-        # 创建堆叠部件用于切换单张预测和批量预测界面
+        # 创建堆叠部件用于切换不同预测模式界面
         self.stacked_widget = QStackedWidget()
         
         # 创建单张预测界面
@@ -130,9 +134,13 @@ class PredictionTab(BaseTab):
         self.batch_prediction_widget = QWidget()
         self.init_batch_prediction_ui()
         
+        # 创建自动Review界面
+        self.auto_review_widget = AutoReviewWidget(parent=self, main_window=self.main_window)
+        
         # 添加到堆叠部件
         self.stacked_widget.addWidget(self.single_prediction_widget)
         self.stacked_widget.addWidget(self.batch_prediction_widget)
+        self.stacked_widget.addWidget(self.auto_review_widget)
         
         main_layout.addWidget(self.stacked_widget)
         
@@ -369,8 +377,10 @@ class PredictionTab(BaseTab):
         """切换预测模式"""
         if button == self.single_mode_radio:
             self.stacked_widget.setCurrentIndex(0)
-        else:
+        elif button == self.batch_mode_radio:
             self.stacked_widget.setCurrentIndex(1)
+        elif button == self.auto_review_mode_radio:
+            self.stacked_widget.setCurrentIndex(2)
     
     def select_model_file(self):
         """选择模型文件"""

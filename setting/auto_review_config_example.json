@@ -1,0 +1,35 @@
+{
+  "scan_folder": "\\\\192.168.129.25\\ScanResults",
+  "review_folder": "\\\\192.168.129.2\\D:\\01_AOI_ADC_Review(review)",
+  "scan_interval": 10,
+  "confidence_threshold": 80.0,
+  "copy_mode": "copy",
+  "auto_start": false,
+  "description": "自动Review配置文件示例 - 适配实际AOI生产线路径结构",
+  "note": "此配置文件定义了自动Review系统的运行参数，适配recipeID/setup1/lotID/waferID路径结构",
+  "parameters": {
+    "scan_folder": "扫描文件夹路径，监控ScanResults下的recipeID/setup1/lotID/waferID结构",
+    "review_folder": "Review输出文件夹路径，分类结果将保存为recipeID/lotID/缺陷类别结构",
+    "scan_interval": "扫描间隔（秒），设置多长时间扫描一次新文件",
+    "confidence_threshold": "置信度阈值（%），只有超过此阈值的预测才会被分类",
+    "copy_mode": "文件操作模式，copy=复制文件，move=移动文件",
+    "auto_start": "是否在程序启动时自动开始Review服务"
+  },
+  "directory_structure": {
+    "input": "ScanResults\\recipeID\\setup1\\lotID\\waferID\\*.jpeg",
+    "output": "Review\\recipeID\\lotID\\DefectClass\\*.jpeg",
+    "note": "程序自动识别recipeID和lotID，按缺陷类别分类到Review文件夹"
+  },
+  "file_filtering": {
+    "supported_formats": [".jpeg", ".jpg"],
+    "excluded_formats": [".jeg"],
+    "note": "只预测JPEG格式图片，忽略JEG格式文件"
+  },
+  "workflow": {
+    "1": "扫描 ScanResults 下所有 recipeID/setup1/lotID/waferID 文件夹",
+    "2": "在每个 waferID 文件夹中查找 JPEG 格式图片",
+    "3": "使用AI模型进行缺陷分类预测",
+    "4": "置信度达标的图片复制到 Review/recipeID/lotID/缺陷类别/ 目录",
+    "5": "按 lotID 级别输出，不细分 waferID"
+  }
+} 

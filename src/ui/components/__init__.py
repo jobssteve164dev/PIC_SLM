@@ -54,6 +54,11 @@ from .training import (
 # 模型分析组件 - 现在从ui目录导入
 from ..model_analysis_widget import ModelAnalysisWidget
 
+# 预测组件模块
+from .prediction import (
+    AutoReviewWidget
+)
+
 __all__ = [
     # 评估组件 (从evaluation子包导入)
     'EnhancedModelEvaluationWidget',
@@ -97,5 +102,8 @@ __all__ = [
     'WeightConfigManager',
     
     # 模型分析组件
-    'ModelAnalysisWidget'
+    'ModelAnalysisWidget',
+    
+    # 预测组件
+    'AutoReviewWidget'
 ] 
