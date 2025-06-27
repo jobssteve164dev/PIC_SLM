@@ -400,8 +400,40 @@ class AutoReviewWidget(QWidget):
             'skip_processed': True
         }
         
-        self.init_ui()
+        # 自动加载默认配置文件
+        self._load_default_config()
         
+        self.init_ui()
+    
+    def _load_default_config(self):
+        """程序启动时自动加载默认配置文件"""
+        try:
+            # 获取项目根目录
+            current_dir = os.path.dirname(os.path.abspath(__file__))
+            project_root = os.path.join(current_dir, '..', '..', '..', '..')
+            project_root = os.path.normpath(project_root)
+            
+            # 默认配置文件路径
+            default_config_path = os.path.join(project_root, 'setting', 'auto_review_config.json')
+            
+            if os.path.exists(default_config_path):
+                self.logger.info(f"找到默认配置文件: {default_config_path}")
+                
+                with open(default_config_path, 'r', encoding='utf-8') as f:
+                    loaded_config = json.load(f)
+                
+                # 更新配置，保留默认值作为备份
+                for key, value in loaded_config.items():
+                    if key in self.config:
+                        self.config[key] = value
+                
+                self.logger.info("默认配置文件加载成功")
+            else:
+                self.logger.info(f"默认配置文件不存在: {default_config_path}，使用内置默认配置")
+                
+        except Exception as e:
+            self.logger.warning(f"加载默认配置文件时出错: {str(e)}，使用内置默认配置")
+    
     def init_ui(self):
         """初始化UI界面"""
         layout = QVBoxLayout(self)
