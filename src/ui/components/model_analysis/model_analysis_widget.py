@@ -42,6 +42,15 @@ class ModelAnalysisWidget(QWidget):
             # 存储当前结果用于resize时重新显示
             self.current_results = {}
             
+            # 添加防抖动机制，避免频繁刷新
+            self.refresh_timer = QTimer()
+            self.refresh_timer.setSingleShot(True)
+            self.refresh_timer.timeout.connect(self.refresh_image_displays)
+            
+            # 跟踪上次窗口大小，避免不必要的刷新
+            self.last_size = None
+            self.is_refreshing = False  # 防止重复刷新
+            
             self.logger = logging.getLogger(__name__)
             self.logger.setLevel(logging.INFO)
             
@@ -102,7 +111,7 @@ class ModelAnalysisWidget(QWidget):
         # 连接结果区域按钮信号
         self.results_section['copy_image_btn'].clicked.connect(self.copy_current_result_image)
         self.results_section['save_image_btn'].clicked.connect(self.save_current_result_image)
-        self.results_section['results_tabs'].currentChanged.connect(self.update_buttons_state)
+        self.results_section['results_tabs'].currentChanged.connect(self.on_tab_changed)
         
     def switch_model_type(self, index):
         """切换模型类型"""
@@ -327,39 +336,63 @@ class ModelAnalysisWidget(QWidget):
     def eventFilter(self, obj, event):
         """事件过滤器，处理resize事件"""
         if event.type() == event.Resize and obj == self:
-            # 延迟重新显示图片，避免频繁更新
-            QTimer.singleShot(200, self.refresh_image_displays)
+            # 检查窗口大小是否真的发生了变化
+            current_size = self.size()
+            if self.last_size != current_size:
+                self.last_size = current_size
+                # 停止之前的定时器，重新开始计时
+                self.refresh_timer.stop()
+                self.refresh_timer.start(300)  # 延迟300ms，避免频繁更新
         return super().eventFilter(obj, event)
     
     def refresh_image_displays(self):
-        """刷新所有图片显示"""
+        """刷新所有图片显示（优化版本，避免重复刷新）"""
         try:
+            # 防止重复刷新
+            if self.is_refreshing:
+                return
+            self.is_refreshing = True
+            
+            # 检查是否有分析结果需要刷新
+            if not self.current_results:
+                self.is_refreshing = False
+                return
+            
             # 检查是否有类别名称数据，避免列表索引越界
             if not self.class_names:
                 # 如果没有类别数据，只重新显示原始图片
                 if self.image:
                     display_image(self.image, self.image_section['original_image_label'])
+                self.is_refreshing = False
                 return
             
-            # 重新显示所有已有的分析结果
-            current_class_idx = self.analysis_section['class_combo'].currentIndex()
+            # 获取当前选中的标签页，只刷新当前显示的标签页
+            current_tab_index = self.results_section['results_tabs'].currentIndex()
+            tab_names = ["特征可视化", "GradCAM", "LIME解释", "敏感性分析"]
             
-            # 确保索引在有效范围内
-            if current_class_idx < 0 or current_class_idx >= len(self.class_names):
-                current_class_idx = 0
+            if 0 <= current_tab_index < len(tab_names):
+                current_tab_name = tab_names[current_tab_index]
                 
-            current_class_name = self.class_names[current_class_idx] if current_class_idx < len(self.class_names) else f"类别{current_class_idx}"
-            
-            for analysis_type, result in self.current_results.items():
-                if analysis_type == "特征可视化":
-                    display_feature_visualization(result, self.results_section['feature_viewer'])
-                elif analysis_type == "GradCAM":
-                    display_gradcam(result, self.image, self.results_section['gradcam_viewer'], current_class_name)
-                elif analysis_type == "LIME解释":
-                    display_lime_explanation(result, self.image, self.results_section['lime_viewer'], current_class_idx, self.class_names)
-                elif analysis_type == "敏感性分析":
-                    display_sensitivity_analysis(result, self.results_section['sensitivity_viewer'], current_class_name)
+                # 只刷新当前显示的标签页，避免刷新所有标签页
+                if current_tab_name in self.current_results:
+                    current_class_idx = self.analysis_section['class_combo'].currentIndex()
                     
+                    # 确保索引在有效范围内
+                    if current_class_idx < 0 or current_class_idx >= len(self.class_names):
+                        current_class_idx = 0
+                        
+                    current_class_name = self.class_names[current_class_idx] if current_class_idx < len(self.class_names) else f"类别{current_class_idx}"
+                    
+                    result = self.current_results[current_tab_name]
+                    if current_tab_name == "特征可视化":
+                        display_feature_visualization(result, self.results_section['feature_viewer'])
+                    elif current_tab_name == "GradCAM":
+                        display_gradcam(result, self.image, self.results_section['gradcam_viewer'], current_class_name)
+                    elif current_tab_name == "LIME解释":
+                        display_lime_explanation(result, self.image, self.results_section['lime_viewer'], current_class_idx, self.class_names)
+                    elif current_tab_name == "敏感性分析":
+                        display_sensitivity_analysis(result, self.results_section['sensitivity_viewer'], current_class_name)
+            
             # 重新显示原始图片
             if self.image:
                 display_image(self.image, self.image_section['original_image_label'])
@@ -369,6 +402,8 @@ class ModelAnalysisWidget(QWidget):
             # 添加详细的错误信息用于调试
             import traceback
             self.logger.error(f"详细错误信息: {traceback.format_exc()}")
+        finally:
+            self.is_refreshing = False
     
     def set_model(self, model, class_names=None):
         """从外部设置模型"""
@@ -448,6 +483,61 @@ class ModelAnalysisWidget(QWidget):
                 
         except Exception as e:
             QMessageBox.critical(self, "错误", f"保存图片失败: {str(e)}")
+    
+    def on_tab_changed(self, index):
+        """标签页切换时处理"""
+        try:
+            # 只更新按钮状态，不刷新图片
+            self.update_buttons_state()
+            
+            # 如果当前标签页有分析结果但图片没有显示，才进行延迟刷新
+            tab_names = ["特征可视化", "GradCAM", "LIME解释", "敏感性分析"]
+            if 0 <= index < len(tab_names):
+                current_tab_name = tab_names[index]
+                if current_tab_name in self.current_results:
+                    viewer_names = ['feature_viewer', 'gradcam_viewer', 'lime_viewer', 'sensitivity_viewer']
+                    current_viewer = self.results_section[viewer_names[index]]
+                    
+                    # 检查当前查看器是否已经有图片显示
+                    pixmap = current_viewer.get_current_pixmap()
+                    if not pixmap or pixmap.isNull():
+                        # 只有在没有图片时才需要刷新
+                        QTimer.singleShot(50, self.refresh_current_tab_only)
+                        
+        except Exception as e:
+            self.logger.error(f"标签页切换处理失败: {str(e)}")
+    
+    def refresh_current_tab_only(self):
+        """只刷新当前标签页（用于标签页切换时的延迟加载）"""
+        try:
+            if self.is_refreshing:
+                return
+                
+            current_tab_index = self.results_section['results_tabs'].currentIndex()
+            tab_names = ["特征可视化", "GradCAM", "LIME解释", "敏感性分析"]
+            
+            if 0 <= current_tab_index < len(tab_names):
+                current_tab_name = tab_names[current_tab_index]
+                
+                if current_tab_name in self.current_results and self.class_names:
+                    current_class_idx = self.analysis_section['class_combo'].currentIndex()
+                    if current_class_idx < 0 or current_class_idx >= len(self.class_names):
+                        current_class_idx = 0
+                        
+                    current_class_name = self.class_names[current_class_idx] if current_class_idx < len(self.class_names) else f"类别{current_class_idx}"
+                    
+                    result = self.current_results[current_tab_name]
+                    if current_tab_name == "特征可视化":
+                        display_feature_visualization(result, self.results_section['feature_viewer'])
+                    elif current_tab_name == "GradCAM":
+                        display_gradcam(result, self.image, self.results_section['gradcam_viewer'], current_class_name)
+                    elif current_tab_name == "LIME解释":
+                        display_lime_explanation(result, self.image, self.results_section['lime_viewer'], current_class_idx, self.class_names)
+                    elif current_tab_name == "敏感性分析":
+                        display_sensitivity_analysis(result, self.results_section['sensitivity_viewer'], current_class_name)
+                        
+        except Exception as e:
+            self.logger.error(f"刷新当前标签页失败: {str(e)}")
     
     def update_buttons_state(self):
         """更新按钮状态"""

@@ -39,6 +39,7 @@
         "temp_files_limit_gb": 10.0,
         "check_interval": 10.0,
         "alert_method": "弹窗提醒",
-        "auto_cleanup_enabled": true
+        "auto_cleanup_enabled": true,
+        "enforce_limits_enabled": false
     }
 }
