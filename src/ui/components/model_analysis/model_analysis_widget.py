@@ -99,6 +99,11 @@ class ModelAnalysisWidget(QWidget):
         self.results_section = create_results_section(self)
         layout.addWidget(self.results_section['group'])
         
+        # 连接结果区域按钮信号
+        self.results_section['copy_image_btn'].clicked.connect(self.copy_current_result_image)
+        self.results_section['save_image_btn'].clicked.connect(self.save_current_result_image)
+        self.results_section['results_tabs'].currentChanged.connect(self.update_buttons_state)
+        
     def switch_model_type(self, index):
         """切换模型类型"""
         if index == 0:  # 分类模型
@@ -290,6 +295,9 @@ class ModelAnalysisWidget(QWidget):
             elif analysis_type == "敏感性分析":
                 display_sensitivity_analysis(result, self.results_section['sensitivity_viewer'], current_class_name)
                 
+            # 更新按钮状态
+            self.update_buttons_state()
+            
             # 继续下一个分析
             target_class = self.analysis_section['class_combo'].currentIndex()
             analysis_params = {
@@ -369,4 +377,97 @@ class ModelAnalysisWidget(QWidget):
             self.class_names = class_names
             self.analysis_section['class_combo'].clear()
             self.analysis_section['class_combo'].addItems(self.class_names)
-        self.check_ready_state() 
+        self.check_ready_state()
+    
+    def copy_current_result_image(self):
+        """复制当前结果图片到剪贴板"""
+        try:
+            from PyQt5.QtWidgets import QApplication
+            from PyQt5.QtGui import QPixmap
+            import io
+            
+            # 获取当前选中的标签页
+            current_tab_index = self.results_section['results_tabs'].currentIndex()
+            tab_names = ["特征可视化", "GradCAM", "LIME解释", "敏感性分析"]
+            
+            if current_tab_index < 0 or current_tab_index >= len(tab_names):
+                QMessageBox.warning(self, "警告", "请先选择要复制的分析结果标签页!")
+                return
+                
+            current_tab_name = tab_names[current_tab_index]
+            viewer_names = ['feature_viewer', 'gradcam_viewer', 'lime_viewer', 'sensitivity_viewer']
+            current_viewer = self.results_section[viewer_names[current_tab_index]]
+            
+            # 获取当前显示的图片
+            pixmap = current_viewer.get_current_pixmap()
+            if pixmap and not pixmap.isNull():
+                # 复制到剪贴板
+                clipboard = QApplication.clipboard()
+                clipboard.setPixmap(pixmap)
+                QMessageBox.information(self, "成功", f"{current_tab_name}结果图片已复制到剪贴板!")
+            else:
+                QMessageBox.warning(self, "警告", f"当前{current_tab_name}标签页没有可复制的图片!")
+                
+        except Exception as e:
+            QMessageBox.critical(self, "错误", f"复制图片失败: {str(e)}")
+    
+    def save_current_result_image(self):
+        """保存当前结果图片到文件"""
+        try:
+            from PyQt5.QtWidgets import QFileDialog
+            
+            # 获取当前选中的标签页
+            current_tab_index = self.results_section['results_tabs'].currentIndex()
+            tab_names = ["特征可视化", "GradCAM", "LIME解释", "敏感性分析"]
+            
+            if current_tab_index < 0 or current_tab_index >= len(tab_names):
+                QMessageBox.warning(self, "警告", "请先选择要保存的分析结果标签页!")
+                return
+                
+            current_tab_name = tab_names[current_tab_index]
+            viewer_names = ['feature_viewer', 'gradcam_viewer', 'lime_viewer', 'sensitivity_viewer']
+            current_viewer = self.results_section[viewer_names[current_tab_index]]
+            
+            # 获取当前显示的图片
+            pixmap = current_viewer.get_current_pixmap()
+            if pixmap and not pixmap.isNull():
+                # 选择保存路径
+                file_path, _ = QFileDialog.getSaveFileName(
+                    self, f"保存{current_tab_name}结果图片", 
+                    f"{current_tab_name}_结果.png",
+                    "PNG图片 (*.png);;JPEG图片 (*.jpg);;所有文件 (*)"
+                )
+                
+                if file_path:
+                    if pixmap.save(file_path):
+                        QMessageBox.information(self, "成功", f"{current_tab_name}结果图片已保存到: {file_path}")
+                    else:
+                        QMessageBox.critical(self, "错误", "保存图片失败!")
+            else:
+                QMessageBox.warning(self, "警告", f"当前{current_tab_name}标签页没有可保存的图片!")
+                
+        except Exception as e:
+            QMessageBox.critical(self, "错误", f"保存图片失败: {str(e)}")
+    
+    def update_buttons_state(self):
+        """更新按钮状态"""
+        try:
+            # 获取当前选中的标签页
+            current_tab_index = self.results_section['results_tabs'].currentIndex()
+            viewer_names = ['feature_viewer', 'gradcam_viewer', 'lime_viewer', 'sensitivity_viewer']
+            
+            # 检查当前标签页是否有图片
+            has_image = False
+            if 0 <= current_tab_index < len(viewer_names):
+                current_viewer = self.results_section[viewer_names[current_tab_index]]
+                pixmap = current_viewer.get_current_pixmap()
+                has_image = pixmap and not pixmap.isNull()
+            
+            # 更新按钮状态
+            self.results_section['copy_image_btn'].setEnabled(has_image)
+            self.results_section['save_image_btn'].setEnabled(has_image)
+            
+        except Exception as e:
+            # 如果出错，禁用按钮
+            self.results_section['copy_image_btn'].setEnabled(False)
+            self.results_section['save_image_btn'].setEnabled(False) 

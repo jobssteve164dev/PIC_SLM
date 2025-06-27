@@ -138,6 +138,8 @@ def create_analysis_section(parent):
     common_layout.addWidget(QLabel("目标类别:"))
     class_combo = QComboBox()
     class_combo.setToolTip("选择要分析的目标类别，分析将针对该类别进行")
+    class_combo.setMinimumWidth(200)  # 设置最小宽度为200像素
+    class_combo.setSizeAdjustPolicy(QComboBox.AdjustToContents)  # 根据内容调整宽度
     common_layout.addWidget(class_combo)
     
     common_layout.addStretch()
@@ -219,27 +221,59 @@ def create_results_section(parent):
     results_group = QGroupBox("分析结果")
     results_layout = QVBoxLayout()
     
+    # 添加工具栏
+    toolbar_layout = QHBoxLayout()
+    
+    # 复制当前分析结果图片按钮
+    copy_image_btn = QPushButton("复制当前结果图片")
+    copy_image_btn.setToolTip("将当前显示的分析结果图片复制到剪贴板")
+    copy_image_btn.setEnabled(False)  # 初始状态禁用
+    toolbar_layout.addWidget(copy_image_btn)
+    
+    # 保存当前分析结果图片按钮
+    save_image_btn = QPushButton("保存当前结果图片")
+    save_image_btn.setToolTip("将当前显示的分析结果图片保存到文件")
+    save_image_btn.setEnabled(False)  # 初始状态禁用
+    toolbar_layout.addWidget(save_image_btn)
+    
+    toolbar_layout.addStretch()  # 添加弹性空间
+    results_layout.addLayout(toolbar_layout)
+    
     # 创建标签页widget
     results_tabs = QTabWidget()
+    results_tabs.setMinimumHeight(500)  # 设置最小高度为500像素
     
     # 特征可视化结果页
     feature_scroll = QScrollArea()
     feature_viewer = ZoomableImageViewer()
     feature_scroll.setWidget(feature_viewer)
     feature_scroll.setWidgetResizable(True)
+    feature_scroll.setMinimumHeight(450)  # 设置滚动区域最小高度
     results_tabs.addTab(feature_scroll, "特征可视化")
     
     # GradCAM结果页
+    gradcam_scroll = QScrollArea()
     gradcam_viewer = ZoomableImageViewer()
-    results_tabs.addTab(gradcam_viewer, "GradCAM")
+    gradcam_scroll.setWidget(gradcam_viewer)
+    gradcam_scroll.setWidgetResizable(True)
+    gradcam_scroll.setMinimumHeight(450)
+    results_tabs.addTab(gradcam_scroll, "GradCAM")
     
     # LIME结果页
+    lime_scroll = QScrollArea()
     lime_viewer = ZoomableImageViewer()
-    results_tabs.addTab(lime_viewer, "LIME解释")
+    lime_scroll.setWidget(lime_viewer)
+    lime_scroll.setWidgetResizable(True)
+    lime_scroll.setMinimumHeight(450)
+    results_tabs.addTab(lime_scroll, "LIME解释")
     
     # 敏感性分析结果页
+    sensitivity_scroll = QScrollArea()
     sensitivity_viewer = ZoomableImageViewer()
-    results_tabs.addTab(sensitivity_viewer, "敏感性分析")
+    sensitivity_scroll.setWidget(sensitivity_viewer)
+    sensitivity_scroll.setWidgetResizable(True)
+    sensitivity_scroll.setMinimumHeight(450)
+    results_tabs.addTab(sensitivity_scroll, "敏感性分析")
     
     results_layout.addWidget(results_tabs)
     results_group.setLayout(results_layout)
@@ -250,5 +284,7 @@ def create_results_section(parent):
         'feature_viewer': feature_viewer,
         'gradcam_viewer': gradcam_viewer,
         'lime_viewer': lime_viewer,
-        'sensitivity_viewer': sensitivity_viewer
+        'sensitivity_viewer': sensitivity_viewer,
+        'copy_image_btn': copy_image_btn,
+        'save_image_btn': save_image_btn
     } 

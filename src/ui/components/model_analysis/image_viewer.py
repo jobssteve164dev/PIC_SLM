@@ -336,4 +336,8 @@ class ZoomableImageViewer(QWidget):
                 self.setCursor(Qt.OpenHandCursor)
             else:
                 self.setCursor(Qt.ArrowCursor)
-        super().keyReleaseEvent(event) 
+        super().keyReleaseEvent(event)
+    
+    def get_current_pixmap(self):
+        """获取当前显示的pixmap"""
+        return self.pixmap if self.pixmap and not self.pixmap.isNull() else None 
