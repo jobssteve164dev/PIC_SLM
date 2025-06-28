@@ -10,6 +10,7 @@
 - config_profile_selector: 配置文件选择器组件
 - resource_limit_widget: 系统资源限制组件
 - log_viewer_widget: 日志查看器组件
+- dependency_manager_widget: 依赖管理组件
 """
 
 from .config_manager import ConfigManager
@@ -20,6 +21,7 @@ from .weight_strategy import WeightStrategy
 from .config_profile_selector import ConfigProfileSelector
 from .resource_limit_widget import ResourceLimitWidget
 from .log_viewer_widget import LogViewerWidget
+from .dependency_manager_widget import DependencyManagerWidget
 
 __all__ = [
     'ConfigManager',
@@ -29,5 +31,6 @@ __all__ = [
     'WeightStrategy',
     'ConfigProfileSelector',
     'ResourceLimitWidget',
-    'LogViewerWidget'
+    'LogViewerWidget',
+    'DependencyManagerWidget'
 ] 

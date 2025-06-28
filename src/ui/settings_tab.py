@@ -11,7 +11,8 @@ import time
 from .base_tab import BaseTab
 from .components.settings import (ConfigManager, FolderConfigWidget, 
                                 ClassWeightWidget, ModelConfigWidget, WeightStrategy,
-                                ConfigProfileSelector, ResourceLimitWidget, LogViewerWidget)
+                                ConfigProfileSelector, ResourceLimitWidget, LogViewerWidget,
+                                DependencyManagerWidget)
 
 
 class SettingsTab(BaseTab):
@@ -123,6 +124,18 @@ class SettingsTab(BaseTab):
         
         # 添加日志管理选项卡
         self.settings_tabs.addTab(log_tab, "日志管理")
+        
+        # 创建依赖管理选项卡
+        dependency_tab = QWidget()
+        dependency_layout = QVBoxLayout(dependency_tab)
+        dependency_layout.setContentsMargins(10, 10, 10, 10)
+        
+        # 添加依赖管理组件
+        self.dependency_manager_widget = DependencyManagerWidget()
+        dependency_layout.addWidget(self.dependency_manager_widget)
+        
+        # 添加依赖管理选项卡
+        self.settings_tabs.addTab(dependency_tab, "依赖管理")
         
         main_layout.addWidget(self.settings_tabs)
         
@@ -321,6 +334,12 @@ class SettingsTab(BaseTab):
         if resource_limits_config:
             self.resource_limit_widget.set_resource_limits_config(resource_limits_config)
         
+        # 应用依赖管理配置
+        print(f"SettingsTab._apply_config_to_ui: 应用依赖管理配置...")
+        dependency_config = self.config.get('proxy_settings', {})
+        if dependency_config:
+            self.dependency_manager_widget.apply_config({'proxy_settings': dependency_config})
+        
         print("SettingsTab._apply_config_to_ui: 配置应用完成")
     
     def _collect_current_config(self) -> dict:
@@ -339,6 +358,9 @@ class SettingsTab(BaseTab):
         
         # 获取资源限制配置
         resource_limits_config = self.resource_limit_widget.get_resource_limits_config()
+        
+        # 获取依赖管理配置
+        dependency_config = self.dependency_manager_widget.get_config()
         
         # 创建完整配置
         config = self.config_manager.create_config_dict(
@@ -361,6 +383,9 @@ class SettingsTab(BaseTab):
         
         # 添加资源限制配置
         config['resource_limits'] = resource_limits_config
+        
+        # 添加依赖管理配置
+        config.update(dependency_config)
         
         return config
     
