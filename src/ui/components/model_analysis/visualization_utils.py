@@ -222,6 +222,210 @@ def display_lime_explanation(explanation, original_image, viewer, target_class, 
         logger.error(f"显示LIME解释失败: {str(e)}")
 
 
+def display_integrated_gradients(gradients, original_image, viewer, class_name):
+    """显示Integrated Gradients结果"""
+    try:
+        logger.info(f"Integrated Gradients形状: {gradients.shape}")
+        
+        # 转换梯度为显示格式
+        # 如果是3通道，计算L2范数
+        if len(gradients.shape) == 3 and gradients.shape[0] == 3:
+            attribution = np.sqrt(np.sum(gradients ** 2, axis=0))
+        elif len(gradients.shape) == 3:
+            attribution = np.abs(gradients).sum(axis=0)
+        elif len(gradients.shape) == 2:
+            attribution = np.abs(gradients)
+        else:
+            logger.error(f"不支持的Integrated Gradients形状: {gradients.shape}")
+            return
+        
+        # 标准化
+        if attribution.max() > 0:
+            attribution = attribution / attribution.max()
+        
+        # 创建可视化
+        fig, axes = plt.subplots(1, 3, figsize=(15, 5))
+        
+        # 原图
+        normalized_image = normalize_image_for_matplotlib(original_image)
+        axes[0].imshow(normalized_image)
+        axes[0].set_title('原始图片')
+        axes[0].axis('off')
+        
+        # 积分梯度热力图
+        im = axes[1].imshow(attribution, cmap='hot', vmin=0, vmax=1)
+        axes[1].set_title(f'Integrated Gradients - {class_name}')
+        axes[1].axis('off')
+        plt.colorbar(im, ax=axes[1])
+        
+        # 叠加图
+        axes[2].imshow(normalized_image)
+        axes[2].imshow(attribution, alpha=0.5, cmap='hot', vmin=0, vmax=1)
+        axes[2].set_title('叠加显示')
+        axes[2].axis('off')
+        
+        plt.tight_layout()
+        
+        # 转换为QPixmap并显示
+        buffer = io.BytesIO()
+        plt.savefig(buffer, format='png', dpi=100, bbox_inches='tight')
+        buffer.seek(0)
+        
+        pixmap = QPixmap()
+        if not pixmap.loadFromData(buffer.getvalue()):
+            logger.error("无法加载Integrated Gradients图像数据")
+            return
+        
+        viewer.set_image(pixmap)
+        
+        plt.close()
+        buffer.close()
+        
+    except Exception as e:
+        logger.error(f"显示Integrated Gradients失败: {str(e)}")
+
+
+def display_shap_explanation(shap_result, original_image, viewer, class_name):
+    """显示SHAP解释结果"""
+    try:
+        shap_values = shap_result.get('shap_values')
+        method = shap_result.get('method', 'partition')
+        
+        if shap_values is None:
+            logger.error("SHAP值为空")
+            return
+        
+        # 处理SHAP值 - 修复多维数据问题
+        logger.info(f"SHAP值形状: {shap_values.shape}")
+        
+        # 如果SHAP返回4维数据 (C, H, W, num_classes)，取第一个类别或指定类别
+        if len(shap_values.shape) == 4:
+            # 形状为 (C, H, W, num_classes)，取最后一维的第一个
+            shap_values = shap_values[:, :, :, 0]
+            logger.info(f"处理后SHAP值形状: {shap_values.shape}")
+        
+        # 如果是3D并且第一个维度是通道数
+        if len(shap_values.shape) == 3 and shap_values.shape[0] == 3:
+            # RGB图像，计算总重要性
+            attribution = np.sqrt(np.sum(shap_values ** 2, axis=0))
+        elif len(shap_values.shape) == 3:
+            # 如果是其他3D情况，沿第一个轴求和
+            attribution = np.abs(shap_values).sum(axis=0)
+        elif len(shap_values.shape) == 2:
+            # 如果是2D，直接使用
+            attribution = np.abs(shap_values)
+        else:
+            logger.error(f"不支持的SHAP值形状: {shap_values.shape}")
+            return
+        
+        # 标准化
+        if attribution.max() > 0:
+            attribution = attribution / attribution.max()
+        
+        # 创建可视化
+        fig, axes = plt.subplots(1, 3, figsize=(15, 5))
+        
+        # 原图
+        normalized_image = normalize_image_for_matplotlib(original_image)
+        axes[0].imshow(normalized_image)
+        axes[0].set_title('原始图片')
+        axes[0].axis('off')
+        
+        # SHAP热力图
+        im = axes[1].imshow(attribution, cmap='RdBu_r', vmin=0, vmax=1)
+        axes[1].set_title(f'SHAP解释 ({method}) - {class_name}')
+        axes[1].axis('off')
+        plt.colorbar(im, ax=axes[1])
+        
+        # 叠加图
+        axes[2].imshow(normalized_image)
+        axes[2].imshow(attribution, alpha=0.5, cmap='RdBu_r', vmin=0, vmax=1)
+        axes[2].set_title('叠加显示')
+        axes[2].axis('off')
+        
+        plt.tight_layout()
+        
+        # 转换为QPixmap并显示
+        buffer = io.BytesIO()
+        plt.savefig(buffer, format='png', dpi=100, bbox_inches='tight')
+        buffer.seek(0)
+        
+        pixmap = QPixmap()
+        if not pixmap.loadFromData(buffer.getvalue()):
+            logger.error("无法加载SHAP图像数据")
+            return
+        
+        viewer.set_image(pixmap)
+        
+        plt.close()
+        buffer.close()
+        
+    except Exception as e:
+        logger.error(f"显示SHAP解释失败: {str(e)}")
+
+
+def display_smoothgrad(gradients, original_image, viewer, class_name):
+    """显示SmoothGrad结果"""
+    try:
+        logger.info(f"SmoothGrad形状: {gradients.shape}")
+        
+        # 转换梯度为显示格式
+        if len(gradients.shape) == 3 and gradients.shape[0] == 3:
+            attribution = np.sqrt(np.sum(gradients ** 2, axis=0))
+        elif len(gradients.shape) == 3:
+            attribution = np.abs(gradients).sum(axis=0)
+        elif len(gradients.shape) == 2:
+            attribution = np.abs(gradients)
+        else:
+            logger.error(f"不支持的SmoothGrad形状: {gradients.shape}")
+            return
+        
+        # 标准化
+        if attribution.max() > 0:
+            attribution = attribution / attribution.max()
+        
+        # 创建可视化
+        fig, axes = plt.subplots(1, 3, figsize=(15, 5))
+        
+        # 原图
+        normalized_image = normalize_image_for_matplotlib(original_image)
+        axes[0].imshow(normalized_image)
+        axes[0].set_title('原始图片')
+        axes[0].axis('off')
+        
+        # SmoothGrad热力图
+        im = axes[1].imshow(attribution, cmap='viridis', vmin=0, vmax=1)
+        axes[1].set_title(f'SmoothGrad - {class_name}')
+        axes[1].axis('off')
+        plt.colorbar(im, ax=axes[1])
+        
+        # 叠加图
+        axes[2].imshow(normalized_image)
+        axes[2].imshow(attribution, alpha=0.5, cmap='viridis', vmin=0, vmax=1)
+        axes[2].set_title('叠加显示')
+        axes[2].axis('off')
+        
+        plt.tight_layout()
+        
+        # 转换为QPixmap并显示
+        buffer = io.BytesIO()
+        plt.savefig(buffer, format='png', dpi=100, bbox_inches='tight')
+        buffer.seek(0)
+        
+        pixmap = QPixmap()
+        if not pixmap.loadFromData(buffer.getvalue()):
+            logger.error("无法加载SmoothGrad图像数据")
+            return
+        
+        viewer.set_image(pixmap)
+        
+        plt.close()
+        buffer.close()
+        
+    except Exception as e:
+        logger.error(f"显示SmoothGrad失败: {str(e)}")
+
+
 def display_sensitivity_analysis(result, viewer, class_name):
     """显示敏感性分析结果"""
     try:

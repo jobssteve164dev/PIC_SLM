@@ -9,7 +9,8 @@ from PIL import Image
 from .worker import ModelAnalysisWorker
 from .visualization_utils import (display_image, display_feature_visualization,
                                  display_gradcam, display_lime_explanation,
-                                 display_sensitivity_analysis)
+                                 display_sensitivity_analysis, display_integrated_gradients,
+                                 display_shap_explanation, display_smoothgrad)
 from .model_loader import load_model_from_main_window, load_class_names, preprocess_image
 from .ui_components import (create_model_section, create_image_section,
                           create_analysis_section, create_results_section)
@@ -225,6 +226,12 @@ class ModelAnalysisWidget(QWidget):
             selected_methods.append("LIME解释")
         if self.analysis_section['sensitivity_checkbox'].isChecked():
             selected_methods.append("敏感性分析")
+        if self.analysis_section['integrated_gradients_checkbox'].isChecked():
+            selected_methods.append("Integrated Gradients")
+        if self.analysis_section['shap_checkbox'].isChecked():
+            selected_methods.append("SHAP解释")
+        if self.analysis_section['smoothgrad_checkbox'].isChecked():
+            selected_methods.append("SmoothGrad")
             
         if not selected_methods:
             QMessageBox.warning(self, "警告", "请至少选择一种分析方法!")
@@ -238,7 +245,12 @@ class ModelAnalysisWidget(QWidget):
             'num_superpixels': self.analysis_section['num_superpixels'].value(),
             'num_samples': self.analysis_section['num_samples'].value(),
             'perturbation_range': self.analysis_section['perturbation_range'].value(),
-            'num_steps': self.analysis_section['num_steps'].value()
+            'num_steps': self.analysis_section['num_steps'].value(),
+            'ig_steps': self.analysis_section['ig_steps'].value(),
+            'baseline_type': self.analysis_section['baseline_type'].currentText(),
+            'shap_samples': self.analysis_section['shap_samples'].value(),
+            'smoothgrad_samples': self.analysis_section['smoothgrad_samples'].value(),
+            'noise_level': self.analysis_section['noise_level'].value()
         }
         
         # 显示进度条
@@ -303,6 +315,12 @@ class ModelAnalysisWidget(QWidget):
                 display_lime_explanation(result, self.image, self.results_section['lime_viewer'], current_class_idx, self.class_names)
             elif analysis_type == "敏感性分析":
                 display_sensitivity_analysis(result, self.results_section['sensitivity_viewer'], current_class_name)
+            elif analysis_type == "Integrated Gradients":
+                display_integrated_gradients(result, self.image, self.results_section['ig_viewer'], current_class_name)
+            elif analysis_type == "SHAP解释":
+                display_shap_explanation(result, self.image, self.results_section['shap_viewer'], current_class_name)
+            elif analysis_type == "SmoothGrad":
+                display_smoothgrad(result, self.image, self.results_section['smoothgrad_viewer'], current_class_name)
                 
             # 更新按钮状态
             self.update_buttons_state()
@@ -313,7 +331,12 @@ class ModelAnalysisWidget(QWidget):
                 'num_superpixels': self.analysis_section['num_superpixels'].value(),
                 'num_samples': self.analysis_section['num_samples'].value(),
                 'perturbation_range': self.analysis_section['perturbation_range'].value(),
-                'num_steps': self.analysis_section['num_steps'].value()
+                'num_steps': self.analysis_section['num_steps'].value(),
+                'ig_steps': self.analysis_section['ig_steps'].value(),
+                'baseline_type': self.analysis_section['baseline_type'].currentText(),
+                'shap_samples': self.analysis_section['shap_samples'].value(),
+                'smoothgrad_samples': self.analysis_section['smoothgrad_samples'].value(),
+                'noise_level': self.analysis_section['noise_level'].value()
             }
             self.execute_next_analysis(target_class, analysis_params)
             
@@ -368,7 +391,7 @@ class ModelAnalysisWidget(QWidget):
             
             # 获取当前选中的标签页，只刷新当前显示的标签页
             current_tab_index = self.results_section['results_tabs'].currentIndex()
-            tab_names = ["特征可视化", "GradCAM", "LIME解释", "敏感性分析"]
+            tab_names = ["特征可视化", "GradCAM", "LIME解释", "敏感性分析", "Integrated Gradients", "SHAP解释", "SmoothGrad"]
             
             if 0 <= current_tab_index < len(tab_names):
                 current_tab_name = tab_names[current_tab_index]
@@ -392,6 +415,12 @@ class ModelAnalysisWidget(QWidget):
                         display_lime_explanation(result, self.image, self.results_section['lime_viewer'], current_class_idx, self.class_names)
                     elif current_tab_name == "敏感性分析":
                         display_sensitivity_analysis(result, self.results_section['sensitivity_viewer'], current_class_name)
+                    elif current_tab_name == "Integrated Gradients":
+                        display_integrated_gradients(result, self.image, self.results_section['ig_viewer'], current_class_name)
+                    elif current_tab_name == "SHAP解释":
+                        display_shap_explanation(result, self.image, self.results_section['shap_viewer'], current_class_name)
+                    elif current_tab_name == "SmoothGrad":
+                        display_smoothgrad(result, self.image, self.results_section['smoothgrad_viewer'], current_class_name)
             
             # 重新显示原始图片
             if self.image:
@@ -423,14 +452,14 @@ class ModelAnalysisWidget(QWidget):
             
             # 获取当前选中的标签页
             current_tab_index = self.results_section['results_tabs'].currentIndex()
-            tab_names = ["特征可视化", "GradCAM", "LIME解释", "敏感性分析"]
+            tab_names = ["特征可视化", "GradCAM", "LIME解释", "敏感性分析", "Integrated Gradients", "SHAP解释", "SmoothGrad"]
             
             if current_tab_index < 0 or current_tab_index >= len(tab_names):
                 QMessageBox.warning(self, "警告", "请先选择要复制的分析结果标签页!")
                 return
                 
             current_tab_name = tab_names[current_tab_index]
-            viewer_names = ['feature_viewer', 'gradcam_viewer', 'lime_viewer', 'sensitivity_viewer']
+            viewer_names = ['feature_viewer', 'gradcam_viewer', 'lime_viewer', 'sensitivity_viewer', 'ig_viewer', 'shap_viewer', 'smoothgrad_viewer']
             current_viewer = self.results_section[viewer_names[current_tab_index]]
             
             # 获取当前显示的图片
@@ -453,14 +482,14 @@ class ModelAnalysisWidget(QWidget):
             
             # 获取当前选中的标签页
             current_tab_index = self.results_section['results_tabs'].currentIndex()
-            tab_names = ["特征可视化", "GradCAM", "LIME解释", "敏感性分析"]
+            tab_names = ["特征可视化", "GradCAM", "LIME解释", "敏感性分析", "Integrated Gradients", "SHAP解释", "SmoothGrad"]
             
             if current_tab_index < 0 or current_tab_index >= len(tab_names):
                 QMessageBox.warning(self, "警告", "请先选择要保存的分析结果标签页!")
                 return
                 
             current_tab_name = tab_names[current_tab_index]
-            viewer_names = ['feature_viewer', 'gradcam_viewer', 'lime_viewer', 'sensitivity_viewer']
+            viewer_names = ['feature_viewer', 'gradcam_viewer', 'lime_viewer', 'sensitivity_viewer', 'ig_viewer', 'shap_viewer', 'smoothgrad_viewer']
             current_viewer = self.results_section[viewer_names[current_tab_index]]
             
             # 获取当前显示的图片
@@ -491,11 +520,11 @@ class ModelAnalysisWidget(QWidget):
             self.update_buttons_state()
             
             # 如果当前标签页有分析结果但图片没有显示，才进行延迟刷新
-            tab_names = ["特征可视化", "GradCAM", "LIME解释", "敏感性分析"]
+            tab_names = ["特征可视化", "GradCAM", "LIME解释", "敏感性分析", "Integrated Gradients", "SHAP解释", "SmoothGrad"]
             if 0 <= index < len(tab_names):
                 current_tab_name = tab_names[index]
                 if current_tab_name in self.current_results:
-                    viewer_names = ['feature_viewer', 'gradcam_viewer', 'lime_viewer', 'sensitivity_viewer']
+                    viewer_names = ['feature_viewer', 'gradcam_viewer', 'lime_viewer', 'sensitivity_viewer', 'ig_viewer', 'shap_viewer', 'smoothgrad_viewer']
                     current_viewer = self.results_section[viewer_names[index]]
                     
                     # 检查当前查看器是否已经有图片显示
@@ -514,7 +543,7 @@ class ModelAnalysisWidget(QWidget):
                 return
                 
             current_tab_index = self.results_section['results_tabs'].currentIndex()
-            tab_names = ["特征可视化", "GradCAM", "LIME解释", "敏感性分析"]
+            tab_names = ["特征可视化", "GradCAM", "LIME解释", "敏感性分析", "Integrated Gradients", "SHAP解释", "SmoothGrad"]
             
             if 0 <= current_tab_index < len(tab_names):
                 current_tab_name = tab_names[current_tab_index]
@@ -535,6 +564,12 @@ class ModelAnalysisWidget(QWidget):
                         display_lime_explanation(result, self.image, self.results_section['lime_viewer'], current_class_idx, self.class_names)
                     elif current_tab_name == "敏感性分析":
                         display_sensitivity_analysis(result, self.results_section['sensitivity_viewer'], current_class_name)
+                    elif current_tab_name == "Integrated Gradients":
+                        display_integrated_gradients(result, self.image, self.results_section['ig_viewer'], current_class_name)
+                    elif current_tab_name == "SHAP解释":
+                        display_shap_explanation(result, self.image, self.results_section['shap_viewer'], current_class_name)
+                    elif current_tab_name == "SmoothGrad":
+                        display_smoothgrad(result, self.image, self.results_section['smoothgrad_viewer'], current_class_name)
                         
         except Exception as e:
             self.logger.error(f"刷新当前标签页失败: {str(e)}")
@@ -544,7 +579,7 @@ class ModelAnalysisWidget(QWidget):
         try:
             # 获取当前选中的标签页
             current_tab_index = self.results_section['results_tabs'].currentIndex()
-            viewer_names = ['feature_viewer', 'gradcam_viewer', 'lime_viewer', 'sensitivity_viewer']
+            viewer_names = ['feature_viewer', 'gradcam_viewer', 'lime_viewer', 'sensitivity_viewer', 'ig_viewer', 'shap_viewer', 'smoothgrad_viewer']
             
             # 检查当前标签页是否有图片
             has_image = False

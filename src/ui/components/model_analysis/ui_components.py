@@ -123,6 +123,17 @@ def create_analysis_section(parent):
     sensitivity_checkbox = QCheckBox("敏感性分析")
     sensitivity_checkbox.setToolTip("通过添加不同程度的噪声扰动，测试模型对输入变化的敏感程度")
     
+    # 新增的第一阶段方法
+    integrated_gradients_checkbox = QCheckBox("Integrated Gradients")
+    integrated_gradients_checkbox.setToolTip("积分梯度方法，解决梯度饱和问题，提供更稳定的特征重要性解释")
+    
+    shap_checkbox = QCheckBox("SHAP解释")
+    shap_checkbox.setToolTip("基于博弈论Shapley值的统一解释框架，提供全局和局部解释")
+    
+    smoothgrad_checkbox = QCheckBox("SmoothGrad")
+    smoothgrad_checkbox.setToolTip("平滑梯度方法，通过添加噪声并平均梯度来减少噪声干扰")
+    
+    # 第一行布局
     methods_layout.addWidget(feature_checkbox)
     methods_layout.addWidget(gradcam_checkbox)
     methods_layout.addWidget(lime_checkbox)
@@ -130,6 +141,15 @@ def create_analysis_section(parent):
     methods_layout.addStretch()
     
     analysis_layout.addLayout(methods_layout)
+    
+    # 第二行新方法
+    new_methods_layout = QHBoxLayout()
+    new_methods_layout.addWidget(integrated_gradients_checkbox)
+    new_methods_layout.addWidget(shap_checkbox)
+    new_methods_layout.addWidget(smoothgrad_checkbox)
+    new_methods_layout.addStretch()
+    
+    analysis_layout.addLayout(new_methods_layout)
     
     # 公共参数
     common_layout = QHBoxLayout()
@@ -175,6 +195,39 @@ def create_analysis_section(parent):
     num_steps.setToolTip("敏感性分析时从0到最大扰动范围的步数，值越大曲线越平滑")
     params_layout.addRow("敏感性扰动步数:", num_steps)
     
+    # Integrated Gradients参数
+    ig_steps = QSpinBox()
+    ig_steps.setRange(10, 200)
+    ig_steps.setValue(50)
+    ig_steps.setToolTip("Integrated Gradients的积分步数，值越大结果越精确但计算时间更长")
+    params_layout.addRow("IG积分步数:", ig_steps)
+    
+    baseline_type = QComboBox()
+    baseline_type.addItems(["zero", "gaussian", "mean"])
+    baseline_type.setToolTip("基线图像类型：zero(全零)、gaussian(高斯噪声)、mean(平均值)")
+    params_layout.addRow("IG基线类型:", baseline_type)
+    
+    # SHAP参数
+    shap_samples = QSpinBox()
+    shap_samples.setRange(50, 1000)
+    shap_samples.setValue(100)
+    shap_samples.setToolTip("SHAP分析的采样数量，值越大结果越准确但计算时间更长")
+    params_layout.addRow("SHAP采样数量:", shap_samples)
+    
+    # SmoothGrad参数
+    smoothgrad_samples = QSpinBox()
+    smoothgrad_samples.setRange(20, 200)
+    smoothgrad_samples.setValue(50)
+    smoothgrad_samples.setToolTip("SmoothGrad的噪声采样次数，值越大平滑效果越好")
+    params_layout.addRow("SmoothGrad采样次数:", smoothgrad_samples)
+    
+    noise_level = QDoubleSpinBox()
+    noise_level.setRange(0.01, 0.5)
+    noise_level.setValue(0.15)
+    noise_level.setSingleStep(0.01)
+    noise_level.setToolTip("SmoothGrad的噪声水平，值越大噪声越强")
+    params_layout.addRow("SmoothGrad噪声水平:", noise_level)
+    
     analysis_layout.addLayout(params_layout)
     
     # 开始分析按钮
@@ -205,11 +258,19 @@ def create_analysis_section(parent):
         'gradcam_checkbox': gradcam_checkbox,
         'lime_checkbox': lime_checkbox,
         'sensitivity_checkbox': sensitivity_checkbox,
+        'integrated_gradients_checkbox': integrated_gradients_checkbox,
+        'shap_checkbox': shap_checkbox,
+        'smoothgrad_checkbox': smoothgrad_checkbox,
         'class_combo': class_combo,
         'num_superpixels': num_superpixels,
         'num_samples': num_samples,
         'perturbation_range': perturbation_range,
         'num_steps': num_steps,
+        'ig_steps': ig_steps,
+        'baseline_type': baseline_type,
+        'shap_samples': shap_samples,
+        'smoothgrad_samples': smoothgrad_samples,
+        'noise_level': noise_level,
         'start_analysis_btn': start_analysis_btn,
         'stop_analysis_btn': stop_analysis_btn,
         'progress_bar': progress_bar
@@ -275,6 +336,30 @@ def create_results_section(parent):
     sensitivity_scroll.setMinimumHeight(450)
     results_tabs.addTab(sensitivity_scroll, "敏感性分析")
     
+    # Integrated Gradients结果页
+    ig_scroll = QScrollArea()
+    ig_viewer = ZoomableImageViewer()
+    ig_scroll.setWidget(ig_viewer)
+    ig_scroll.setWidgetResizable(True)
+    ig_scroll.setMinimumHeight(450)
+    results_tabs.addTab(ig_scroll, "Integrated Gradients")
+    
+    # SHAP结果页
+    shap_scroll = QScrollArea()
+    shap_viewer = ZoomableImageViewer()
+    shap_scroll.setWidget(shap_viewer)
+    shap_scroll.setWidgetResizable(True)
+    shap_scroll.setMinimumHeight(450)
+    results_tabs.addTab(shap_scroll, "SHAP解释")
+    
+    # SmoothGrad结果页
+    smoothgrad_scroll = QScrollArea()
+    smoothgrad_viewer = ZoomableImageViewer()
+    smoothgrad_scroll.setWidget(smoothgrad_viewer)
+    smoothgrad_scroll.setWidgetResizable(True)
+    smoothgrad_scroll.setMinimumHeight(450)
+    results_tabs.addTab(smoothgrad_scroll, "SmoothGrad")
+    
     results_layout.addWidget(results_tabs)
     results_group.setLayout(results_layout)
     
@@ -285,6 +370,9 @@ def create_results_section(parent):
         'gradcam_viewer': gradcam_viewer,
         'lime_viewer': lime_viewer,
         'sensitivity_viewer': sensitivity_viewer,
+        'ig_viewer': ig_viewer,
+        'shap_viewer': shap_viewer,
+        'smoothgrad_viewer': smoothgrad_viewer,
         'copy_image_btn': copy_image_btn,
         'save_image_btn': save_image_btn
     } 

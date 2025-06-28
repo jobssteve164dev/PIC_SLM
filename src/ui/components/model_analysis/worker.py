@@ -53,6 +53,12 @@ class ModelAnalysisWorker(QThread):
                 result = self._lime_analysis()
             elif self.analysis_type == "敏感性分析":
                 result = self._sensitivity_analysis()
+            elif self.analysis_type == "Integrated Gradients":
+                result = self._integrated_gradients_analysis()
+            elif self.analysis_type == "SHAP解释":
+                result = self._shap_analysis()
+            elif self.analysis_type == "SmoothGrad":
+                result = self._smoothgrad_analysis()
             else:
                 raise ValueError(f"未知的分析类型: {self.analysis_type}")
                 
@@ -244,4 +250,165 @@ class ModelAnalysisWorker(QThread):
             'epsilons': epsilons,
             'predictions': predictions,
             'original_confidence': original_confidence
-        } 
+        }
+    
+    def _integrated_gradients_analysis(self):
+        """Integrated Gradients分析"""
+        self.status_updated.emit("正在计算Integrated Gradients...")
+        
+        # 获取参数
+        num_steps = self.analysis_params.get('ig_steps', 50)
+        baseline_type = self.analysis_params.get('baseline_type', 'zero')
+        
+        # 创建基线图像
+        if baseline_type == 'zero':
+            baseline = torch.zeros_like(self.image_tensor)
+        elif baseline_type == 'gaussian':
+            baseline = torch.randn_like(self.image_tensor) * 0.1
+        elif baseline_type == 'mean':
+            baseline = torch.ones_like(self.image_tensor) * 0.5
+        else:
+            baseline = torch.zeros_like(self.image_tensor)
+        
+        # 计算积分梯度
+        integrated_gradients = torch.zeros_like(self.image_tensor)
+        
+        for i in range(num_steps):
+            # 检查是否已停止
+            if self.is_stopped:
+                return integrated_gradients.detach().cpu().numpy()
+            
+            # 线性插值
+            alpha = i / (num_steps - 1) if num_steps > 1 else 0
+            interpolated = baseline + alpha * (self.image_tensor - baseline)
+            interpolated = interpolated.unsqueeze(0)
+            interpolated.requires_grad_()
+            
+            # 前向传播
+            output = self.model(interpolated)
+            
+            # 反向传播
+            self.model.zero_grad()
+            output[0, self.target_class].backward()
+            
+            # 累加梯度
+            if interpolated.grad is not None:
+                integrated_gradients += interpolated.grad.squeeze(0)
+            
+            self.progress_updated.emit(int((i + 1) / num_steps * 100))
+        
+        # 计算最终的积分梯度
+        integrated_gradients = integrated_gradients * (self.image_tensor - baseline) / num_steps
+        
+        return integrated_gradients.detach().cpu().numpy()
+    
+    def _shap_analysis(self):
+        """SHAP分析"""
+        try:
+            import shap
+        except ImportError:
+            raise ImportError("请安装shap库: pip install shap")
+        
+        self.status_updated.emit("正在进行SHAP分析...")
+        
+        # 获取参数
+        num_samples = self.analysis_params.get('shap_samples', 100)
+        
+        # 使用简化的梯度SHAP方法，更稳定
+        try:
+            # 准备输入
+            input_tensor = self.image_tensor.unsqueeze(0)
+            
+            # 创建梯度SHAP解释器
+            explainer = shap.GradientExplainer(self.model, input_tensor)
+            
+            # 计算SHAP值
+            shap_values = explainer.shap_values(input_tensor)
+            
+            self.progress_updated.emit(100)
+            
+            # 处理返回的SHAP值
+            if isinstance(shap_values, list):
+                # 多类分类情况，选择目标类别
+                if self.target_class < len(shap_values):
+                    selected_shap_values = shap_values[self.target_class][0]
+                else:
+                    selected_shap_values = shap_values[0][0]
+                
+                return {
+                    'shap_values': selected_shap_values,
+                    'method': 'gradient',
+                    'target_class': self.target_class
+                }
+            else:
+                # 单一SHAP值
+                return {
+                    'shap_values': shap_values[0],
+                    'method': 'gradient',
+                    'target_class': self.target_class
+                }
+                
+        except Exception as e:
+            # 如果SHAP失败，使用简单的梯度方法作为替代
+            self.status_updated.emit("SHAP失败，使用简单梯度方法...")
+            
+            input_tensor = self.image_tensor.unsqueeze(0)
+            input_tensor.requires_grad_()
+            
+            # 前向传播
+            output = self.model(input_tensor)
+            
+            # 反向传播
+            self.model.zero_grad()
+            output[0, self.target_class].backward()
+            
+            # 获取梯度
+            gradients = input_tensor.grad.squeeze(0).detach().cpu().numpy()
+            
+            self.progress_updated.emit(100)
+            
+            return {
+                'shap_values': gradients,
+                'method': 'simple_gradient',
+                'target_class': self.target_class
+            }
+    
+    def _smoothgrad_analysis(self):
+        """SmoothGrad分析"""
+        self.status_updated.emit("正在计算SmoothGrad...")
+        
+        # 获取参数
+        num_samples = self.analysis_params.get('smoothgrad_samples', 50)
+        noise_level = self.analysis_params.get('noise_level', 0.15)
+        
+        # 累积梯度
+        smooth_gradients = torch.zeros_like(self.image_tensor)
+        
+        for i in range(num_samples):
+            # 检查是否已停止
+            if self.is_stopped:
+                return smooth_gradients.detach().cpu().numpy()
+            
+            # 添加高斯噪声
+            noise = torch.randn_like(self.image_tensor) * noise_level
+            noisy_input = self.image_tensor + noise
+            noisy_input = noisy_input.unsqueeze(0)
+            noisy_input.requires_grad_()
+            
+            # 前向传播
+            output = self.model(noisy_input)
+            
+            # 反向传播
+            self.model.zero_grad()
+            output[0, self.target_class].backward()
+            
+            # 累加梯度
+            if noisy_input.grad is not None:
+                smooth_gradients += noisy_input.grad.squeeze(0)
+            
+            self.progress_updated.emit(int((i + 1) / num_samples * 100))
+        
+        # 平均梯度
+        smooth_gradients = smooth_gradients / num_samples
+        
+        return smooth_gradients.detach().cpu().numpy() 
