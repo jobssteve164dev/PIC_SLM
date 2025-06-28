@@ -129,6 +129,9 @@ class DependencyCheckThread(QThread):
             'tarfile', 'bz2', 'lzma', 'unittest', 'argparse', 'getopt', 'pdb'
         }
         
+        # 本地模块（项目内部的模块，不需要安装）
+        local_modules = self._get_local_modules()
+        
         # 包名映射（import名到pip包名的映射）
         package_mapping = {
             'cv2': 'opencv-python',
@@ -172,8 +175,11 @@ class DependencyCheckThread(QThread):
                             if import_count % 50 == 0:  # 每50个import更新一次状态
                                 self.status_updated.emit(f"分析代码导入... ({import_count} 个import)")
                                 
-                            # 过滤掉标准库模块
-                            if imp not in stdlib_modules and not imp.startswith('.'):
+                            # 过滤掉标准库模块和本地模块
+                            if (imp not in stdlib_modules and 
+                                imp not in local_modules and 
+                                not imp.startswith('.') and
+                                self._is_valid_package_name(imp)):
                                 # 应用包名映射
                                 package_name = package_mapping.get(imp, imp)
                                 dependencies.add(package_name)
@@ -182,38 +188,151 @@ class DependencyCheckThread(QThread):
         result = [(pkg, "", "code") for pkg in sorted(dependencies)]
         return result
     
+    def _get_local_modules(self) -> set:
+        """获取项目本地模块列表"""
+        local_modules = set()
+        
+        # 扫描项目根目录下的所有文件夹（这些都是项目内部的）
+        project_dirs = set()
+        try:
+            for item in os.listdir('.'):
+                if os.path.isdir(item) and not item.startswith('.'):
+                    project_dirs.add(item)
+        except:
+            pass
+        
+        # 扫描src目录下的所有模块
+        if os.path.exists('src'):
+            for root, dirs, files in os.walk('src'):
+                # 跳过__pycache__目录
+                dirs[:] = [d for d in dirs if d != '__pycache__']
+                
+                for file in files:
+                    if file.endswith('.py') and file != '__init__.py':
+                        # 获取相对于src的模块路径
+                        rel_path = os.path.relpath(os.path.join(root, file), 'src')
+                        module_name = rel_path.replace(os.sep, '.').replace('.py', '')
+                        # 只取顶级模块名
+                        top_level = module_name.split('.')[0]
+                        local_modules.add(top_level)
+                
+                # 添加目录作为模块（如果包含__init__.py）
+                for dir_name in dirs:
+                    dir_path = os.path.join(root, dir_name)
+                    if os.path.exists(os.path.join(dir_path, '__init__.py')):
+                        rel_path = os.path.relpath(dir_path, 'src')
+                        module_name = rel_path.replace(os.sep, '.')
+                        top_level = module_name.split('.')[0]
+                        local_modules.add(top_level)
+        
+        # 添加项目根目录下的所有文件夹
+        local_modules.update(project_dirs)
+        
+        # 手动添加已知的项目模块和常见项目文件夹
+        known_local_modules = {
+            'src', 'ui', 'utils', 'components', 'training_components', 
+            'image_processing', 'model_trainer', 'predictor', 'config_loader',
+            'data_processor', 'detection_trainer', 'detection_utils', 
+            'image_preprocessor', 'annotation_tool', 'backup', 'logs', 'models',
+            'config', 'setting', 'runs', 'train_config', 'pretrainedmodels',
+            'resource', 'test', 'examples', 'docs', 'data', 'datasets',
+            'checkpoints', 'weights', 'pretrained', 'cache', 'temp', 'build',
+            'dist', 'venv', 'env', '.git', '.vscode', '__pycache__'
+        }
+        local_modules.update(known_local_modules)
+        
+        return local_modules
+    
+    def _is_valid_package_name(self, name: str) -> bool:
+        """检查是否是有效的包名"""
+        if not name:
+            return False
+        
+        # 过滤无效的包名
+        invalid_patterns = [
+            # 文件扩展名
+            name.endswith(('.py', '.pyx', '.so', '.dll', '.exe', '.bat', '.sh')),
+            # 包含路径分隔符
+            '/' in name or '\\' in name,
+            # 数字开头
+            name[0].isdigit(),
+            # 包含空格或特殊字符
+            any(c in name for c in ' \t\n\r!@#$%^&*()+=[]{}|;:,<>?'),
+            # 太短或太长
+            len(name) < 2 or len(name) > 50,
+            # 常见的非包名和项目相关名称
+            name.lower() in {
+                'main', 'test', 'tests', 'example', 'examples', 'demo', 'app',
+                'config', 'configs', 'setting', 'settings', 'data', 'dataset', 
+                'datasets', 'model', 'models', 'log', 'logs', 'backup', 'cache',
+                'temp', 'tmp', 'build', 'dist', 'docs', 'doc', 'readme', 'license',
+                'scripts', 'script', 'tools', 'tool', 'utils', 'util', 'helpers',
+                'helper', 'assets', 'static', 'resources', 'resource', 'weights',
+                'checkpoints', 'checkpoint', 'pretrained', 'pretrainedmodels',
+                'runs', 'experiments', 'exp', 'results', 'output', 'outputs',
+                'input', 'inputs', 'src', 'source', 'lib', 'libs', 'bin'
+            },
+            # 版本号格式
+            name.replace('.', '').replace('-', '').replace('_', '').isdigit(),
+        ]
+        
+        return not any(invalid_patterns)
+    
     def _extract_imports_from_file(self, file_path: str) -> set:
         """从单个Python文件中提取import的包名"""
         imports = set()
         
         try:
             with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
-                for line_num, line in enumerate(f, 1):
-                    line = line.strip()
-                    
-                    # 解析 import xxx
-                    if line.startswith('import ') and not line.startswith('import.'):
-                        parts = line.split()
-                        if len(parts) >= 2:
-                            module = parts[1].split('.')[0]  # 只取顶级包名
-                            imports.add(module)
-                    
-                    # 解析 from xxx import
-                    elif line.startswith('from ') and ' import ' in line:
-                        try:
-                            from_part = line.split(' import ')[0]
-                            module = from_part.replace('from ', '').strip().split('.')[0]
-                            # 过滤相对导入
-                            if not module.startswith('.') and module:
+                content = f.read()
+                
+            # 简单的import语句解析，避免复杂的语法解析
+            lines = content.split('\n')
+            
+            for line_num, line in enumerate(lines, 1):
+                line = line.strip()
+                
+                # 跳过注释行
+                if line.startswith('#') or not line:
+                    continue
+                
+                # 解析 import xxx
+                if line.startswith('import '):
+                    # 处理多个import: import a, b, c
+                    import_part = line[7:].strip()  # 去掉'import '
+                    if import_part:
+                        # 分割逗号分隔的导入
+                        modules = [m.strip().split('.')[0] for m in import_part.split(',')]
+                        for module in modules:
+                            module = module.strip()
+                            if module and self._is_valid_import_name(module):
                                 imports.add(module)
-                        except:
-                            continue
-                            
+                
+                # 解析 from xxx import
+                elif line.startswith('from ') and ' import ' in line:
+                    try:
+                        from_part = line.split(' import ')[0][5:].strip()  # 去掉'from '
+                        if from_part and not from_part.startswith('.'):
+                            module = from_part.split('.')[0]
+                            if module and self._is_valid_import_name(module):
+                                imports.add(module)
+                    except:
+                        continue
+                        
         except Exception as e:
-            # 如果文件读取失败，跳过该文件
-            pass
+            # 文件读取失败时，记录但不影响整体进程
+            self.status_updated.emit(f"警告: 无法解析文件 {os.path.basename(file_path)}")
             
         return imports
+    
+    def _is_valid_import_name(self, name: str) -> bool:
+        """检查是否是有效的import名称"""
+        if not name or len(name) < 1:
+            return False
+        
+        # 基本的包名验证
+        return (name.replace('_', '').replace('-', '').isalnum() and 
+                not name[0].isdigit())
     
     def _merge_dependencies(self, req_deps: List[Tuple[str, str, str]], 
                           code_deps: List[Tuple[str, str, str]]) -> List[Tuple[str, str, str]]:
@@ -468,6 +587,64 @@ class DependencyManagerWidget(QWidget):
         
         parent_layout.addWidget(management_group)
         
+        # 手动安装依赖组
+        manual_group = QGroupBox("手动安装依赖")
+        manual_group.setFont(QFont('微软雅黑', 10, QFont.Bold))
+        manual_layout = QVBoxLayout(manual_group)
+        
+        # 输入提示
+        input_label = QLabel("请输入要安装的依赖库名（多个库用逗号或空格分隔）：")
+        input_label.setStyleSheet("color: #333; margin: 5px 0;")
+        manual_layout.addWidget(input_label)
+        
+        # 输入框和按钮的水平布局
+        input_hlayout = QHBoxLayout()
+        
+        # 输入框
+        self.manual_input = QLineEdit()
+        self.manual_input.setPlaceholderText("例如: numpy pandas matplotlib>=3.0 scikit-learn==1.0.2")
+        self.manual_input.returnPressed.connect(self._install_manual_packages)
+        self.manual_input.setStyleSheet("padding: 5px; border: 1px solid #ccc; border-radius: 3px;")
+        input_hlayout.addWidget(self.manual_input)
+        
+        # 安装按钮
+        self.install_manual_btn = QPushButton("安装")
+        self.install_manual_btn.clicked.connect(self._install_manual_packages)
+        self.install_manual_btn.setStyleSheet("background-color: #2196F3; color: white; padding: 5px 15px; border-radius: 3px;")
+        self.install_manual_btn.setMaximumWidth(80)
+        input_hlayout.addWidget(self.install_manual_btn)
+        
+        manual_layout.addLayout(input_hlayout)
+        
+        # 常用库快捷按钮
+        shortcuts_label = QLabel("常用库快捷安装：")
+        shortcuts_label.setStyleSheet("color: #333; margin: 10px 0 5px 0;")
+        manual_layout.addWidget(shortcuts_label)
+        
+        shortcuts_layout = QHBoxLayout()
+        common_packages = [
+            ("NumPy", "numpy"),
+            ("Pandas", "pandas"), 
+            ("Matplotlib", "matplotlib"),
+            ("OpenCV", "opencv-python"),
+            ("Scikit-learn", "scikit-learn"),
+            ("SHAP", "shap"),
+            ("Pillow", "pillow"),
+            ("Requests", "requests")
+        ]
+        
+        for display_name, package_name in common_packages:
+            btn = QPushButton(display_name)
+            btn.clicked.connect(lambda checked, pkg=package_name: self._install_single_package(pkg))
+            btn.setStyleSheet("padding: 3px 8px; margin: 2px; border: 1px solid #ddd; border-radius: 3px;")
+            btn.setMaximumWidth(90)
+            shortcuts_layout.addWidget(btn)
+        
+        shortcuts_layout.addStretch()
+        manual_layout.addLayout(shortcuts_layout)
+        
+        parent_layout.addWidget(manual_group)
+        
     def _create_dependency_list_frame(self) -> QFrame:
         """创建依赖列表框架"""
         frame = QFrame()
@@ -713,6 +890,79 @@ class DependencyManagerWidget(QWidget):
             return
             
         self._install_packages(selected_packages)
+    
+    def _install_manual_packages(self):
+        """安装手动输入的依赖包"""
+        input_text = self.manual_input.text().strip()
+        if not input_text:
+            QMessageBox.information(self, "提示", "请输入要安装的依赖库名")
+            return
+        
+        # 解析输入的包名（支持逗号和空格分隔）
+        packages = []
+        for item in input_text.replace(',', ' ').split():
+            item = item.strip()
+            if item:
+                packages.append(item)
+        
+        if not packages:
+            QMessageBox.information(self, "提示", "请输入有效的依赖库名")
+            return
+        
+        # 验证包名格式
+        invalid_packages = []
+        valid_packages = []
+        
+        for package in packages:
+            # 允许版本号规范（如 package>=1.0, package==1.2.3）
+            package_name = package.split('=')[0].split('>')[0].split('<')[0].split('!')[0].split('~')[0]
+            if self._is_valid_manual_package_name(package_name):
+                valid_packages.append(package)
+            else:
+                invalid_packages.append(package)
+        
+        if invalid_packages:
+            msg = f"以下包名格式无效，将被跳过：\n{', '.join(invalid_packages)}"
+            if valid_packages:
+                msg += f"\n\n将安装：{', '.join(valid_packages)}"
+                reply = QMessageBox.question(self, "包名验证", msg, 
+                                           QMessageBox.Yes | QMessageBox.No)
+                if reply != QMessageBox.Yes:
+                    return
+            else:
+                QMessageBox.warning(self, "包名验证", msg)
+                return
+        
+        if valid_packages:
+            self._install_packages(valid_packages)
+            self.manual_input.clear()  # 清空输入框
+    
+    def _install_single_package(self, package_name):
+        """安装单个包（快捷按钮使用）"""
+        self._install_packages([package_name])
+    
+    def _is_valid_manual_package_name(self, name: str) -> bool:
+        """检查手动输入的包名是否有效（相对宽松的验证）"""
+        if not name:
+            return False
+        
+        # 基本格式检查
+        if len(name) < 2 or len(name) > 100:
+            return False
+        
+        # 不能包含路径分隔符和危险字符
+        if any(c in name for c in '/\\<>"|*?'):
+            return False
+        
+        # 不能以数字开头
+        if name[0].isdigit():
+            return False
+        
+        # 不能是明显的文件名
+        if name.endswith(('.py', '.exe', '.bat', '.sh', '.dll', '.so')):
+            return False
+        
+        return True
         
     def _install_packages(self, packages: List[str]):
         """安装指定的包列表"""
