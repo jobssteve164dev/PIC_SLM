@@ -26,6 +26,7 @@ lime==0.2.0.1
 scikit-image==0.24.0
 mplcursors==0.6
 requests==2.32.3
+shap==0.41.0
 
 # 可选依赖
 pywin32==310

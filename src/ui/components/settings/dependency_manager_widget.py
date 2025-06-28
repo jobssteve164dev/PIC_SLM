@@ -32,17 +32,38 @@ class DependencyCheckThread(QThread):
     def __init__(self):
         super().__init__()
         self.requirements_file = "requirements.txt"
+        self.scan_mode = "requirements"  # "requirements" 或 "code_analysis" 或 "both"
+        
+    def set_scan_mode(self, mode: str):
+        """设置扫描模式
+        Args:
+            mode: "requirements" - 只扫描requirements.txt
+                 "code_analysis" - 只扫描代码中的import
+                 "both" - 扫描两者并合并
+        """
+        self.scan_mode = mode
         
     def run(self):
         """执行依赖检查"""
         try:
-            self.status_updated.emit("正在读取依赖文件...")
-            dependencies = self._parse_requirements()
+            self.status_updated.emit("正在读取依赖信息...")
+            
+            if self.scan_mode == "requirements":
+                dependencies = self._parse_requirements()
+            elif self.scan_mode == "code_analysis": 
+                dependencies = self._analyze_code_imports()
+            else:  # both
+                req_deps = self._parse_requirements()
+                code_deps = self._analyze_code_imports()
+                dependencies = self._merge_dependencies(req_deps, code_deps)
             
             total = len(dependencies)
             results = []
             
-            for i, (pkg_name, version_spec) in enumerate(dependencies):
+            for i, (pkg_name, version_spec, source) in enumerate(dependencies):
+                if self.isInterruptionRequested():
+                    break
+                    
                 self.status_updated.emit(f"检查依赖: {pkg_name}")
                 
                 installed, version = self._check_package(pkg_name)
@@ -50,7 +71,8 @@ class DependencyCheckThread(QThread):
                     'name': pkg_name, 
                     'required_version': version_spec,
                     'installed': installed,
-                    'current_version': version
+                    'current_version': version,
+                    'source': source  # 'requirements', 'code', 'both'
                 })
                 
                 self.dependency_checked.emit(pkg_name, installed, version)
@@ -62,7 +84,7 @@ class DependencyCheckThread(QThread):
         except Exception as e:
             self.status_updated.emit(f"检查失败: {str(e)}")
     
-    def _parse_requirements(self) -> List[Tuple[str, str]]:
+    def _parse_requirements(self) -> List[Tuple[str, str, str]]:
         """解析requirements.txt文件"""
         dependencies = []
         
@@ -75,18 +97,144 @@ class DependencyCheckThread(QThread):
                 if line and not line.startswith('#'):
                     if '==' in line:
                         pkg_name, version = line.split('==')
-                        dependencies.append((pkg_name.strip(), version.strip()))
+                        dependencies.append((pkg_name.strip(), version.strip(), 'requirements'))
                     elif ';' in line:  # 处理条件依赖
                         pkg_part = line.split(';')[0].strip()
                         if '==' in pkg_part:
                             pkg_name, version = pkg_part.split('==')
-                            dependencies.append((pkg_name.strip(), version.strip()))
+                            dependencies.append((pkg_name.strip(), version.strip(), 'requirements'))
                         else:
-                            dependencies.append((pkg_part.strip(), ""))
+                            dependencies.append((pkg_part.strip(), "", 'requirements'))
                     else:
-                        dependencies.append((line.strip(), ""))
+                        dependencies.append((line.strip(), "", 'requirements'))
         
         return dependencies
+    
+    def _analyze_code_imports(self) -> List[Tuple[str, str, str]]:
+        """分析代码中的import语句，提取实际使用的依赖"""
+        dependencies = set()
+        
+        # 需要扫描的目录
+        scan_dirs = ['src']
+        
+        # 标准库模块（不需要安装的）
+        stdlib_modules = {
+            'os', 'sys', 'json', 'time', 'datetime', 'threading', 'subprocess', 
+            'pathlib', 'glob', 'shutil', 'platform', 'traceback', 'logging', 
+            'functools', 'enum', 'dataclasses', 'typing', 'collections', 'itertools',
+            'math', 'random', 're', 'urllib', 'http', 'socket', 'ssl', 'hashlib',
+            'base64', 'pickle', 'copy', 'weakref', 'gc', 'warnings', 'configparser',
+            'sqlite3', 'csv', 'xml', 'html', 'email', 'mimetypes', 'tempfile',
+            'io', 'codecs', 'locale', 'calendar', 'zoneinfo', 'gzip', 'zipfile',
+            'tarfile', 'bz2', 'lzma', 'unittest', 'argparse', 'getopt', 'pdb'
+        }
+        
+        # 包名映射（import名到pip包名的映射）
+        package_mapping = {
+            'cv2': 'opencv-python',
+            'PIL': 'pillow', 
+            'skimage': 'scikit-image',
+            'sklearn': 'scikit-learn',
+            'yaml': 'PyYAML',
+            'QtWidgets': 'PyQt5',
+            'QtCore': 'PyQt5',
+            'QtGui': 'PyQt5',
+            'torchvision': 'torchvision',
+            'tensorboard': 'tensorboard',
+            'efficientnet_pytorch': 'efficientnet-pytorch',
+            'timm': 'timm',
+            'shap': 'shap',
+            'lime': 'lime',
+            'captum': 'captum',
+            'albumentations': 'albumentations',
+            'seaborn': 'seaborn',
+            'tqdm': 'tqdm',
+            'requests': 'requests',
+            'psutil': 'psutil',
+            'colorama': 'colorama',
+            'mplcursors': 'mplcursors'
+        }
+        
+        import_count = 0
+        
+        for scan_dir in scan_dirs:
+            if not os.path.exists(scan_dir):
+                continue
+                
+            for root, dirs, files in os.walk(scan_dir):
+                for file in files:
+                    if file.endswith('.py'):
+                        file_path = os.path.join(root, file)
+                        imports = self._extract_imports_from_file(file_path)
+                        
+                        for imp in imports:
+                            import_count += 1
+                            if import_count % 50 == 0:  # 每50个import更新一次状态
+                                self.status_updated.emit(f"分析代码导入... ({import_count} 个import)")
+                                
+                            # 过滤掉标准库模块
+                            if imp not in stdlib_modules and not imp.startswith('.'):
+                                # 应用包名映射
+                                package_name = package_mapping.get(imp, imp)
+                                dependencies.add(package_name)
+        
+        # 转换为列表格式
+        result = [(pkg, "", "code") for pkg in sorted(dependencies)]
+        return result
+    
+    def _extract_imports_from_file(self, file_path: str) -> set:
+        """从单个Python文件中提取import的包名"""
+        imports = set()
+        
+        try:
+            with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
+                for line_num, line in enumerate(f, 1):
+                    line = line.strip()
+                    
+                    # 解析 import xxx
+                    if line.startswith('import ') and not line.startswith('import.'):
+                        parts = line.split()
+                        if len(parts) >= 2:
+                            module = parts[1].split('.')[0]  # 只取顶级包名
+                            imports.add(module)
+                    
+                    # 解析 from xxx import
+                    elif line.startswith('from ') and ' import ' in line:
+                        try:
+                            from_part = line.split(' import ')[0]
+                            module = from_part.replace('from ', '').strip().split('.')[0]
+                            # 过滤相对导入
+                            if not module.startswith('.') and module:
+                                imports.add(module)
+                        except:
+                            continue
+                            
+        except Exception as e:
+            # 如果文件读取失败，跳过该文件
+            pass
+            
+        return imports
+    
+    def _merge_dependencies(self, req_deps: List[Tuple[str, str, str]], 
+                          code_deps: List[Tuple[str, str, str]]) -> List[Tuple[str, str, str]]:
+        """合并requirements.txt和代码分析的依赖"""
+        merged = {}
+        
+        # 添加requirements.txt中的依赖
+        for pkg, version, source in req_deps:
+            merged[pkg] = (pkg, version, source)
+        
+        # 添加代码中发现的依赖
+        for pkg, version, source in code_deps:
+            if pkg in merged:
+                # 如果已存在，标记为both
+                existing_pkg, existing_version, existing_source = merged[pkg]
+                merged[pkg] = (existing_pkg, existing_version, 'both')
+            else:
+                # 新发现的依赖
+                merged[pkg] = (pkg, version, 'code_only')
+        
+        return list(merged.values())
     
     def _check_package(self, package_name: str) -> Tuple[bool, str]:
         """检查单个包是否已安装"""
@@ -261,12 +409,32 @@ class DependencyManagerWidget(QWidget):
         management_group.setFont(QFont('微软雅黑', 10, QFont.Bold))
         management_layout = QVBoxLayout(management_group)
         
+        # 扫描模式选择
+        scan_mode_layout = QHBoxLayout()
+        scan_mode_layout.addWidget(QLabel("扫描模式:"))
+        
+        self.scan_mode_combo = QComboBox()
+        self.scan_mode_combo.addItems([
+            "requirements.txt", 
+            "代码分析", 
+            "智能扫描（推荐）"
+        ])
+        self.scan_mode_combo.setCurrentIndex(2)  # 默认选择智能扫描
+        self.scan_mode_combo.setToolTip(
+            "requirements.txt: 只检查requirements.txt中记录的依赖\n"
+            "代码分析: 扫描代码中实际使用的import语句\n"
+            "智能扫描: 合并两种方式，发现所有依赖"
+        )
+        scan_mode_layout.addWidget(self.scan_mode_combo)
+        scan_mode_layout.addStretch()
+        management_layout.addLayout(scan_mode_layout)
+        
         # 操作按钮行
         buttons_layout = QHBoxLayout()
         
         self.check_dependencies_btn = QPushButton("检查依赖")
         self.check_dependencies_btn.clicked.connect(self.check_dependencies)
-        self.check_dependencies_btn.setToolTip("检查requirements.txt中的所有依赖是否已安装")
+        self.check_dependencies_btn.setToolTip("根据选择的扫描模式检查依赖状态")
         buttons_layout.addWidget(self.check_dependencies_btn)
         
         self.install_missing_btn = QPushButton("安装缺失依赖")
@@ -314,9 +482,9 @@ class DependencyManagerWidget(QWidget):
         
         # 依赖表格
         self.dependencies_table = QTableWidget()
-        self.dependencies_table.setColumnCount(5)
+        self.dependencies_table.setColumnCount(6)
         self.dependencies_table.setHorizontalHeaderLabels([
-            "选择", "包名", "要求版本", "当前版本", "状态"
+            "选择", "包名", "要求版本", "当前版本", "状态", "来源"
         ])
         
         # 设置表格属性
@@ -326,6 +494,7 @@ class DependencyManagerWidget(QWidget):
         header.setSectionResizeMode(2, QHeaderView.ResizeToContents)
         header.setSectionResizeMode(3, QHeaderView.ResizeToContents)
         header.setSectionResizeMode(4, QHeaderView.ResizeToContents)
+        header.setSectionResizeMode(5, QHeaderView.ResizeToContents)
         
         self.dependencies_table.setColumnWidth(0, 50)
         self.dependencies_table.setAlternatingRowColors(True)
@@ -432,8 +601,17 @@ class DependencyManagerWidget(QWidget):
         self.dependencies_table.setRowCount(0)
         self.dependencies_data.clear()
         
+        # 确定扫描模式
+        mode_map = {
+            0: "requirements",      # requirements.txt
+            1: "code_analysis",     # 代码分析
+            2: "both"              # 智能扫描
+        }
+        scan_mode = mode_map[self.scan_mode_combo.currentIndex()]
+        
         # 启动检查线程
         self.check_thread = DependencyCheckThread()
+        self.check_thread.set_scan_mode(scan_mode)
         self.check_thread.progress_updated.connect(self.progress_bar.setValue)
         self.check_thread.status_updated.connect(self.status_label.setText)
         self.check_thread.dependency_checked.connect(self.add_dependency_to_table)
@@ -456,9 +634,11 @@ class DependencyManagerWidget(QWidget):
         
         # 要求版本（从dependencies_data中获取）
         required_version = ""
+        source = ""
         for dep in self.dependencies_data:
             if dep['name'] == name:
                 required_version = dep.get('required_version', '')
+                source = dep.get('source', '')
                 break
         self.dependencies_table.setItem(row, 2, QTableWidgetItem(required_version))
         
@@ -475,6 +655,21 @@ class DependencyManagerWidget(QWidget):
         else:
             status_item.setForeground(QColor('red'))
         self.dependencies_table.setItem(row, 4, status_item)
+        
+        # 来源
+        source_display = {
+            'requirements': 'requirements.txt',
+            'code': '代码导入',
+            'both': '两者',
+            'code_only': '仅代码'
+        }
+        source_item = QTableWidgetItem(source_display.get(source, source))
+        if source in ['code_only']:
+            source_item.setForeground(QColor('orange'))
+            source_item.setToolTip("此依赖在代码中使用但未在requirements.txt中记录")
+        elif source == 'code':
+            source_item.setForeground(QColor('blue'))
+        self.dependencies_table.setItem(row, 5, source_item)
         
     def on_check_finished(self, results: List[Dict]):
         """检查完成回调"""
