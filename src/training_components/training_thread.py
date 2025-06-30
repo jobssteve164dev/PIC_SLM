@@ -335,6 +335,16 @@ class TrainingThread(QThread):
             self._save_training_info(model_name, num_epochs, batch_size, learning_rate, 
                                    best_acc, class_names, model_save_dir)
             
+            # 记录超参数和最终指标
+            if hasattr(self, 'tensorboard_logger') and self.tensorboard_logger:
+                final_metrics = {
+                    'final_accuracy': float(best_acc),
+                    'final_loss': float(epoch_loss) if 'epoch_loss' in locals() else 0.0,
+                    'total_epochs': num_epochs,
+                    'best_epoch': epoch + 1 if 'epoch' in locals() else num_epochs
+                }
+                self.tensorboard_logger.log_hyperparameters(self.config, final_metrics)
+            
             # 关闭TensorBoard
             self.tensorboard_logger.close()
             
@@ -441,6 +451,12 @@ class TrainingThread(QThread):
                 # 记录到TensorBoard
                 self.tensorboard_logger.log_epoch_metrics(epoch, phase, epoch_loss, epoch_acc)
                 
+                # 记录高级评估指标
+                if len(all_labels) > 0 and len(all_preds) > 0:
+                    self.tensorboard_logger.log_advanced_metrics(
+                        all_labels, all_preds, epoch=epoch, phase=phase
+                    )
+                
                 # 记录样本图像（每5个epoch一次）
                 if phase == 'val' and epoch % 5 == 0:
                     self.tensorboard_logger.log_sample_images(dataloaders[phase], epoch)
@@ -450,6 +466,25 @@ class TrainingThread(QThread):
                     self.tensorboard_logger.log_confusion_matrix(
                         all_labels, all_preds, class_names, epoch
                     )
+                
+                # 记录模型预测可视化（每10个epoch一次）
+                if phase == 'val' and epoch % 10 == 0:
+                    self.tensorboard_logger.log_model_predictions(
+                        self.model, dataloaders[phase], class_names, epoch, self.device
+                    )
+                
+                # 记录模型权重和梯度（每5个epoch一次）
+                if phase == 'train' and epoch % 5 == 0:
+                    self.tensorboard_logger.log_model_weights_and_gradients(self.model, epoch)
+                
+                # 记录学习率调度
+                if phase == 'train':
+                    self.tensorboard_logger.log_learning_rate_schedule(optimizer, epoch)
+                
+                # 记录性能指标
+                self.tensorboard_logger.log_performance_metrics(
+                    epoch, num_samples=dataset_sizes[phase]
+                )
                 
                 # 刷新TensorBoard数据
                 self.tensorboard_logger.flush()

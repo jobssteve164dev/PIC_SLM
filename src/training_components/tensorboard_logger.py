@@ -7,6 +7,9 @@ TensorBoard日志记录器 - 负责记录训练过程中的各种指标和可视
 - 记录模型结构图
 - 记录样本图像
 - 记录混淆矩阵
+- 记录模型权重和梯度统计
+- 记录性能和资源使用情况
+- 记录高级评估指标
 """
 
 import os
@@ -22,10 +25,11 @@ from torch.utils.tensorboard import SummaryWriter
 from torchvision import transforms
 from PIL import Image
 from PyQt5.QtCore import QObject, pyqtSignal
+import psutil  # 用于系统资源监控
 
 
 class TensorBoardLogger(QObject):
-    """TensorBoard日志记录器"""
+    """增强版TensorBoard日志记录器"""
     
     # 信号定义
     status_updated = pyqtSignal(str)
@@ -34,6 +38,8 @@ class TensorBoardLogger(QObject):
         super().__init__()
         self.writer = None
         self.log_dir = None
+        self.start_time = None
+        self.last_log_time = None
     
     def initialize(self, config, model_name):
         """
@@ -61,6 +67,8 @@ class TensorBoardLogger(QObject):
         
         os.makedirs(self.log_dir, exist_ok=True)
         self.writer = SummaryWriter(self.log_dir)
+        self.start_time = time.time()
+        self.last_log_time = self.start_time
         
         return self.log_dir
     
@@ -83,6 +91,219 @@ class TensorBoardLogger(QObject):
             self.writer.add_graph(model, sample_inputs)
         except Exception as e:
             print(f"记录模型图时出错: {str(e)}")
+    
+    def log_hyperparameters(self, config, final_metrics):
+        """
+        记录超参数和最终指标
+        
+        Args:
+            config: 训练配置字典
+            final_metrics: 最终训练指标字典
+        """
+        if not self.writer:
+            return
+            
+        try:
+            # 提取关键超参数
+            hparams = {
+                'learning_rate': config.get('learning_rate', 0.001),
+                'batch_size': config.get('batch_size', 32),
+                'optimizer': config.get('optimizer', 'Adam'),
+                'weight_decay': config.get('weight_decay', 0.0001),
+                'dropout_rate': config.get('dropout_rate', 0.0),
+                'model_name': config.get('model_name', 'Unknown'),
+                'use_pretrained': config.get('use_pretrained', False),
+                'early_stopping_patience': config.get('early_stopping_patience', 10)
+            }
+            
+            # 记录超参数和指标
+            self.writer.add_hparams(hparams, final_metrics)
+            
+        except Exception as e:
+            print(f"记录超参数时出错: {str(e)}")
+    
+    def log_model_weights_and_gradients(self, model, epoch):
+        """
+        记录模型权重和梯度的直方图
+        
+        Args:
+            model: PyTorch模型
+            epoch: 当前epoch
+        """
+        if not self.writer:
+            return
+            
+        try:
+            for name, param in model.named_parameters():
+                if param.requires_grad:
+                    # 记录权重分布
+                    self.writer.add_histogram(f'Weights/{name}', param.data, epoch)
+                    
+                    # 记录梯度分布（如果存在）
+                    if param.grad is not None:
+                        self.writer.add_histogram(f'Gradients/{name}', param.grad.data, epoch)
+                        
+                        # 记录梯度范数
+                        grad_norm = param.grad.data.norm(2).item()
+                        self.writer.add_scalar(f'Gradient_Norms/{name}', grad_norm, epoch)
+            
+            # 记录总梯度范数
+            total_norm = 0
+            for param in model.parameters():
+                if param.grad is not None:
+                    param_norm = param.grad.data.norm(2)
+                    total_norm += param_norm.item() ** 2
+            total_norm = total_norm ** (1. / 2)
+            self.writer.add_scalar('Gradients/total_norm', total_norm, epoch)
+            
+        except Exception as e:
+            print(f"记录权重和梯度时出错: {str(e)}")
+    
+    def log_performance_metrics(self, epoch, batch_idx=None, num_samples=None):
+        """
+        记录性能指标
+        
+        Args:
+            epoch: 当前epoch
+            batch_idx: 当前batch索引
+            num_samples: 处理的样本数量
+        """
+        if not self.writer:
+            return
+            
+        try:
+            current_time = time.time()
+            
+            # 计算训练速度
+            if self.last_log_time and num_samples:
+                time_elapsed = current_time - self.last_log_time
+                samples_per_second = num_samples / time_elapsed if time_elapsed > 0 else 0
+                self.writer.add_scalar('Performance/samples_per_second', samples_per_second, epoch)
+            
+            # 记录总训练时间
+            total_time = current_time - self.start_time
+            self.writer.add_scalar('Performance/total_training_time', total_time, epoch)
+            
+            # 记录GPU内存使用（如果可用）
+            if torch.cuda.is_available():
+                memory_allocated = torch.cuda.memory_allocated() / 1024**3  # GB
+                memory_reserved = torch.cuda.memory_reserved() / 1024**3    # GB
+                self.writer.add_scalar('Memory/gpu_memory_allocated_gb', memory_allocated, epoch)
+                self.writer.add_scalar('Memory/gpu_memory_reserved_gb', memory_reserved, epoch)
+                
+                # GPU利用率（如果可以获取）
+                try:
+                    import pynvml
+                    pynvml.nvmlInit()
+                    handle = pynvml.nvmlDeviceGetHandleByIndex(0)
+                    util = pynvml.nvmlDeviceGetUtilizationRates(handle)
+                    self.writer.add_scalar('Performance/gpu_utilization', util.gpu, epoch)
+                except:
+                    pass  # pynvml可能未安装
+            
+            # 记录系统资源使用
+            cpu_percent = psutil.cpu_percent()
+            memory_percent = psutil.virtual_memory().percent
+            self.writer.add_scalar('System/cpu_usage_percent', cpu_percent, epoch)
+            self.writer.add_scalar('System/memory_usage_percent', memory_percent, epoch)
+            
+            self.last_log_time = current_time
+            
+        except Exception as e:
+            print(f"记录性能指标时出错: {str(e)}")
+    
+    def log_advanced_metrics(self, y_true, y_pred, y_scores=None, epoch=0, phase='val'):
+        """
+        记录高级评估指标
+        
+        Args:
+            y_true: 真实标签
+            y_pred: 预测标签
+            y_scores: 预测概率/分数（可选）
+            epoch: 当前epoch
+            phase: 训练阶段
+        """
+        if not self.writer:
+            return
+            
+        try:
+            from sklearn.metrics import (precision_score, recall_score, f1_score, 
+                                       roc_auc_score, average_precision_score,
+                                       balanced_accuracy_score)
+            
+            # 基础指标
+            precision = precision_score(y_true, y_pred, average='weighted', zero_division=0)
+            recall = recall_score(y_true, y_pred, average='weighted', zero_division=0)
+            f1 = f1_score(y_true, y_pred, average='weighted', zero_division=0)
+            balanced_acc = balanced_accuracy_score(y_true, y_pred)
+            
+            self.writer.add_scalar(f'Advanced_Metrics/{phase}_precision', precision, epoch)
+            self.writer.add_scalar(f'Advanced_Metrics/{phase}_recall', recall, epoch)
+            self.writer.add_scalar(f'Advanced_Metrics/{phase}_f1_score', f1, epoch)
+            self.writer.add_scalar(f'Advanced_Metrics/{phase}_balanced_accuracy', balanced_acc, epoch)
+            
+            # 如果提供了概率分数，计算AUC相关指标
+            if y_scores is not None:
+                try:
+                    # 多类别情况下的AUC
+                    auc_roc = roc_auc_score(y_true, y_scores, multi_class='ovr', average='weighted')
+                    self.writer.add_scalar(f'Advanced_Metrics/{phase}_auc_roc', auc_roc, epoch)
+                    
+                    # 平均精确率
+                    avg_precision = average_precision_score(y_true, y_scores, average='weighted')
+                    self.writer.add_scalar(f'Advanced_Metrics/{phase}_avg_precision', avg_precision, epoch)
+                except:
+                    pass  # 可能是二分类问题或其他情况
+            
+        except Exception as e:
+            print(f"记录高级指标时出错: {str(e)}")
+    
+    def log_learning_rate_schedule(self, optimizer, epoch):
+        """
+        记录学习率调度
+        
+        Args:
+            optimizer: 优化器
+            epoch: 当前epoch
+        """
+        if not self.writer:
+            return
+            
+        try:
+            # 记录每个参数组的学习率
+            for i, param_group in enumerate(optimizer.param_groups):
+                lr = param_group['lr']
+                self.writer.add_scalar(f'Learning_Rate/group_{i}', lr, epoch)
+                
+                # 如果有其他参数（如momentum, weight_decay），也记录
+                if 'momentum' in param_group:
+                    self.writer.add_scalar(f'Optimizer/momentum_group_{i}', 
+                                         param_group['momentum'], epoch)
+                if 'weight_decay' in param_group:
+                    self.writer.add_scalar(f'Optimizer/weight_decay_group_{i}', 
+                                         param_group['weight_decay'], epoch)
+        except Exception as e:
+            print(f"记录学习率时出错: {str(e)}")
+    
+    def log_loss_components(self, loss_dict, epoch, phase='train'):
+        """
+        记录损失函数的各个组成部分
+        
+        Args:
+            loss_dict: 损失组件字典
+            epoch: 当前epoch
+            phase: 训练阶段
+        """
+        if not self.writer:
+            return
+            
+        try:
+            for loss_name, loss_value in loss_dict.items():
+                if isinstance(loss_value, torch.Tensor):
+                    loss_value = loss_value.item()
+                self.writer.add_scalar(f'Loss_Components/{phase}_{loss_name}', loss_value, epoch)
+        except Exception as e:
+            print(f"记录损失组件时出错: {str(e)}")
     
     def log_class_info(self, class_names, class_distribution, class_weights, epoch=0):
         """
@@ -180,6 +401,45 @@ class TensorBoardLogger(QObject):
         except Exception as e:
             print(f"记录混淆矩阵时出错: {str(e)}")
     
+    def log_model_predictions(self, model, dataloader, class_names, epoch, device, max_images=4):
+        """
+        记录模型预测结果的可视化
+        
+        Args:
+            model: 训练的模型
+            dataloader: 数据加载器
+            class_names: 类别名称列表
+            epoch: 当前epoch
+            device: 计算设备
+            max_images: 最大图像数量
+        """
+        if not self.writer:
+            return
+            
+        try:
+            model.eval()
+            with torch.no_grad():
+                images, labels = next(iter(dataloader))
+                images, labels = images.to(device), labels.to(device)
+                outputs = model(images)
+                _, predicted = torch.max(outputs, 1)
+                
+                # 创建预测结果图表
+                fig = self._create_predictions_chart(
+                    images[:max_images], labels[:max_images], 
+                    predicted[:max_images], outputs[:max_images], class_names
+                )
+                
+                # 转换为张量并添加到TensorBoard
+                img_tensor = self._plt_to_tensor()
+                self.writer.add_image('Model Predictions', img_tensor, epoch)
+                
+                plt.close(fig)
+            model.train()
+            
+        except Exception as e:
+            print(f"记录模型预测时出错: {str(e)}")
+    
     def flush(self):
         """刷新数据到磁盘"""
         if self.writer:
@@ -251,9 +511,9 @@ class TensorBoardLogger(QObject):
                         horizontalalignment="center",
                         color="white" if cm[i, j] > thresh else "black")
         
-        plt.tight_layout()
         plt.ylabel('True label')
         plt.xlabel('Predicted label')
+        plt.tight_layout()
         
         # 转换为张量
         img_tensor = self._plt_to_tensor()
@@ -261,13 +521,48 @@ class TensorBoardLogger(QObject):
         
         return img_tensor
     
+    def _create_predictions_chart(self, images, true_labels, predicted_labels, outputs, class_names):
+        """创建预测结果图表"""
+        fig, axes = plt.subplots(1, len(images), figsize=(15, 3))
+        if len(images) == 1:
+            axes = [axes]
+            
+        for i, (img, true_label, pred_label, output) in enumerate(
+            zip(images, true_labels, predicted_labels, outputs)):
+            
+            # 将图像转换为可显示格式
+            img = img.cpu()
+            if img.shape[0] == 1:  # 灰度图像
+                img = img.squeeze(0)
+                axes[i].imshow(img, cmap='gray')
+            else:  # 彩色图像
+                img = img.permute(1, 2, 0)
+                axes[i].imshow(img)
+            
+            # 获取预测概率
+            probs = torch.nn.functional.softmax(output, dim=0)
+            confidence = probs[pred_label].item()
+            
+            # 设置标题
+            true_class = class_names[true_label.item()]
+            pred_class = class_names[pred_label.item()]
+            color = 'green' if true_label == pred_label else 'red'
+            
+            axes[i].set_title(f'True: {true_class}\nPred: {pred_class}\nConf: {confidence:.2f}', 
+                            color=color, fontsize=10)
+            axes[i].axis('off')
+        
+        plt.tight_layout()
+        return fig
+    
     def _plt_to_tensor(self):
-        """将matplotlib图形转换为张量"""
+        """将matplotlib图表转换为张量"""
         buf = io.BytesIO()
-        plt.savefig(buf, format='png', dpi=150)
+        plt.savefig(buf, format='png', bbox_inches='tight', dpi=100)
         buf.seek(0)
         img = Image.open(buf)
         img_tensor = transforms.ToTensor()(img)
+        buf.close()
         return img_tensor
     
     def get_log_dir(self):
