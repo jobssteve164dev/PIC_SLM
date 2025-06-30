@@ -725,3 +725,88 @@
 {"timestamp":"2025-07-01T07:16:30.789566","level":"INFO","logger":"src.predictor","message":"预测器初始化完成，使用设备: cpu","module":"predictor","function":"__init__","line":249}
 {"timestamp":"2025-07-01T07:16:30.793072","level":"INFO","logger":"src.image_processing.main_processor","message":"图像处理器初始化完成","module":"main_processor","function":"__init__","line":37}
 {"timestamp":"2025-07-01T07:16:30.793072","level":"INFO","logger":"src.annotation_tool","message":"标注工具初始化完成","module":"annotation_tool","function":"__init__","line":19}
+{"timestamp":"2025-07-01T07:18:51.260974","level":"INFO","logger":"src.image_processing.main_processor","message":"图像处理器初始化完成","module":"main_processor","function":"__init__","line":37}
+{"timestamp":"2025-07-01T07:18:51.263068","level":"INFO","logger":"src.image_processing.main_processor","message":"开始图像预处理，源文件夹: E:\\PIC_SLM\\TEST\\SOURCE2","module":"main_processor","function":"preprocess_images","line":65}
+{"timestamp":"2025-07-01T07:18:51.263068","level":"INFO","logger":"src.image_processing.main_processor","message":"目标文件夹: E:/PIC_SLM/TEST/OUTPUT3","module":"main_processor","function":"preprocess_images","line":66}
+{"timestamp":"2025-07-01T07:18:51.264196","level":"INFO","logger":"src.image_processing.main_processor","message":"图像尺寸: 512x512","module":"main_processor","function":"preprocess_images","line":67}
+{"timestamp":"2025-07-01T07:18:51.264196","level":"INFO","logger":"src.image_processing.main_processor","message":"类别平衡: False","module":"main_processor","function":"preprocess_images","line":68}
+{"timestamp":"2025-07-01T07:18:51.265197","level":"INFO","logger":"src.image_processing.main_processor","message":"采样模式: True","module":"main_processor","function":"preprocess_images","line":69}
+{"timestamp":"2025-07-01T07:18:55.085032","level":"INFO","logger":"performance","message":"Performance: preprocess_images took 3823.1ms","module":"logger","function":"log_performance","line":263,"component":"image_processor","operation":"preprocess_images"}
+{"timestamp":"2025-07-01T07:19:56.724294","level":"INFO","logger":"src.image_processing.main_processor","message":"图像处理器初始化完成","module":"main_processor","function":"__init__","line":37}
+{"timestamp":"2025-07-01T07:19:56.726295","level":"INFO","logger":"src.image_processing.main_processor","message":"开始图像预处理，源文件夹: E:\\PIC_SLM\\TEST\\SOURCE2","module":"main_processor","function":"preprocess_images","line":65}
+{"timestamp":"2025-07-01T07:19:56.727294","level":"INFO","logger":"src.image_processing.main_processor","message":"目标文件夹: E:/PIC_SLM/TEST/OUTPUT3","module":"main_processor","function":"preprocess_images","line":66}
+{"timestamp":"2025-07-01T07:19:56.727294","level":"INFO","logger":"src.image_processing.main_processor","message":"图像尺寸: 512x512","module":"main_processor","function":"preprocess_images","line":67}
+{"timestamp":"2025-07-01T07:19:56.728299","level":"INFO","logger":"src.image_processing.main_processor","message":"类别平衡: False","module":"main_processor","function":"preprocess_images","line":68}
+{"timestamp":"2025-07-01T07:19:56.728299","level":"INFO","logger":"src.image_processing.main_processor","message":"采样模式: True","module":"main_processor","function":"preprocess_images","line":69}
+{"timestamp":"2025-07-01T07:21:50.626549","level":"INFO","logger":"performance","message":"Performance: preprocess_images took 113900.25ms","module":"logger","function":"log_performance","line":263,"component":"image_processor","operation":"preprocess_images"}
+{"timestamp":"2025-07-01T07:22:17.938099","level":"INFO","logger":"src.image_processing.main_processor","message":"图像处理器初始化完成","module":"main_processor","function":"__init__","line":37}
+{"timestamp":"2025-07-01T07:22:17.940106","level":"INFO","logger":"src.image_processing.main_processor","message":"开始图像预处理，源文件夹: E:\\PIC_SLM\\TEST\\SOURCE2","module":"main_processor","function":"preprocess_images","line":65}
+{"timestamp":"2025-07-01T07:22:17.940106","level":"INFO","logger":"src.image_processing.main_processor","message":"目标文件夹: E:/PIC_SLM/TEST/OUTPUT3","module":"main_processor","function":"preprocess_images","line":66}
+{"timestamp":"2025-07-01T07:22:17.941413","level":"INFO","logger":"src.image_processing.main_processor","message":"图像尺寸: 512x512","module":"main_processor","function":"preprocess_images","line":67}
+{"timestamp":"2025-07-01T07:22:17.941413","level":"INFO","logger":"src.image_processing.main_processor","message":"类别平衡: False","module":"main_processor","function":"preprocess_images","line":68}
+{"timestamp":"2025-07-01T07:22:17.942411","level":"INFO","logger":"src.image_processing.main_processor","message":"采样模式: True","module":"main_processor","function":"preprocess_images","line":69}
+{"timestamp":"2025-07-01T07:22:32.956334","level":"INFO","logger":"performance","message":"Performance: preprocess_images took 15016.23ms","module":"logger","function":"log_performance","line":263,"component":"image_processor","operation":"preprocess_images"}
+{"timestamp":"2025-07-01T07:22:42.248516","level":"INFO","logger":"src.image_processing.main_processor","message":"图像处理器初始化完成","module":"main_processor","function":"__init__","line":37}
+{"timestamp":"2025-07-01T07:22:42.250732","level":"INFO","logger":"src.image_processing.main_processor","message":"开始图像预处理，源文件夹: E:\\PIC_SLM\\TEST\\SOURCE2","module":"main_processor","function":"preprocess_images","line":65}
+{"timestamp":"2025-07-01T07:22:42.250732","level":"INFO","logger":"src.image_processing.main_processor","message":"目标文件夹: E:/PIC_SLM/TEST/OUTPUT3","module":"main_processor","function":"preprocess_images","line":66}
+{"timestamp":"2025-07-01T07:22:42.251982","level":"INFO","logger":"src.image_processing.main_processor","message":"图像尺寸: 512x512","module":"main_processor","function":"preprocess_images","line":67}
+{"timestamp":"2025-07-01T07:22:42.251982","level":"INFO","logger":"src.image_processing.main_processor","message":"类别平衡: False","module":"main_processor","function":"preprocess_images","line":68}
+{"timestamp":"2025-07-01T07:22:42.251982","level":"INFO","logger":"src.image_processing.main_processor","message":"采样模式: True","module":"main_processor","function":"preprocess_images","line":69}
+{"timestamp":"2025-07-01T07:23:12.713314","level":"INFO","logger":"performance","message":"Performance: preprocess_images took 30462.58ms","module":"logger","function":"log_performance","line":263,"component":"image_processor","operation":"preprocess_images"}
+{"timestamp":"2025-07-01T07:24:44.981456","level":"INFO","logger":"src.image_processing.main_processor","message":"图像处理器初始化完成","module":"main_processor","function":"__init__","line":37}
+{"timestamp":"2025-07-01T07:24:44.983453","level":"INFO","logger":"src.image_processing.main_processor","message":"开始图像预处理，源文件夹: E:\\PIC_SLM\\TEST\\SOURCE2","module":"main_processor","function":"preprocess_images","line":65}
+{"timestamp":"2025-07-01T07:24:44.984787","level":"INFO","logger":"src.image_processing.main_processor","message":"目标文件夹: E:/PIC_SLM/TEST/OUTPUT3","module":"main_processor","function":"preprocess_images","line":66}
+{"timestamp":"2025-07-01T07:24:44.984787","level":"INFO","logger":"src.image_processing.main_processor","message":"图像尺寸: 512x512","module":"main_processor","function":"preprocess_images","line":67}
+{"timestamp":"2025-07-01T07:24:44.985976","level":"INFO","logger":"src.image_processing.main_processor","message":"类别平衡: False","module":"main_processor","function":"preprocess_images","line":68}
+{"timestamp":"2025-07-01T07:24:44.985976","level":"INFO","logger":"src.image_processing.main_processor","message":"采样模式: True","module":"main_processor","function":"preprocess_images","line":69}
+{"timestamp":"2025-07-01T07:25:14.772754","level":"INFO","logger":"performance","message":"Performance: preprocess_images took 29789.3ms","module":"logger","function":"log_performance","line":263,"component":"image_processor","operation":"preprocess_images"}
+{"timestamp":"2025-07-01T07:25:33.845886","level":"INFO","logger":"__main__","message":"程序退出，正在清理TensorBoard进程...","module":"main","function":"cleanup_tensorboard","line":67}
+{"timestamp":"2025-07-01T07:25:33.934216","level":"INFO","logger":"__main__","message":"TensorBoard进程清理完成","module":"main","function":"cleanup_tensorboard","line":76}
+{"timestamp":"2025-07-01T07:26:24.652231","level":"INFO","logger":"__main__","message":"程序开始执行...","module":"main","function":"<module>","line":23}
+{"timestamp":"2025-07-01T07:26:24.653240","level":"INFO","logger":"__main__","message":"Python版本: 3.9.13 (tags/v3.9.13:6de2ca5, May 17 2022, 16:36:42) [MSC v.1929 64 bit (AMD64)]","module":"main","function":"<module>","line":24}
+{"timestamp":"2025-07-01T07:26:24.653240","level":"INFO","logger":"__main__","message":"当前工作目录: F:\\Qsync\\00.AI_PROJECT\\图片分类模型训练\\C1\\src","module":"main","function":"<module>","line":25}
+{"timestamp":"2025-07-01T07:26:24.689596","level":"INFO","logger":"__main__","message":"PyQt5模块已导入","module":"main","function":"<module>","line":28}
+{"timestamp":"2025-07-01T07:26:30.601704","level":"INFO","logger":"__main__","message":"MainWindow已导入","module":"main","function":"<module>","line":31}
+{"timestamp":"2025-07-01T07:26:30.602707","level":"INFO","logger":"__main__","message":"EvaluationTab已导入","module":"main","function":"<module>","line":33}
+{"timestamp":"2025-07-01T07:26:30.604139","level":"INFO","logger":"__main__","message":"DataProcessor已导入","module":"main","function":"<module>","line":35}
+{"timestamp":"2025-07-01T07:26:30.774106","level":"INFO","logger":"__main__","message":"ModelTrainer已导入","module":"main","function":"<module>","line":37}
+{"timestamp":"2025-07-01T07:26:30.777250","level":"INFO","logger":"__main__","message":"配置文件路径: f:\\Qsync\\00.AI_PROJECT\\图片分类模型训练\\C1\\config.json","module":"main","function":"main","line":86}
+{"timestamp":"2025-07-01T07:26:30.777612","level":"INFO","logger":"__main__","message":"配置文件是否存在: True","module":"main","function":"main","line":87}
+{"timestamp":"2025-07-01T07:26:31.364462","level":"INFO","logger":"src.ui.components.prediction.auto_review_widget","message":"找到默认配置文件: f:\\Qsync\\00.AI_PROJECT\\图片分类模型训练\\C1\\setting\\auto_review_config.json","module":"auto_review_widget","function":"_load_default_config","line":420}
+{"timestamp":"2025-07-01T07:26:31.365462","level":"INFO","logger":"src.ui.components.prediction.auto_review_widget","message":"默认配置文件加载成功","module":"auto_review_widget","function":"_load_default_config","line":430}
+{"timestamp":"2025-07-01T07:26:32.103386","level":"INFO","logger":"src.data_processor","message":"数据处理器初始化完成","module":"data_processor","function":"__init__","line":26}
+{"timestamp":"2025-07-01T07:26:32.104386","level":"INFO","logger":"src.predictor","message":"预测器初始化完成，使用设备: cpu","module":"predictor","function":"__init__","line":249}
+{"timestamp":"2025-07-01T07:26:32.108580","level":"INFO","logger":"src.image_processing.main_processor","message":"图像处理器初始化完成","module":"main_processor","function":"__init__","line":37}
+{"timestamp":"2025-07-01T07:26:32.109581","level":"INFO","logger":"src.annotation_tool","message":"标注工具初始化完成","module":"annotation_tool","function":"__init__","line":19}
+{"timestamp":"2025-07-01T07:27:35.729068","level":"INFO","logger":"src.image_processing.main_processor","message":"图像处理器初始化完成","module":"main_processor","function":"__init__","line":37}
+{"timestamp":"2025-07-01T07:27:35.731227","level":"INFO","logger":"src.image_processing.main_processor","message":"开始图像预处理，源文件夹: E:\\PIC_SLM\\TEST\\SOURCE2","module":"main_processor","function":"preprocess_images","line":65}
+{"timestamp":"2025-07-01T07:27:35.731227","level":"INFO","logger":"src.image_processing.main_processor","message":"目标文件夹: E:/PIC_SLM/TEST/OUTPUT3","module":"main_processor","function":"preprocess_images","line":66}
+{"timestamp":"2025-07-01T07:27:35.731227","level":"INFO","logger":"src.image_processing.main_processor","message":"图像尺寸: 224x224","module":"main_processor","function":"preprocess_images","line":67}
+{"timestamp":"2025-07-01T07:27:35.732734","level":"INFO","logger":"src.image_processing.main_processor","message":"类别平衡: False","module":"main_processor","function":"preprocess_images","line":68}
+{"timestamp":"2025-07-01T07:27:35.732734","level":"INFO","logger":"src.image_processing.main_processor","message":"采样模式: True","module":"main_processor","function":"preprocess_images","line":69}
+{"timestamp":"2025-07-01T07:28:06.992867","level":"INFO","logger":"performance","message":"Performance: preprocess_images took 31262.8ms","module":"logger","function":"log_performance","line":263,"component":"image_processor","operation":"preprocess_images"}
+{"timestamp":"2025-07-01T07:28:32.695668","level":"INFO","logger":"src.image_processing.main_processor","message":"图像处理器初始化完成","module":"main_processor","function":"__init__","line":37}
+{"timestamp":"2025-07-01T07:28:32.697675","level":"INFO","logger":"src.image_processing.main_processor","message":"开始图像预处理，源文件夹: E:\\PIC_SLM\\TEST\\SOURCE2","module":"main_processor","function":"preprocess_images","line":65}
+{"timestamp":"2025-07-01T07:28:32.697675","level":"INFO","logger":"src.image_processing.main_processor","message":"目标文件夹: E:/PIC_SLM/TEST/OUTPUT3","module":"main_processor","function":"preprocess_images","line":66}
+{"timestamp":"2025-07-01T07:28:32.698673","level":"INFO","logger":"src.image_processing.main_processor","message":"图像尺寸: 512x512","module":"main_processor","function":"preprocess_images","line":67}
+{"timestamp":"2025-07-01T07:28:32.699672","level":"INFO","logger":"src.image_processing.main_processor","message":"类别平衡: False","module":"main_processor","function":"preprocess_images","line":68}
+{"timestamp":"2025-07-01T07:28:32.699672","level":"INFO","logger":"src.image_processing.main_processor","message":"采样模式: True","module":"main_processor","function":"preprocess_images","line":69}
+{"timestamp":"2025-07-01T07:29:19.422965","level":"INFO","logger":"performance","message":"Performance: preprocess_images took 46725.29ms","module":"logger","function":"log_performance","line":263,"component":"image_processor","operation":"preprocess_images"}
+{"timestamp":"2025-07-01T07:29:36.149155","level":"INFO","logger":"__main__","message":"程序退出，正在清理TensorBoard进程...","module":"main","function":"cleanup_tensorboard","line":67}
+{"timestamp":"2025-07-01T07:29:36.234687","level":"INFO","logger":"__main__","message":"TensorBoard进程清理完成","module":"main","function":"cleanup_tensorboard","line":76}
+{"timestamp":"2025-07-01T07:29:53.079000","level":"INFO","logger":"__main__","message":"程序开始执行...","module":"main","function":"<module>","line":23}
+{"timestamp":"2025-07-01T07:29:53.079734","level":"INFO","logger":"__main__","message":"Python版本: 3.9.13 (tags/v3.9.13:6de2ca5, May 17 2022, 16:36:42) [MSC v.1929 64 bit (AMD64)]","module":"main","function":"<module>","line":24}
+{"timestamp":"2025-07-01T07:29:53.079734","level":"INFO","logger":"__main__","message":"当前工作目录: F:\\Qsync\\00.AI_PROJECT\\图片分类模型训练\\C1\\src","module":"main","function":"<module>","line":25}
+{"timestamp":"2025-07-01T07:29:53.117200","level":"INFO","logger":"__main__","message":"PyQt5模块已导入","module":"main","function":"<module>","line":28}
+{"timestamp":"2025-07-01T07:29:59.043338","level":"INFO","logger":"__main__","message":"MainWindow已导入","module":"main","function":"<module>","line":31}
+{"timestamp":"2025-07-01T07:29:59.043338","level":"INFO","logger":"__main__","message":"EvaluationTab已导入","module":"main","function":"<module>","line":33}
+{"timestamp":"2025-07-01T07:29:59.044347","level":"INFO","logger":"__main__","message":"DataProcessor已导入","module":"main","function":"<module>","line":35}
+{"timestamp":"2025-07-01T07:29:59.219321","level":"INFO","logger":"__main__","message":"ModelTrainer已导入","module":"main","function":"<module>","line":37}
+{"timestamp":"2025-07-01T07:29:59.222322","level":"INFO","logger":"__main__","message":"配置文件路径: f:\\Qsync\\00.AI_PROJECT\\图片分类模型训练\\C1\\config.json","module":"main","function":"main","line":86}
+{"timestamp":"2025-07-01T07:29:59.222322","level":"INFO","logger":"__main__","message":"配置文件是否存在: True","module":"main","function":"main","line":87}
+{"timestamp":"2025-07-01T07:29:59.823910","level":"INFO","logger":"src.ui.components.prediction.auto_review_widget","message":"找到默认配置文件: f:\\Qsync\\00.AI_PROJECT\\图片分类模型训练\\C1\\setting\\auto_review_config.json","module":"auto_review_widget","function":"_load_default_config","line":420}
+{"timestamp":"2025-07-01T07:29:59.824919","level":"INFO","logger":"src.ui.components.prediction.auto_review_widget","message":"默认配置文件加载成功","module":"auto_review_widget","function":"_load_default_config","line":430}
+{"timestamp":"2025-07-01T07:30:00.585712","level":"INFO","logger":"src.data_processor","message":"数据处理器初始化完成","module":"data_processor","function":"__init__","line":26}
+{"timestamp":"2025-07-01T07:30:00.586713","level":"INFO","logger":"src.predictor","message":"预测器初始化完成，使用设备: cpu","module":"predictor","function":"__init__","line":249}
+{"timestamp":"2025-07-01T07:30:00.590779","level":"INFO","logger":"src.image_processing.main_processor","message":"图像处理器初始化完成","module":"main_processor","function":"__init__","line":37}
+{"timestamp":"2025-07-01T07:30:00.590779","level":"INFO","logger":"src.annotation_tool","message":"标注工具初始化完成","module":"annotation_tool","function":"__init__","line":19}
