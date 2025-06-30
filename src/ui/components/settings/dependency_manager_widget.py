@@ -13,12 +13,98 @@ from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QGroupBox, QLabel, 
     QLineEdit, QPushButton, QTextEdit, QProgressBar, QTableWidget,
     QTableWidgetItem, QHeaderView, QCheckBox, QComboBox, QMessageBox,
-    QSplitter, QFrame
+    QSplitter, QFrame, QDialog, QDialogButtonBox, QFormLayout
 )
 from PyQt5.QtCore import QThread, pyqtSignal, Qt, QTimer
 from PyQt5.QtGui import QFont, QColor, QPalette
 import importlib.util
 import pkg_resources
+
+
+class CustomMirrorDialog(QDialog):
+    """自定义镜像配置对话框"""
+    
+    def __init__(self, parent=None, existing_config=None):
+        super().__init__(parent)
+        self.setWindowTitle("自定义镜像配置")
+        self.setModal(True)
+        self.setFixedSize(500, 200)
+        
+        # 初始化配置
+        self.config = existing_config or {
+            "name": "",
+            "url": "",
+            "host": ""
+        }
+        
+        self.init_ui()
+        
+    def init_ui(self):
+        """初始化UI"""
+        layout = QVBoxLayout(self)
+        
+        # 表单布局
+        form_layout = QFormLayout()
+        
+        # 镜像名称
+        self.name_input = QLineEdit()
+        self.name_input.setPlaceholderText("例如: 公司内网源")
+        self.name_input.setText(self.config.get("name", ""))
+        form_layout.addRow("镜像名称:", self.name_input)
+        
+        # 镜像地址
+        self.url_input = QLineEdit()
+        self.url_input.setPlaceholderText("例如: https://pypi.company.com/simple/")
+        self.url_input.setText(self.config.get("url", ""))
+        form_layout.addRow("镜像地址:", self.url_input)
+        
+        # 信任主机
+        self.host_input = QLineEdit()
+        self.host_input.setPlaceholderText("例如: pypi.company.com")
+        self.host_input.setText(self.config.get("host", ""))
+        form_layout.addRow("信任主机:", self.host_input)
+        
+        layout.addLayout(form_layout)
+        
+        # 说明文本
+        help_label = QLabel("提示：信任主机用于跳过SSL证书验证，通常是镜像地址的域名部分")
+        help_label.setStyleSheet("color: #666; font-size: 12px; margin: 10px 0;")
+        help_label.setWordWrap(True)
+        layout.addWidget(help_label)
+        
+        # 按钮
+        button_box = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        button_box.accepted.connect(self.accept)
+        button_box.rejected.connect(self.reject)
+        layout.addWidget(button_box)
+        
+    def get_config(self) -> Dict:
+        """获取配置"""
+        return {
+            "name": self.name_input.text().strip(),
+            "url": self.url_input.text().strip(),
+            "host": self.host_input.text().strip()
+        }
+        
+    def accept(self):
+        """确认按钮处理"""
+        config = self.get_config()
+        
+        # 验证输入
+        if not config["name"]:
+            QMessageBox.warning(self, "警告", "请输入镜像名称")
+            return
+            
+        if not config["url"]:
+            QMessageBox.warning(self, "警告", "请输入镜像地址")
+            return
+            
+        # 验证URL格式
+        if not (config["url"].startswith("http://") or config["url"].startswith("https://")):
+            QMessageBox.warning(self, "警告", "镜像地址必须以http://或https://开头")
+            return
+            
+        super().accept()
 
 
 class DependencyCheckThread(QThread):
@@ -379,11 +465,12 @@ class DependencyInstallThread(QThread):
     progress_updated = pyqtSignal(str)  # 安装进度信息
     install_finished = pyqtSignal(bool, str)  # 安装完成, 成功/失败, 消息
     
-    def __init__(self, packages: List[str], proxy_url: str = "", use_index: bool = False):
+    def __init__(self, packages: List[str], proxy_url: str = "", use_index: bool = False, trusted_hosts: List[str] = None):
         super().__init__()
         self.packages = packages
         self.proxy_url = proxy_url
         self.use_index = use_index
+        self.trusted_hosts = trusted_hosts or []
         
     def run(self):
         """执行依赖安装"""
@@ -399,6 +486,11 @@ class DependencyInstallThread(QThread):
                     cmd.extend(["-i", self.proxy_url])
                 elif self.proxy_url:
                     cmd.extend(["--proxy", self.proxy_url])
+                
+                # 添加信任主机设置
+                for trusted_host in self.trusted_hosts:
+                    if trusted_host.strip():
+                        cmd.extend(["--trusted-host", trusted_host.strip()])
                 
                 # 执行安装
                 result = subprocess.run(
@@ -495,25 +587,67 @@ class DependencyManagerWidget(QWidget):
         
         proxy_layout.addLayout(proxy_url_layout)
         
+        # 信任主机设置
+        trusted_host_layout = QVBoxLayout()
+        
+        # 信任主机复选框
+        self.enable_trusted_host_checkbox = QCheckBox("启用信任主机 (--trusted-host)")
+        self.enable_trusted_host_checkbox.setToolTip(
+            "启用后将跳过SSL证书验证，适用于内网镜像源或HTTP代理\n"
+            "注意：这会降低安全性，请谨慎使用"
+        )
+        self.enable_trusted_host_checkbox.toggled.connect(self.on_trusted_host_enabled_changed)
+        self.enable_trusted_host_checkbox.toggled.connect(self.save_proxy_settings)
+        trusted_host_layout.addWidget(self.enable_trusted_host_checkbox)
+        
+        # 信任主机输入框
+        trusted_hosts_input_layout = QHBoxLayout()
+        trusted_hosts_input_layout.addWidget(QLabel("信任主机:"))
+        
+        self.trusted_hosts_input = QLineEdit()
+        self.trusted_hosts_input.setPlaceholderText("例如: pypi.tuna.tsinghua.edu.cn (多个主机用逗号分隔)")
+        self.trusted_hosts_input.setEnabled(False)
+        self.trusted_hosts_input.textChanged.connect(self.save_proxy_settings)
+        trusted_hosts_input_layout.addWidget(self.trusted_hosts_input)
+        
+        trusted_host_layout.addLayout(trusted_hosts_input_layout)
+        proxy_layout.addLayout(trusted_host_layout)
+        
         # 常用代理快捷按钮
         shortcuts_layout = QHBoxLayout()
         shortcuts_layout.addWidget(QLabel("常用镜像:"))
         
+        # 预设镜像
         shortcuts = [
-            ("清华源", "https://pypi.tuna.tsinghua.edu.cn/simple/"),
-            ("阿里源", "https://mirrors.aliyun.com/pypi/simple/"),
-            ("豆瓣源", "https://pypi.douban.com/simple/"),
-            ("华为源", "https://mirrors.huaweicloud.com/repository/pypi/simple/")
+            ("清华源", "https://pypi.tuna.tsinghua.edu.cn/simple/", "pypi.tuna.tsinghua.edu.cn"),
+            ("阿里源", "https://mirrors.aliyun.com/pypi/simple/", "mirrors.aliyun.com"),
+            ("豆瓣源", "https://pypi.douban.com/simple/", "pypi.douban.com"),
+            ("华为源", "https://mirrors.huaweicloud.com/repository/pypi/simple/", "mirrors.huaweicloud.com")
         ]
         
-        for name, url in shortcuts:
+        for name, url, host in shortcuts:
             btn = QPushButton(name)
-            btn.clicked.connect(lambda checked, u=url: self.set_proxy_url(u))
+            btn.clicked.connect(lambda checked, u=url, h=host: self.set_proxy_url_and_host(u, h))
             btn.setMaximumWidth(80)
             shortcuts_layout.addWidget(btn)
         
+        # 自定义镜像按钮
+        self.custom_mirror_btn = QPushButton("自定义")
+        self.custom_mirror_btn.clicked.connect(self.handle_custom_mirror_click)
+        self.custom_mirror_btn.setMaximumWidth(80)
+        self.custom_mirror_btn.setStyleSheet("background-color: #4CAF50; color: white;")
+        self.custom_mirror_btn.setContextMenuPolicy(Qt.CustomContextMenu)
+        self.custom_mirror_btn.customContextMenuRequested.connect(self.show_custom_mirror_menu)
+        shortcuts_layout.addWidget(self.custom_mirror_btn)
+        
         shortcuts_layout.addStretch()
         proxy_layout.addLayout(shortcuts_layout)
+        
+        # 当前自定义镜像显示
+        self.custom_mirror_label = QLabel()
+        self.custom_mirror_label.setStyleSheet("color: #666; font-size: 12px; margin: 5px 0;")
+        self.custom_mirror_label.setVisible(False)
+        proxy_layout.addWidget(self.custom_mirror_label)
         
         # 测试代理按钮
         test_proxy_btn = QPushButton("测试代理连接")
@@ -713,20 +847,37 @@ class DependencyManagerWidget(QWidget):
         
     def on_proxy_enabled_changed(self, enabled: bool):
         """代理启用状态改变"""
-        controls = [
-            self.proxy_type_combo,
-            self.proxy_url_input
-        ]
+        self.proxy_type_combo.setEnabled(enabled)
+        self.proxy_url_input.setEnabled(enabled)
         
-        for control in controls:
-            control.setEnabled(enabled)
+        # 同时控制信任主机相关控件
+        self.enable_trusted_host_checkbox.setEnabled(enabled)
+        if enabled and self.enable_trusted_host_checkbox.isChecked():
+            self.trusted_hosts_input.setEnabled(True)
+        else:
+            self.trusted_hosts_input.setEnabled(False)
             
         self.save_proxy_settings()
+    
+    def on_trusted_host_enabled_changed(self, enabled: bool):
+        """信任主机启用状态改变"""
+        self.trusted_hosts_input.setEnabled(enabled and self.enable_proxy_checkbox.isChecked())
         
     def set_proxy_url(self, url: str):
         """设置代理URL"""
         self.proxy_url_input.setText(url)
-        self.enable_proxy_checkbox.setChecked(True)
+        self.save_proxy_settings()
+        
+    def set_proxy_url_and_host(self, url: str, host: str):
+        """设置代理URL和信任主机"""
+        self.proxy_url_input.setText(url)
+        
+        # 如果选择了镜像源，自动启用信任主机并设置对应的主机
+        if url.startswith("https://"):
+            self.enable_trusted_host_checkbox.setChecked(True)
+            self.trusted_hosts_input.setText(host)
+        
+        self.save_proxy_settings()
         
     def test_proxy_connection(self):
         """测试代理连接"""
@@ -972,10 +1123,18 @@ class DependencyManagerWidget(QWidget):
         # 获取代理设置
         proxy_url = ""
         use_index = False
+        trusted_hosts = []
         
         if self.enable_proxy_checkbox.isChecked():
             proxy_url = self.proxy_url_input.text().strip()
             use_index = (self.proxy_type_combo.currentIndex() == 0)
+            
+            # 获取信任主机设置
+            if self.enable_trusted_host_checkbox.isChecked():
+                trusted_hosts_text = self.trusted_hosts_input.text().strip()
+                if trusted_hosts_text:
+                    # 支持逗号和空格分隔的多个主机
+                    trusted_hosts = [host.strip() for host in trusted_hosts_text.replace(',', ' ').split() if host.strip()]
             
         # 确认安装
         message = f"即将安装以下 {len(packages)} 个依赖包:\n\n"
@@ -983,6 +1142,8 @@ class DependencyManagerWidget(QWidget):
         if proxy_url:
             proxy_type = "索引代理" if use_index else "HTTP代理"
             message += f"\n\n使用{proxy_type}: {proxy_url}"
+            if trusted_hosts:
+                message += f"\n信任主机: {', '.join(trusted_hosts)}"
             
         reply = QMessageBox.question(
             self, "确认安装", message,
@@ -998,9 +1159,14 @@ class DependencyManagerWidget(QWidget):
         self.check_dependencies_btn.setEnabled(False)
         
         self.add_log(f"开始安装 {len(packages)} 个依赖包...")
+        if proxy_url:
+            proxy_type = "索引代理" if use_index else "HTTP代理"
+            self.add_log(f"使用{proxy_type}: {proxy_url}")
+            if trusted_hosts:
+                self.add_log(f"信任主机: {', '.join(trusted_hosts)}")
         
         # 启动安装线程
-        self.install_thread = DependencyInstallThread(packages, proxy_url, use_index)
+        self.install_thread = DependencyInstallThread(packages, proxy_url, use_index, trusted_hosts)
         self.install_thread.progress_updated.connect(self.add_log)
         self.install_thread.install_finished.connect(self.on_install_finished)
         self.install_thread.start()
@@ -1047,6 +1213,16 @@ class DependencyManagerWidget(QWidget):
         self.proxy_type_combo.setCurrentIndex(proxy_config.get("type", 0))
         self.proxy_url_input.setText(proxy_config.get("url", ""))
         
+        # 加载信任主机设置
+        self.enable_trusted_host_checkbox.setChecked(proxy_config.get("trusted_host_enabled", False))
+        self.trusted_hosts_input.setText(proxy_config.get("trusted_hosts", ""))
+        
+        # 更新控件状态
+        self.on_proxy_enabled_changed(self.enable_proxy_checkbox.isChecked())
+        
+        # 更新自定义镜像显示
+        self.update_custom_mirror_display()
+        
     def save_proxy_settings(self):
         """保存代理设置"""
         from ....utils.config_manager import ConfigManager
@@ -1054,7 +1230,9 @@ class DependencyManagerWidget(QWidget):
         proxy_config = {
             "enabled": self.enable_proxy_checkbox.isChecked(),
             "type": self.proxy_type_combo.currentIndex(),
-            "url": self.proxy_url_input.text().strip()
+            "url": self.proxy_url_input.text().strip(),
+            "trusted_host_enabled": self.enable_trusted_host_checkbox.isChecked(),
+            "trusted_hosts": self.trusted_hosts_input.text().strip()
         }
         
         config_manager = ConfigManager()
@@ -1062,12 +1240,19 @@ class DependencyManagerWidget(QWidget):
         
     def get_config(self) -> Dict:
         """获取当前配置"""
+        from ....utils.config_manager import ConfigManager
+        config_manager = ConfigManager()
+        custom_mirror_config = config_manager.get_config_item("custom_mirror", {})
+        
         return {
             "proxy_settings": {
                 "enabled": self.enable_proxy_checkbox.isChecked(),
                 "type": self.proxy_type_combo.currentIndex(),
-                "url": self.proxy_url_input.text().strip()
-            }
+                "url": self.proxy_url_input.text().strip(),
+                "trusted_host_enabled": self.enable_trusted_host_checkbox.isChecked(),
+                "trusted_hosts": self.trusted_hosts_input.text().strip()
+            },
+            "custom_mirror": custom_mirror_config
         }
         
     def apply_config(self, config: Dict):
@@ -1076,4 +1261,111 @@ class DependencyManagerWidget(QWidget):
         
         self.enable_proxy_checkbox.setChecked(proxy_config.get("enabled", False))
         self.proxy_type_combo.setCurrentIndex(proxy_config.get("type", 0))
-        self.proxy_url_input.setText(proxy_config.get("url", "")) 
+        self.proxy_url_input.setText(proxy_config.get("url", ""))
+        self.enable_trusted_host_checkbox.setChecked(proxy_config.get("trusted_host_enabled", False))
+        self.trusted_hosts_input.setText(proxy_config.get("trusted_hosts", ""))
+        
+        # 更新控件状态
+        self.on_proxy_enabled_changed(self.enable_proxy_checkbox.isChecked())
+        
+        # 应用自定义镜像配置
+        custom_mirror_config = config.get("custom_mirror", {})
+        if custom_mirror_config:
+            from ....utils.config_manager import ConfigManager
+            config_manager = ConfigManager()
+            config_manager.set_config_item("custom_mirror", custom_mirror_config, save_immediately=False)
+            
+        # 更新自定义镜像显示
+        self.update_custom_mirror_display()
+        
+    def show_custom_mirror_dialog(self):
+        """显示自定义镜像配置对话框"""
+        # 加载现有的自定义镜像配置
+        from ....utils.config_manager import ConfigManager
+        config_manager = ConfigManager()
+        custom_mirror_config = config_manager.get_config_item("custom_mirror", {})
+        
+        dialog = CustomMirrorDialog(self, custom_mirror_config)
+        
+        if dialog.exec_() == QDialog.Accepted:
+            config = dialog.get_config()
+            
+            # 保存自定义镜像配置
+            config_manager.set_config_item("custom_mirror", config, save_immediately=True)
+            
+            # 应用自定义镜像设置
+            self.set_proxy_url_and_host(config["url"], config["host"])
+            
+            # 更新自定义镜像显示
+            self.update_custom_mirror_display()
+            
+            QMessageBox.information(self, "成功", f"自定义镜像 '{config['name']}' 配置成功！")
+    
+    def update_custom_mirror_display(self):
+        """更新自定义镜像显示"""
+        from ....utils.config_manager import ConfigManager
+        config_manager = ConfigManager()
+        custom_mirror_config = config_manager.get_config_item("custom_mirror", {})
+        
+        if custom_mirror_config.get("name") and custom_mirror_config.get("url"):
+            self.custom_mirror_label.setText(f"自定义镜像: {custom_mirror_config['name']} ({custom_mirror_config['url']})")
+            self.custom_mirror_label.setVisible(True)
+            # 更新按钮样式，表示已配置
+            self.custom_mirror_btn.setStyleSheet("background-color: #2196F3; color: white;")
+            self.custom_mirror_btn.setToolTip(f"当前自定义镜像: {custom_mirror_config['name']}\n左键应用，右键编辑")
+        else:
+            self.custom_mirror_label.setVisible(False)
+            # 恢复默认样式，表示未配置
+            self.custom_mirror_btn.setStyleSheet("background-color: #4CAF50; color: white;")
+            self.custom_mirror_btn.setToolTip("点击配置自定义镜像")
+    
+    def handle_custom_mirror_click(self):
+        """处理自定义镜像按钮点击"""
+        from ....utils.config_manager import ConfigManager
+        config_manager = ConfigManager()
+        custom_mirror_config = config_manager.get_config_item("custom_mirror", {})
+        
+        # 如果已有自定义镜像配置，直接应用；否则打开配置对话框
+        if custom_mirror_config.get("name") and custom_mirror_config.get("url"):
+            self.apply_custom_mirror()
+        else:
+            self.show_custom_mirror_dialog()
+    
+    def show_custom_mirror_menu(self, position):
+        """显示自定义镜像右键菜单"""
+        from PyQt5.QtWidgets import QMenu, QAction
+        
+        menu = QMenu(self)
+        
+        # 应用自定义镜像
+        apply_action = QAction("应用自定义镜像", self)
+        apply_action.triggered.connect(self.apply_custom_mirror)
+        menu.addAction(apply_action)
+        
+        # 编辑自定义镜像
+        edit_action = QAction("编辑自定义镜像", self)
+        edit_action.triggered.connect(self.show_custom_mirror_dialog)
+        menu.addAction(edit_action)
+        
+        # 检查是否有自定义镜像配置
+        from ....utils.config_manager import ConfigManager
+        config_manager = ConfigManager()
+        custom_mirror_config = config_manager.get_config_item("custom_mirror", {})
+        
+        if not (custom_mirror_config.get("name") and custom_mirror_config.get("url")):
+            apply_action.setEnabled(False)
+            apply_action.setText("应用自定义镜像 (未配置)")
+            
+        menu.exec_(self.custom_mirror_btn.mapToGlobal(position))
+    
+    def apply_custom_mirror(self):
+        """应用自定义镜像"""
+        from ....utils.config_manager import ConfigManager
+        config_manager = ConfigManager()
+        custom_mirror_config = config_manager.get_config_item("custom_mirror", {})
+        
+        if custom_mirror_config.get("name") and custom_mirror_config.get("url"):
+            self.set_proxy_url_and_host(custom_mirror_config["url"], custom_mirror_config.get("host", ""))
+            self.add_log(f"已应用自定义镜像: {custom_mirror_config['name']}")
+        else:
+            QMessageBox.information(self, "提示", "尚未配置自定义镜像，请先点击'自定义'按钮进行配置") 
