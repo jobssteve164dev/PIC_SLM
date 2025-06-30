@@ -381,33 +381,305 @@ class AugmentationManager:
             return output_path
             
     def _get_random_single_augmentation(self, params: Dict) -> A.Compose:
-        """获取随机单个增强操作"""
-        augmentations = []
-        
-        # 根据参数添加可能的增强
-        if params.get('flip_horizontal', False):
-            augmentations.append(A.HorizontalFlip(p=1.0))
-        if params.get('flip_vertical', False):
-            augmentations.append(A.VerticalFlip(p=1.0))
-        if params.get('rotate', False):
-            augmentations.append(A.RandomRotate90(p=1.0))
-        if params.get('brightness', False):
-            augmentations.append(A.RandomBrightnessContrast(brightness_limit=0.2, contrast_limit=0, p=1.0))
-        if params.get('contrast', False):
-            augmentations.append(A.RandomBrightnessContrast(brightness_limit=0, contrast_limit=0.2, p=1.0))
-        if params.get('noise', False):
-            augmentations.append(A.GaussNoise(var_limit=(10, 50), p=1.0))
-        if params.get('blur', False):
-            augmentations.append(A.GaussianBlur(blur_limit=3, p=1.0))
-        if params.get('hue', False):
-            augmentations.append(A.HueSaturationValue(hue_shift_limit=20, sat_shift_limit=30, val_shift_limit=20, p=1.0))
-            
-        # 如果没有启用任何增强，使用默认增强
-        if not augmentations:
-            augmentations = [A.HorizontalFlip(p=1.0)]
-            
-        # 随机选择一个增强
+        """获取随机增强操作组合 - 改进版，添加更多连续随机参数"""
         import random
-        selected_aug = random.choice(augmentations)
+        import numpy as np
         
-        return A.Compose([selected_aug]) 
+        # 生成随机强度参数
+        intensity = random.uniform(0.3, 1.0)
+        
+        # 构建可用的增强方法列表（使用连续随机参数）
+        available_augmentations = []
+        
+        # 1. 几何变换 - 连续随机参数
+        if params.get('flip_horizontal', False):
+            available_augmentations.append(A.HorizontalFlip(p=1.0))
+        if params.get('flip_vertical', False):
+            available_augmentations.append(A.VerticalFlip(p=1.0))
+        if params.get('rotate', False):
+            # 改进：使用连续角度而不是90度倍数
+            available_augmentations.append(A.Rotate(limit=(-45 * intensity, 45 * intensity), p=1.0))
+            available_augmentations.append(A.RandomRotate90(p=1.0))  # 保留原有的90度旋转
+        
+        # 2. 颜色变换 - 连续随机参数
+        if params.get('brightness', False):
+            brightness_limit = 0.1 + intensity * 0.3  # 0.1-0.4 范围
+            available_augmentations.append(A.RandomBrightnessContrast(
+                brightness_limit=brightness_limit, contrast_limit=0, p=1.0))
+        if params.get('contrast', False):
+            contrast_limit = 0.1 + intensity * 0.3  # 0.1-0.4 范围
+            available_augmentations.append(A.RandomBrightnessContrast(
+                brightness_limit=0, contrast_limit=contrast_limit, p=1.0))
+        
+        # 3. 噪声和模糊 - 连续随机参数
+        if params.get('noise', False):
+            noise_var = (5 + intensity * 10, 15 + intensity * 35)  # 动态范围
+            available_augmentations.append(A.GaussNoise(var_limit=noise_var, p=1.0))
+        if params.get('blur', False):
+            blur_limit = int(1 + intensity * 4)  # 1-5 像素模糊
+            available_augmentations.append(A.GaussianBlur(blur_limit=blur_limit, p=1.0))
+        
+        # 4. 色彩变换 - 连续随机参数
+        if params.get('hue', False):
+            hue_limit = int(10 + intensity * 30)  # 10-40 度色相偏移
+            sat_limit = int(15 + intensity * 35)  # 15-50 饱和度偏移
+            val_limit = int(10 + intensity * 30)  # 10-40 明度偏移
+            available_augmentations.append(A.HueSaturationValue(
+                hue_shift_limit=hue_limit, sat_shift_limit=sat_limit, val_shift_limit=val_limit, p=1.0))
+        
+        # 5. 新增高级连续随机变换
+        # 随机仿射变换
+        available_augmentations.append(A.Affine(
+            scale=(0.9 - intensity * 0.1, 1.0 + intensity * 0.2),  # 0.8-1.2 缩放
+            translate_percent=(-intensity * 0.1, intensity * 0.1),  # ±10% 平移
+            rotate=(-20 * intensity, 20 * intensity),  # ±20度旋转
+            shear=(-10 * intensity, 10 * intensity),  # ±10度剪切
+            p=1.0
+        ))
+        
+        # 随机透视变换
+        available_augmentations.append(A.Perspective(
+            scale=(0.02 + intensity * 0.08, 0.05 + intensity * 0.15),  # 0.02-0.2 透视强度
+            p=1.0
+        ))
+        
+        # 随机弹性变形
+        available_augmentations.append(A.ElasticTransform(
+            alpha=1 + intensity * 50,  # 1-51 变形强度
+            sigma=5 + intensity * 15,  # 5-20 平滑度
+            alpha_affine=5 + intensity * 15,  # 5-20 仿射强度
+            p=1.0
+        ))
+        
+        # 随机网格扭曲
+        available_augmentations.append(A.GridDistortion(
+            num_steps=3 + int(intensity * 2),  # 3-5 网格步数
+            distort_limit=(-0.1 - intensity * 0.2, 0.1 + intensity * 0.2),  # 扭曲强度
+            p=1.0
+        ))
+        
+        # 随机光学扭曲
+        available_augmentations.append(A.OpticalDistortion(
+            distort_limit=(-0.1 - intensity * 0.4, 0.1 + intensity * 0.4),  # -0.5 到 0.5
+            shift_limit=(-0.05 - intensity * 0.1, 0.05 + intensity * 0.1),  # 位移限制
+            p=1.0
+        ))
+        
+        # 随机伽马校正
+        available_augmentations.append(A.RandomGamma(
+            gamma_limit=(80 - int(intensity * 20), 120 + int(intensity * 30)),  # 60-150 伽马范围
+            p=1.0
+        ))
+        
+        # 随机阴影
+        available_augmentations.append(A.RandomShadow(
+            shadow_roi=(0, 0.3 + intensity * 0.2, 1, 0.7 + intensity * 0.3),  # 阴影区域
+            num_shadows_lower=1,
+            num_shadows_upper=1 + int(intensity * 2),  # 1-3 个阴影
+            shadow_dimension=3 + int(intensity * 2),  # 阴影维度
+            p=1.0
+        ))
+        
+        # 随机太阳耀斑
+        available_augmentations.append(A.RandomSunFlare(
+            flare_roi=(0, 0, 1, 0.3 + intensity * 0.4),  # 耀斑区域
+            angle_lower=0,
+            angle_upper=1,
+            num_flare_circles_lower=1,
+            num_flare_circles_upper=1 + int(intensity * 2),  # 1-3 个耀斑圆
+            src_radius=50 + int(intensity * 100),  # 50-150 源半径
+            p=1.0
+        ))
+        
+        # 随机雨滴效果
+        available_augmentations.append(A.RandomRain(
+            slant_lower=-5 - int(intensity * 5),  # -10 到 -5
+            slant_upper=5 + int(intensity * 5),   # 5 到 10
+            drop_length=1 + int(intensity * 4),   # 1-5 雨滴长度
+            drop_width=1 + int(intensity * 2),    # 1-3 雨滴宽度
+            drop_color=(200, 200, 200),
+            blur_value=1 + int(intensity * 2),    # 1-3 模糊值
+            brightness_coefficient=0.6 + intensity * 0.3,  # 0.6-0.9 亮度系数
+            rain_type="drizzle" if intensity < 0.5 else "heavy",
+            p=1.0
+        ))
+        
+        # 随机雾效果
+        available_augmentations.append(A.RandomFog(
+            fog_coef_lower=0.1 + intensity * 0.2,  # 0.1-0.3
+            fog_coef_upper=0.2 + intensity * 0.4,  # 0.2-0.6
+            alpha_coef=0.08 + intensity * 0.1,     # 0.08-0.18
+            p=1.0
+        ))
+        
+        # 随机雪效果
+        available_augmentations.append(A.RandomSnow(
+            snow_point_lower=0.1 + intensity * 0.1,  # 0.1-0.2
+            snow_point_upper=0.2 + intensity * 0.2,  # 0.2-0.4
+            brightness_coeff=1.5 + intensity * 0.5,  # 1.5-2.0
+            p=1.0
+        ))
+        
+        # CLAHE (对比度限制自适应直方图均衡)
+        available_augmentations.append(A.CLAHE(
+            clip_limit=(1 + intensity * 3, 2 + intensity * 6),  # 1-4, 2-8
+            tile_grid_size=(4 + int(intensity * 4), 4 + int(intensity * 4)),  # 4-8, 4-8
+            p=1.0
+        ))
+        
+        # 随机色调分离
+        available_augmentations.append(A.Solarize(
+            threshold=(32 + int(intensity * 96), 64 + int(intensity * 128)),  # 32-128, 64-192
+            p=1.0
+        ))
+        
+        # 随机后验化
+        available_augmentations.append(A.Posterize(
+            num_bits=(3 + int(intensity * 2), 4 + int(intensity * 2)),  # 3-5, 4-6
+            p=1.0
+        ))
+        
+        # 随机均衡化
+        available_augmentations.append(A.Equalize(p=1.0))
+        
+        # 随机自动对比度
+        available_augmentations.append(A.AutoContrast(p=1.0))
+        
+        # 如果没有启用任何增强，添加默认的连续随机增强
+        if not available_augmentations:
+            available_augmentations = [
+                A.RandomBrightnessContrast(brightness_limit=0.2, contrast_limit=0.2, p=1.0),
+                A.HueSaturationValue(hue_shift_limit=20, sat_shift_limit=30, val_shift_limit=20, p=1.0),
+                A.GaussNoise(var_limit=(10, 50), p=1.0)
+            ]
+        
+        # 随机选择1-3个增强方法进行组合
+        num_augmentations = random.randint(1, min(3, len(available_augmentations)))
+        selected_augs = random.sample(available_augmentations, num_augmentations)
+        
+        # 为每个选中的增强添加随机概率
+        final_augs = []
+        for aug in selected_augs:
+            # 为每个增强设置随机概率 (0.7-1.0)
+            aug_prob = 0.7 + random.uniform(0, 0.3)
+            # 创建带概率的增强
+            if hasattr(aug, 'p'):
+                aug.p = aug_prob
+            final_augs.append(aug)
+        
+        return A.Compose(final_augs)
+        
+    def get_enhanced_random_augmentation(self, params: Dict) -> A.Compose:
+        """获取增强版随机增强 - 专门用于高质量过采样"""
+        import random
+        import numpy as np
+        
+        # 生成更强的随机强度
+        intensity = random.uniform(0.5, 1.0)
+        
+        # 构建高级增强序列
+        augmentation_sequence = []
+        
+        # 第一阶段：几何变换 (随机选择1-2个)
+        geometric_augs = []
+        if random.random() < 0.7:  # 70% 概率应用旋转
+            angle_range = random.uniform(10, 45) * intensity
+            geometric_augs.append(A.Rotate(limit=(-angle_range, angle_range), p=1.0))
+        
+        if random.random() < 0.5:  # 50% 概率应用仿射变换
+            geometric_augs.append(A.Affine(
+                scale=(0.85 + random.uniform(0, 0.1), 1.15 + random.uniform(0, 0.1)),
+                translate_percent=(random.uniform(-0.1, 0.1), random.uniform(-0.1, 0.1)),
+                rotate=(random.uniform(-15, 15), random.uniform(-15, 15)),
+                shear=(random.uniform(-10, 10), random.uniform(-10, 10)),
+                p=1.0
+            ))
+        
+        if random.random() < 0.3:  # 30% 概率应用透视变换
+            perspective_scale = random.uniform(0.02, 0.08) * intensity
+            geometric_augs.append(A.Perspective(scale=(perspective_scale, perspective_scale * 2), p=1.0))
+        
+        if geometric_augs:
+            augmentation_sequence.extend(random.sample(geometric_augs, min(2, len(geometric_augs))))
+        
+        # 第二阶段：颜色变换 (随机选择2-3个)
+        color_augs = []
+        
+        # 亮度对比度 (高概率)
+        if random.random() < 0.8:
+            brightness_range = random.uniform(0.1, 0.3) * intensity
+            contrast_range = random.uniform(0.1, 0.3) * intensity
+            color_augs.append(A.RandomBrightnessContrast(
+                brightness_limit=brightness_range, contrast_limit=contrast_range, p=1.0))
+        
+        # 色相饱和度 (高概率)
+        if random.random() < 0.8:
+            hue_range = int(random.uniform(10, 30) * intensity)
+            sat_range = int(random.uniform(15, 40) * intensity)
+            val_range = int(random.uniform(10, 25) * intensity)
+            color_augs.append(A.HueSaturationValue(
+                hue_shift_limit=hue_range, sat_shift_limit=sat_range, val_shift_limit=val_range, p=1.0))
+        
+        # 伽马校正
+        if random.random() < 0.6:
+            gamma_lower = 80 - int(random.uniform(0, 20) * intensity)
+            gamma_upper = 120 + int(random.uniform(0, 30) * intensity)
+            color_augs.append(A.RandomGamma(gamma_limit=(gamma_lower, gamma_upper), p=1.0))
+        
+        # CLAHE
+        if random.random() < 0.4:
+            clip_limit = random.uniform(1, 4) * intensity
+            tile_size = 4 + int(random.uniform(0, 4) * intensity)
+            color_augs.append(A.CLAHE(clip_limit=(clip_limit, clip_limit * 2), 
+                                    tile_grid_size=(tile_size, tile_size), p=1.0))
+        
+        if color_augs:
+            augmentation_sequence.extend(random.sample(color_augs, min(3, len(color_augs))))
+        
+        # 第三阶段：噪声和质量变换 (随机选择1-2个)
+        quality_augs = []
+        
+        # 高斯噪声
+        if random.random() < 0.6:
+            noise_min = random.uniform(5, 15) * intensity
+            noise_max = random.uniform(20, 50) * intensity
+            quality_augs.append(A.GaussNoise(var_limit=(noise_min, noise_max), p=1.0))
+        
+        # 模糊
+        if random.random() < 0.4:
+            blur_limit = int(random.uniform(1, 3) * intensity)
+            quality_augs.append(A.GaussianBlur(blur_limit=blur_limit, p=1.0))
+        
+        # 锐化
+        if random.random() < 0.3:
+            quality_augs.append(A.Sharpen(alpha=(0.1, 0.3), lightness=(0.8, 1.2), p=1.0))
+        
+        if quality_augs:
+            augmentation_sequence.extend(random.sample(quality_augs, min(2, len(quality_augs))))
+        
+        # 第四阶段：特殊效果 (低概率，高多样性)
+        special_augs = []
+        
+        if random.random() < 0.2:  # 雾效果
+            fog_coef = random.uniform(0.1, 0.4) * intensity
+            special_augs.append(A.RandomFog(fog_coef_lower=fog_coef, fog_coef_upper=fog_coef * 2, p=1.0))
+        
+        if random.random() < 0.15:  # 阴影效果
+            shadow_roi = (0, random.uniform(0.2, 0.4), 1, random.uniform(0.6, 0.8))
+            special_augs.append(A.RandomShadow(shadow_roi=shadow_roi, p=1.0))
+        
+        if random.random() < 0.1:  # 太阳耀斑
+            flare_roi = (0, 0, 1, random.uniform(0.3, 0.5))
+            special_augs.append(A.RandomSunFlare(flare_roi=flare_roi, p=1.0))
+        
+        if special_augs:
+            augmentation_sequence.extend(random.sample(special_augs, min(1, len(special_augs))))
+        
+        # 确保至少有一个增强
+        if not augmentation_sequence:
+            augmentation_sequence = [A.RandomBrightnessContrast(brightness_limit=0.2, contrast_limit=0.2, p=1.0)]
+        
+        # 随机打乱增强顺序
+        random.shuffle(augmentation_sequence)
+        
+        return A.Compose(augmentation_sequence) 

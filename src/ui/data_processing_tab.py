@@ -471,6 +471,16 @@ class DataProcessingTab(BaseTab):
         target_info.setStyleSheet("color: gray; font-size: 9pt;")
         options_layout.addWidget(target_info, 16, 2)
         
+        # 高级增强选项
+        self.use_enhanced_augmentation_check = QCheckBox("启用高级随机增强")
+        self.use_enhanced_augmentation_check.setChecked(True)
+        self.use_enhanced_augmentation_check.setEnabled(False)
+        options_layout.addWidget(self.use_enhanced_augmentation_check, 17, 0, 1, 3)
+        enhanced_info = QLabel("(使用更多连续随机参数，大幅降低重复概率，仅在数据增强过采样时生效)")
+        enhanced_info.setWordWrap(True)
+        enhanced_info.setStyleSheet("color: gray; font-size: 9pt;")
+        options_layout.addWidget(enhanced_info, 18, 0, 1, 3)
+        
         options_group.setLayout(options_layout)
         main_layout.addWidget(options_group)
         
@@ -514,7 +524,7 @@ class DataProcessingTab(BaseTab):
             self.output_folder = folder
             self.output_path_edit.setText(folder)
             print(f"设置输出文件夹路径: {self.output_folder}")
-            # 启用打开文件夹按钮
+            # 启用打开输出文件夹按钮
             self.open_output_btn.setEnabled(True)
             self.check_preprocess_ready()
     
@@ -704,6 +714,7 @@ class DataProcessingTab(BaseTab):
         self.sampling_strategy_combo.setEnabled(is_enabled)
         self.oversample_method_combo.setEnabled(is_enabled)
         self.undersample_method_combo.setEnabled(is_enabled)
+        self.use_enhanced_augmentation_check.setEnabled(is_enabled)
         
         # 检查是否为自定义策略
         if is_enabled:
@@ -716,6 +727,7 @@ class DataProcessingTab(BaseTab):
         else:
             self.balance_classes_check.setEnabled(True)
             self.target_samples_spin.setEnabled(False)
+            self.use_enhanced_augmentation_check.setEnabled(False)
             
         # 连接策略变化信号
         if not hasattr(self, '_strategy_connected'):
@@ -784,7 +796,8 @@ class DataProcessingTab(BaseTab):
             'sampling_strategy': self.sampling_strategy_combo.currentText().split(' - ')[0] if self.use_sampling_check.isChecked() else 'auto',
             'oversample_method': self.oversample_method_combo.currentText().split(' - ')[0] if self.use_sampling_check.isChecked() else 'augmentation',
             'undersample_method': self.undersample_method_combo.currentText().split(' - ')[0] if self.use_sampling_check.isChecked() else 'random',
-            'target_samples_per_class': self.target_samples_spin.value() if self.use_sampling_check.isChecked() else 100
+            'target_samples_per_class': self.target_samples_spin.value() if self.use_sampling_check.isChecked() else 100,
+            'use_enhanced_augmentation': self.use_enhanced_augmentation_check.isChecked() if self.use_sampling_check.isChecked() else False
         }
         
         # 发出预处理开始信号

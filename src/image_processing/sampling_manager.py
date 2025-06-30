@@ -401,6 +401,9 @@ class SamplingManager:
         """生成增强样本"""
         additional_files = []
         
+        # 检查是否使用高级随机增强
+        use_enhanced_augmentation = params.get('use_enhanced_augmentation', True)
+        
         # 计算每个原始文件需要生成多少个增强样本
         files_per_original = needed_samples // len(original_files)
         remaining_samples = needed_samples % len(original_files)
@@ -423,10 +426,39 @@ class SamplingManager:
                     params['brightness_value'], params['contrast_value']
                 )
                 
-                # 应用数据增强
-                self.augmentation_manager.apply_single_augmentation_to_image(
-                    temp_path, output_folder, aug_file_name, params['format'], params
-                )
+                # 选择增强方法
+                if use_enhanced_augmentation:
+                    # 使用增强版随机增强（更多连续随机参数）
+                    try:
+                        from PIL import Image
+                        
+                        # 读取图片
+                        image = Image.open(temp_path)
+                        
+                        # 获取增强版随机增强
+                        augmentation = self.augmentation_manager.get_enhanced_random_augmentation(params)
+                        
+                        # 应用增强
+                        augmented = augmentation(image=image)['image']
+                        
+                        # 保存增强后的图片
+                        augmented.save(aug_target_path)
+                        
+                        if status_callback and j % 10 == 0:
+                            status_callback(f"高级增强进度 {class_name}: {j+1}/{samples_for_this_file}")
+                            
+                    except Exception as e:
+                        # 如果高级增强失败，回退到标准增强
+                        if status_callback:
+                            status_callback(f"高级增强失败，使用标准增强: {str(e)}")
+                        self.augmentation_manager.apply_single_augmentation_to_image(
+                            temp_path, output_folder, aug_file_name, params['format'], params
+                        )
+                else:
+                    # 使用标准随机增强
+                    self.augmentation_manager.apply_single_augmentation_to_image(
+                        temp_path, output_folder, aug_file_name, params['format'], params
+                    )
                 
                 # 删除临时文件
                 if os.path.exists(temp_path):
