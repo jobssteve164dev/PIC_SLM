@@ -22,6 +22,7 @@ from .components.dataset_evaluation import ClassificationAnalyzer, DetectionAnal
 from .components.dataset_evaluation import WeightGenerator
 from .components.dataset_evaluation import ChartManager
 from .components.dataset_evaluation import ResultDisplayManager
+from .components.dataset_evaluation import DatasetEvaluationThread
 
 
 class DatasetEvaluationTab(BaseTab):
@@ -54,6 +55,9 @@ class DatasetEvaluationTab(BaseTab):
         self.current_class_weights = None
         self.current_class_counts = None
         
+        # 评估线程
+        self.evaluation_thread = None
+        
         self.init_ui()
         self.connect_signals()
         
@@ -85,10 +89,19 @@ class DatasetEvaluationTab(BaseTab):
         main_layout.addWidget(self.status_label)
         
         # 评估按钮
+        button_layout = QHBoxLayout()
         self.evaluate_btn = QPushButton("开始评估")
         self.evaluate_btn.clicked.connect(self.start_evaluation)
         self.evaluate_btn.setEnabled(False)
-        main_layout.addWidget(self.evaluate_btn)
+        button_layout.addWidget(self.evaluate_btn)
+        
+        # 停止按钮
+        self.stop_btn = QPushButton("停止评估")
+        self.stop_btn.clicked.connect(self.stop_evaluation)
+        self.stop_btn.setEnabled(False)
+        button_layout.addWidget(self.stop_btn)
+        
+        main_layout.addLayout(button_layout)
         
         # 结果显示区域
         results_group = self.create_results_display_group()
@@ -246,80 +259,55 @@ class DatasetEvaluationTab(BaseTab):
             self.update_status(f"已选择数据集，但更新配置失败: {str(e)}")
             
     def start_evaluation(self):
-        """开始数据集评估"""
+        """开始数据集评估（使用独立线程）"""
         if not self.dataset_path:
             QMessageBox.warning(self, "警告", "请先选择数据集文件夹!")
+            return
+            
+        # 如果已有线程在运行，先停止
+        if self.evaluation_thread and self.evaluation_thread.isRunning():
+            self.stop_evaluation()
             return
             
         eval_type = self.eval_type_combo.currentText()
         metric_type = self.metrics_combo.currentText()
         
+        # 更新UI状态
         self.progress_bar.setVisible(True)
         self.progress_bar.setValue(0)
         self.evaluate_btn.setEnabled(False)
+        self.stop_btn.setEnabled(True)
         
-        try:
-            # 创建对应的分析器
-            if eval_type == "分类数据集":
-                self.current_analyzer = ClassificationAnalyzer(self.dataset_path)
-                self.evaluate_classification_dataset(metric_type)
-            else:
-                self.current_analyzer = DetectionAnalyzer(self.dataset_path)
-                self.evaluate_detection_dataset(metric_type)
-                
-        except Exception as e:
-            QMessageBox.critical(self, "错误", f"评估过程中出错: {str(e)}")
-        finally:
-            self.progress_bar.setVisible(False)
-            self.evaluate_btn.setEnabled(True)
-            
-    def evaluate_classification_dataset(self, metric_type):
-        """评估分类数据集"""
-        # 连接分析器的进度信号
-        self.current_analyzer.progress_updated.connect(self.progress_bar.setValue)
-        self.current_analyzer.status_updated.connect(self.update_status)
+        # 创建并启动评估线程
+        self.evaluation_thread = DatasetEvaluationThread(
+            self.dataset_path, eval_type, metric_type
+        )
         
-        try:
-            if metric_type == "数据分布分析":
-                self.analyze_classification_distribution()
-            elif metric_type == "图像质量分析":
-                self.analyze_classification_image_quality()
-            elif metric_type == "标注质量分析":
-                self.analyze_classification_annotation_quality()
-            elif metric_type == "特征分布分析":
-                self.analyze_classification_feature_distribution()
-            elif metric_type == "生成类别权重":
-                self.generate_classification_weights()
-                
-            self.update_status(f"评估完成: {metric_type}")
-            
-        finally:
-            # 断开信号连接
-            self.current_analyzer.progress_updated.disconnect()
-            self.current_analyzer.status_updated.disconnect()
-            
-    def evaluate_detection_dataset(self, metric_type):
-        """评估目标检测数据集"""
-        # 连接分析器的进度信号
-        self.current_analyzer.progress_updated.connect(self.progress_bar.setValue)
-        self.current_analyzer.status_updated.connect(self.update_status)
+        # 连接线程信号
+        self.evaluation_thread.progress_updated.connect(self.progress_bar.setValue)
+        self.evaluation_thread.status_updated.connect(self.update_status)
+        self.evaluation_thread.evaluation_finished.connect(self.on_evaluation_finished)
+        self.evaluation_thread.evaluation_error.connect(self.on_evaluation_error)
+        self.evaluation_thread.evaluation_stopped.connect(self.on_evaluation_stopped)
         
-        try:
-            if metric_type == "数据分布分析":
-                self.analyze_detection_distribution()
-            elif metric_type == "图像质量分析":
-                self.analyze_detection_image_quality()
-            elif metric_type == "标注质量分析":
-                self.analyze_detection_annotation_quality()
-            elif metric_type == "特征分布分析":
-                self.analyze_detection_feature_distribution()
-                
-            self.update_status(f"评估完成: {metric_type}")
+        # 启动线程
+        self.evaluation_thread.start()
+        
+    def stop_evaluation(self):
+        """停止数据集评估"""
+        if self.evaluation_thread and self.evaluation_thread.isRunning():
+            self.evaluation_thread.stop()
+            self.update_status("正在停止评估...")
             
-        finally:
-            # 断开信号连接
-            self.current_analyzer.progress_updated.disconnect()
-            self.current_analyzer.status_updated.disconnect()
+    # 原来的同步评估方法已移至独立线程中执行
+    # def evaluate_classification_dataset(self, metric_type):
+    #     """评估分类数据集（已弃用，使用线程版本）"""
+    #     pass
+            
+    # 原来的同步评估方法已移至独立线程中执行
+    # def evaluate_detection_dataset(self, metric_type):
+    #     """评估目标检测数据集（已弃用，使用线程版本）"""
+    #     pass
             
     def analyze_classification_distribution(self):
         """分析分类数据集分布"""
@@ -620,4 +608,130 @@ class DatasetEvaluationTab(BaseTab):
                 'progress_visible': self.progress_bar.isVisible(),
                 'evaluate_enabled': self.evaluate_btn.isEnabled()
             }
-        } 
+        }
+        
+    def on_evaluation_finished(self, result):
+        """评估完成回调"""
+        try:
+            # 更新UI状态
+            self.progress_bar.setVisible(False)
+            self.evaluate_btn.setEnabled(True)
+            self.stop_btn.setEnabled(False)
+            
+            # 处理评估结果
+            eval_type = result.get('eval_type', '')
+            metric_type = result.get('metric_type', '')
+            analysis_type = result.get('analysis_type', '')
+            
+            if eval_type == "分类数据集":
+                self._handle_classification_result(result, analysis_type)
+            else:
+                self._handle_detection_result(result, analysis_type)
+                
+            self.update_status(f"评估完成: {metric_type}")
+            
+        except Exception as e:
+            self.on_evaluation_error(f"处理评估结果时出错: {str(e)}")
+            
+    def on_evaluation_error(self, error_msg):
+        """评估错误回调"""
+        # 更新UI状态
+        self.progress_bar.setVisible(False)
+        self.evaluate_btn.setEnabled(True)
+        self.stop_btn.setEnabled(False)
+        
+        # 显示错误信息
+        QMessageBox.critical(self, "评估错误", error_msg)
+        self.update_status("评估失败")
+        
+    def on_evaluation_stopped(self):
+        """评估停止回调"""
+        # 更新UI状态
+        self.progress_bar.setVisible(False)
+        self.evaluate_btn.setEnabled(True)
+        self.stop_btn.setEnabled(False)
+        
+        self.update_status("评估已停止")
+        
+    def _handle_classification_result(self, result, analysis_type):
+        """处理分类数据集评估结果"""
+        if analysis_type == 'distribution':
+            # 使用图表管理器绘制图表
+            self.chart_manager.plot_classification_distribution(
+                result['train_classes'], 
+                result['val_classes']
+            )
+            # 使用结果显示管理器显示结果
+            self.result_display_manager.display_classification_distribution_results(result)
+            
+        elif analysis_type == 'image_quality':
+            self.chart_manager.plot_image_quality_analysis(
+                result['image_sizes'],
+                result['image_qualities'],
+                result['brightness_values'],
+                result['contrast_values']
+            )
+            self.result_display_manager.display_image_quality_results(result)
+            
+        elif analysis_type == 'annotation_quality':
+            self.chart_manager.plot_annotation_quality_analysis(
+                result['class_names'],
+                result['annotation_counts']
+            )
+            self.result_display_manager.display_annotation_quality_results(result)
+            
+        elif analysis_type == 'feature_distribution':
+            self.chart_manager.plot_feature_distribution_analysis(
+                result['brightness_values'],
+                result['contrast_values']
+            )
+            self.result_display_manager.display_feature_distribution_results(result)
+            
+        elif analysis_type == 'weight_generation':
+            # 缓存权重结果
+            self.current_class_weights = result['class_weights']
+            self.current_class_counts = result['train_classes']
+            
+            # 显示权重生成结果
+            self.chart_manager.plot_classification_distribution(
+                result['train_classes'], 
+                result['val_classes']
+            )
+            self.chart_manager.plot_weight_distribution(
+                result['class_weights']
+            )
+            self.result_display_manager.display_weight_generation_results(result)
+            
+            # 添加导出按钮
+            self.add_export_weights_button()
+            
+    def _handle_detection_result(self, result, analysis_type):
+        """处理检测数据集评估结果"""
+        if analysis_type == 'distribution':
+            self.chart_manager.plot_detection_distribution(
+                result.get('class_distribution', {}),
+                result.get('bbox_count', 0),
+                result.get('image_count', 0)
+            )
+            self.result_display_manager.display_detection_distribution_results(result)
+            
+        elif analysis_type == 'image_quality':
+            self.chart_manager.plot_detection_image_quality_analysis(
+                result.get('image_sizes', []),
+                result.get('image_qualities', [])
+            )
+            self.result_display_manager.display_detection_image_quality_results(result)
+            
+        elif analysis_type == 'annotation_quality':
+            self.chart_manager.plot_detection_annotation_quality_analysis(
+                result.get('valid_annotations', 0),
+                result.get('invalid_annotations', 0)
+            )
+            self.result_display_manager.display_detection_annotation_quality_results(result)
+            
+        elif analysis_type == 'feature_distribution':
+            self.chart_manager.plot_detection_feature_distribution_analysis(
+                result.get('bbox_aspect_ratios', []),
+                result.get('bbox_areas', [])
+            )
+            self.result_display_manager.display_detection_feature_distribution_results(result) 
