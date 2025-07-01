@@ -24,6 +24,8 @@ from .model_configurator import ModelConfigurator
 from .tensorboard_logger import TensorBoardLogger
 from .training_validator import TrainingValidator
 from .resource_limited_trainer import ResourceLimitedTrainer, enable_resource_limited_training
+from .model_ema import ModelEMAManager
+from .advanced_augmentation import AdvancedAugmentationManager, create_advanced_criterion
 from ..utils.resource_limiter import (
     initialize_resource_limiter, ResourceLimits, ResourceLimitException, get_resource_limiter
 )
@@ -56,6 +58,13 @@ class TrainingThread(QThread):
         self.tensorboard_logger = TensorBoardLogger()
         self.validator = TrainingValidator()
         
+        # 初始化第二阶段组件
+        self.ema_manager = None
+        self.augmentation_manager = None
+        self.advanced_criterion = None
+        self.gradient_accumulation_steps = config.get('gradient_accumulation_steps', 1)
+        self._setup_stage_two_components()
+        
         # 初始化资源限制器
         self.resource_limiter = None
         self.resource_limited_trainer = None
@@ -63,6 +72,39 @@ class TrainingThread(QThread):
         
         # 连接组件信号
         self._connect_component_signals()
+    
+    def _setup_stage_two_components(self):
+        """设置第二阶段组件（模型EMA、高级数据增强等）"""
+        try:
+            # 设置高级数据增强管理器
+            self.augmentation_manager = AdvancedAugmentationManager(self.config)
+            
+            # 记录启用的高级特性
+            advanced_features = []
+            
+            if self.config.get('model_ema', False):
+                advanced_features.append("模型EMA")
+            
+            if self.gradient_accumulation_steps > 1:
+                advanced_features.append(f"梯度累积(步数:{self.gradient_accumulation_steps})")
+            
+            if self.augmentation_manager.is_enabled():
+                aug_methods = []
+                if self.config.get('cutmix_prob', 0.0) > 0:
+                    aug_methods.append("CutMix")
+                if self.config.get('mixup_alpha', 0.0) > 0:
+                    aug_methods.append("MixUp")
+                advanced_features.append(f"高级数据增强({'+'.join(aug_methods)})")
+            
+            if self.config.get('loss_scale', 'dynamic') == 'static':
+                advanced_features.append("静态损失缩放")
+            
+            if advanced_features:
+                self.status_updated.emit(f"✨ 启用第二阶段高级特性: {', '.join(advanced_features)}")
+            
+        except Exception as e:
+            self.status_updated.emit(f"⚠️ 设置第二阶段组件失败: {e}")
+            print(f"第二阶段组件设置错误: {e}")
     
     def _setup_resource_limiter(self):
         """设置资源限制器"""
@@ -195,6 +237,22 @@ class TrainingThread(QThread):
                 else:
                     print(f"   {param}: {value}")
             
+            # 第一阶段高级超参数
+            print("\n🔧 第一阶段高级超参数:")
+            stage_one_params = ['beta1', 'beta2', 'momentum', 'nesterov', 'warmup_steps', 
+                              'warmup_ratio', 'warmup_method', 'min_lr', 'label_smoothing']
+            for param in stage_one_params:
+                value = self.config.get(param, '未设置')
+                print(f"   {param}: {value}")
+            
+            # 第二阶段高级超参数
+            print("\n⚡ 第二阶段高级超参数:")
+            stage_two_params = ['model_ema', 'model_ema_decay', 'gradient_accumulation_steps',
+                              'cutmix_prob', 'mixup_alpha', 'loss_scale', 'static_loss_scale']
+            for param in stage_two_params:
+                value = self.config.get(param, '未设置')
+                print(f"   {param}: {value}")
+            
             # 目录配置参数
             print("\n📁 目录配置参数:")
             dir_params = ['default_param_save_dir', 'tensorboard_log_dir']
@@ -202,8 +260,35 @@ class TrainingThread(QThread):
                 value = self.config.get(param, '未设置')
                 print(f"   {param}: {value}")
             
+            # 统计参数总数
+            total_basic = len(basic_params)
+            total_advanced = len(advanced_params)
+            total_pretrained = len(pretrained_params)
+            total_weight = len(weight_params)
+            total_stage_one = len([p for p in stage_one_params if self.config.get(p) is not None])
+            total_stage_two = len([p for p in stage_two_params if self.config.get(p) is not None])
+            total_resource = len(resource_params)
+            total_dir = len(dir_params)
+            
+            # 如果是检测任务，也统计检测参数
+            total_detection = 0
+            if self.config.get('task_type') == 'detection':
+                detection_params = ['iou_threshold', 'conf_threshold', 'resolution', 'use_mosaic',
+                                  'use_multiscale', 'use_ema', 'nms_threshold', 'use_fpn']
+                total_detection = len([p for p in detection_params if self.config.get(p) is not None])
+            
             print("=" * 60)
             print(f"✅ 参数接收验证完成，共接收 {len(self.config)} 个参数")
+            print(f"   📋 基础参数: {total_basic}个")
+            print(f"   🔧 高级参数: {total_advanced}个") 
+            print(f"   🏗️ 预训练参数: {total_pretrained}个")
+            print(f"   ⚖️ 权重参数: {total_weight}个")
+            print(f"   🔧 第一阶段超参数: {total_stage_one}个")
+            print(f"   ⚡ 第二阶段超参数: {total_stage_two}个")
+            print(f"   💾 资源参数: {total_resource}个")
+            print(f"   📁 目录参数: {total_dir}个")
+            if total_detection > 0:
+                print(f"   🎯 检测参数: {total_detection}个")
             print("=" * 60)
             
             # 启动资源限制器监控
@@ -284,6 +369,13 @@ class TrainingThread(QThread):
             
             if self.stop_training:
                 return
+            
+            # 初始化EMA管理器（第二阶段）
+            if self.config.get('model_ema', False):
+                self.ema_manager = ModelEMAManager(self.model, self.config)
+                if self.ema_manager.is_enabled():
+                    self.ema_manager.to(self.device)
+                    self.status_updated.emit("🔄 EMA模型已初始化")
             
             # 计算类别权重和设置损失函数
             criterion = self._setup_loss_function(dataloaders['train'], class_names)
@@ -423,7 +515,7 @@ class TrainingThread(QThread):
         return model
     
     def _setup_loss_function(self, train_dataset, class_names):
-        """设置损失函数（支持标签平滑）"""
+        """设置损失函数（支持标签平滑和高级数据增强）"""
         use_class_weights = self.config.get('use_class_weights', True)
         weight_strategy = self.config.get('weight_strategy', 'balanced')
         label_smoothing = self.config.get('label_smoothing', 0.0)
@@ -435,21 +527,32 @@ class TrainingThread(QThread):
                 train_dataset.dataset, class_names, self.config, self.device
             )
         
-        # 使用优化器工厂创建损失函数（支持标签平滑）
+        # 创建基础损失函数
         from .optimizer_factory import OptimizerFactory
-        criterion = OptimizerFactory.create_criterion(self.config, class_weights)
+        base_criterion = OptimizerFactory.create_criterion(self.config, class_weights)
+        
+        # 检查是否需要高级损失函数（第二阶段）
+        if self.augmentation_manager and self.augmentation_manager.is_enabled():
+            # 使用高级损失函数支持MixUp/CutMix
+            criterion, aug_manager = create_advanced_criterion(self.config, base_criterion)
+            self.advanced_criterion = criterion
+            self.status_updated.emit("🚀 使用高级混合损失函数（支持MixUp/CutMix）")
+        else:
+            # 使用标准损失函数
+            criterion, _ = create_advanced_criterion(self.config, base_criterion)
+            self.advanced_criterion = None
         
         # 更新状态信息
+        status_parts = []
         if label_smoothing > 0:
-            if use_class_weights:
-                self.status_updated.emit(f"使用标签平滑损失函数（平滑系数: {label_smoothing}），权重策略: {weight_strategy}")
-            else:
-                self.status_updated.emit(f"使用标签平滑损失函数（平滑系数: {label_smoothing}）")
+            status_parts.append(f"标签平滑(系数:{label_smoothing})")
+        if use_class_weights:
+            status_parts.append(f"类别权重({weight_strategy})")
+        
+        if status_parts:
+            self.status_updated.emit(f"损失函数配置: {', '.join(status_parts)}")
         else:
-            if use_class_weights:
-                self.status_updated.emit(f"使用加权损失函数，权重策略: {weight_strategy}")
-            else:
-                self.status_updated.emit("使用标准损失函数（无类别权重）")
+            self.status_updated.emit("使用标准交叉熵损失函数")
         
         return criterion
     
@@ -600,7 +703,7 @@ class TrainingThread(QThread):
             return 0.0
     
     def _train_epoch(self, phase, dataloaders, dataset_sizes, criterion, optimizer, epoch, num_epochs):
-        """训练一个epoch"""
+        """训练一个epoch（支持第二阶段高级特性）"""
         if phase == 'train':
             self.model.train()
         else:
@@ -611,6 +714,10 @@ class TrainingThread(QThread):
         all_preds = []
         all_labels = []
         
+        # 梯度累积相关变量
+        accumulation_steps = self.gradient_accumulation_steps if phase == 'train' else 1
+        accumulated_loss = 0.0
+        
         # 遍历数据
         for i, (inputs, labels) in enumerate(dataloaders[phase]):
             if self.stop_training:
@@ -619,28 +726,85 @@ class TrainingThread(QThread):
             inputs = inputs.to(self.device)
             labels = labels.to(self.device)
             
-            optimizer.zero_grad()
+            # 只在累积步骤开始时清零梯度
+            if phase == 'train' and i % accumulation_steps == 0:
+                optimizer.zero_grad()
             
             # 前向传播
             with torch.set_grad_enabled(phase == 'train'):
-                outputs = self.model(inputs)
-                _, preds = torch.max(outputs, 1)
-                loss = criterion(outputs, labels)
+                # 应用高级数据增强（第二阶段）
+                if phase == 'train' and self.augmentation_manager and self.augmentation_manager.is_enabled():
+                    # 使用高级数据增强
+                    mixed_inputs, y_a, y_b, lam, aug_method = self.augmentation_manager(inputs, labels)
+                    outputs = self.model(mixed_inputs)
+                    
+                    # 计算混合损失
+                    if self.advanced_criterion:
+                        loss = self.advanced_criterion(outputs, y_a, y_b, lam)
+                    else:
+                        loss = lam * criterion(outputs, y_a) + (1 - lam) * criterion(outputs, y_b)
+                    
+                    # 对于预测准确率，使用原始标签
+                    _, preds = torch.max(outputs, 1)
+                    # 混合增强时，准确率计算需要考虑两个标签
+                    corrects = lam * preds.eq(y_a.data).sum().float() + (1 - lam) * preds.eq(y_b.data).sum().float()
+                    
+                    # 记录使用的增强方法
+                    if i == 0:  # 只在第一个batch记录
+                        self.status_updated.emit(f"📊 使用{aug_method}数据增强")
+                    
+                else:
+                    # 标准前向传播
+                    outputs = self.model(inputs)
+                    _, preds = torch.max(outputs, 1)
+                    loss = criterion(outputs, labels)
+                    corrects = torch.sum(preds == labels.data).float()
+                
+                # 梯度累积：缩放损失
+                if phase == 'train' and accumulation_steps > 1:
+                    loss = loss / accumulation_steps
                 
                 # 反向传播
                 if phase == 'train':
                     loss.backward()
-                    optimizer.step()
+                    
+                    # 只在累积步骤结束时更新参数
+                    if (i + 1) % accumulation_steps == 0 or (i + 1) == len(dataloaders[phase]):
+                        # 梯度裁剪（如果启用）
+                        if self.config.get('gradient_clipping', False):
+                            clip_value = self.config.get('gradient_clipping_value', 1.0)
+                            torch.nn.utils.clip_grad_norm_(self.model.parameters(), clip_value)
+                        
+                        optimizer.step()
+                        
+                        # 更新EMA模型（第二阶段）
+                        if self.ema_manager and self.ema_manager.is_enabled():
+                            self.ema_manager.update(self.model)
             
             if self.stop_training:
                 break
             
-            running_loss += loss.item() * inputs.size(0)
-            running_corrects += torch.sum(preds == labels.data)
+            # 累积统计信息
+            if accumulation_steps > 1:
+                accumulated_loss += loss.item() * inputs.size(0) * accumulation_steps  # 还原真实损失
+            else:
+                accumulated_loss += loss.item() * inputs.size(0)
+                
+            running_loss += accumulated_loss if (i + 1) % accumulation_steps == 0 else 0
+            running_corrects += corrects
             
-            # 收集预测和标签
-            all_preds.extend(preds.cpu().numpy())
-            all_labels.extend(labels.cpu().numpy())
+            # 收集预测和标签（用于指标计算）
+            if phase == 'train' and self.augmentation_manager and self.augmentation_manager.is_enabled():
+                # 混合增强时使用原始标签
+                all_preds.extend(preds.cpu().numpy())
+                all_labels.extend(labels.cpu().numpy())
+            else:
+                all_preds.extend(preds.cpu().numpy())
+                all_labels.extend(labels.cpu().numpy())
+            
+            # 重置累积损失
+            if (i + 1) % accumulation_steps == 0:
+                accumulated_loss = 0.0
             
             # 更新进度
             progress = int(((epoch * len(dataloaders[phase]) + i + 1) /
@@ -651,7 +815,9 @@ class TrainingThread(QThread):
             if i % 10 == 0:
                 current_loss = running_loss / ((i + 1) * inputs.size(0))
                 current_acc = running_corrects.double() / ((i + 1) * inputs.size(0))
-                epoch_data = {
+                
+                # 添加梯度累积信息
+                status_info = {
                     'epoch': epoch + 1,
                     'phase': phase,
                     'loss': float(current_loss),
@@ -659,7 +825,15 @@ class TrainingThread(QThread):
                     'batch': i + 1,
                     'total_batches': len(dataloaders[phase])
                 }
-                self.epoch_finished.emit(epoch_data)
+                
+                # 添加第二阶段特性信息
+                if phase == 'train':
+                    if accumulation_steps > 1:
+                        status_info['grad_accum'] = f"{accumulation_steps}步"
+                    if self.ema_manager and self.ema_manager.is_enabled():
+                        status_info['ema'] = "启用"
+                
+                self.epoch_finished.emit(status_info)
         
         if self.stop_training:
             return 0, 0, [], []
@@ -681,21 +855,36 @@ class TrainingThread(QThread):
         return epoch_loss, epoch_acc, all_preds, all_labels
     
     def _save_best_model(self, model_name, model_save_dir, epoch, best_acc):
-        """保存最佳模型"""
+        """保存最佳模型（支持EMA模型）"""
         model_note = self.config.get('model_note', '')
         timestamp = time.strftime("%Y%m%d-%H%M%S")
         
-        # 保存PyTorch模型
+        # 保存标准模型
         model_save_path = os.path.join(model_save_dir, f'{model_name}_{timestamp}_{model_note}_best.pth')
         torch.save(self.model.state_dict(), model_save_path)
-        self.status_updated.emit(f'保存最佳模型，Epoch {epoch+1}, Acc: {best_acc:.4f}')
+        self.status_updated.emit(f'💾 保存最佳模型，Epoch {epoch+1}, Acc: {best_acc:.4f}')
         
-        # 导出ONNX模型
+        # 保存EMA模型（第二阶段）
+        if self.ema_manager and self.ema_manager.is_enabled():
+            ema_save_path = os.path.join(model_save_dir, f'{model_name}_{timestamp}_{model_note}_best_ema.pth')
+            self.ema_manager.save_ema_model(ema_save_path)
+            self.status_updated.emit(f'🔄 保存最佳EMA模型: {ema_save_path}')
+        
+        # 导出ONNX模型（优先使用EMA模型）
         try:
             onnx_save_path = os.path.join(model_save_dir, f'{model_name}_{timestamp}_{model_note}_best.onnx')
             sample_input = torch.randn(1, 3, 224, 224).to(self.device)
+            
+            # 选择用于导出的模型
+            export_model = self.model
+            if self.ema_manager and self.ema_manager.is_enabled():
+                ema_model = self.ema_manager.get_model()
+                if ema_model is not None:
+                    export_model = ema_model
+                    self.status_updated.emit('📦 使用EMA模型导出ONNX')
+            
             torch.onnx.export(
-                self.model, 
+                export_model, 
                 sample_input, 
                 onnx_save_path,
                 export_params=True,
@@ -704,9 +893,9 @@ class TrainingThread(QThread):
                 output_names=['output'],
                 dynamic_axes={'input': {0: 'batch_size'}, 'output': {0: 'batch_size'}}
             )
-            self.status_updated.emit(f'导出ONNX模型: {onnx_save_path}')
+            self.status_updated.emit(f'📦 导出ONNX模型: {onnx_save_path}')
         except Exception as e:
-            self.status_updated.emit(f'导出ONNX模型时出错: {str(e)}')
+            self.status_updated.emit(f'⚠️ 导出ONNX模型时出错: {str(e)}')
     
     def _save_training_info(self, model_name, num_epochs, batch_size, learning_rate, 
                            best_acc, class_names, model_save_dir):

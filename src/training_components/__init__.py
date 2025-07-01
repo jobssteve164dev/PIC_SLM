@@ -19,6 +19,12 @@ from .model_configurator import ModelConfigurator
 from .tensorboard_logger import TensorBoardLogger
 from .training_validator import TrainingValidator
 from .optimizer_factory import OptimizerFactory, WarmupLRScheduler, LabelSmoothingCrossEntropy
+from .model_ema import ModelEMA, ModelEMAManager
+from .advanced_augmentation import (
+    MixUpAugmentation, CutMixAugmentation, AdvancedAugmentationManager,
+    MixCriterion, LabelSmoothingCrossEntropy as AdvancedLabelSmoothingCE,
+    create_advanced_criterion
+)
 
 __all__ = [
     'ModelTrainer',
@@ -27,5 +33,15 @@ __all__ = [
     'WeightCalculator',
     'ModelConfigurator',
     'TensorBoardLogger',
-    'TrainingValidator'
+    'TrainingValidator',
+    'OptimizerFactory',
+    'WarmupLRScheduler',
+    'LabelSmoothingCrossEntropy',
+    'ModelEMA',
+    'ModelEMAManager',
+    'MixUpAugmentation',
+    'CutMixAugmentation',
+    'AdvancedAugmentationManager',
+    'MixCriterion',
+    'create_advanced_criterion'
 ] 

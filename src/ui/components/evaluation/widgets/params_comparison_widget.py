@@ -249,6 +249,12 @@ class ParamsComparisonWidget(QWidget):
             # 标签平滑参数（阶段一新增）
             'label_smoothing',
             
+            # 第二阶段高级超参数
+            'model_ema', 'model_ema_decay',
+            'gradient_accumulation_steps',
+            'cutmix_prob', 'mixup_alpha',
+            'loss_scale', 'static_loss_scale',
+            
             # 检测任务特定参数
             'iou_threshold', 'conf_threshold', 'resolution', 'nms_threshold', 'use_fpn'
         ]

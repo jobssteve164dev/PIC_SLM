@@ -506,7 +506,27 @@ def main():
             'gradient_clipping_value': gradient_clipping_value,
             'mixed_precision': mixed_precision,
             'dropout_rate': dropout_rate,  # 添加dropout率参数
-            'activation_function': params.get('activation_function', 'ReLU')  # 添加激活函数参数
+            'activation_function': params.get('activation_function', 'ReLU'),  # 添加激活函数参数
+            
+            # 第一阶段高级超参数
+            'beta1': params.get('beta1', 0.9),
+            'beta2': params.get('beta2', 0.999),
+            'momentum': params.get('momentum', 0.9),
+            'nesterov': params.get('nesterov', False),
+            'warmup_steps': params.get('warmup_steps', 0),
+            'warmup_ratio': params.get('warmup_ratio', 0.0),
+            'warmup_method': params.get('warmup_method', 'linear'),
+            'min_lr': params.get('min_lr', 1e-6),
+            'label_smoothing': params.get('label_smoothing', 0.0),
+            
+            # 第二阶段高级超参数
+            'model_ema': params.get('model_ema', False),
+            'model_ema_decay': params.get('model_ema_decay', 0.9999),
+            'gradient_accumulation_steps': params.get('gradient_accumulation_steps', 1),
+            'cutmix_prob': params.get('cutmix_prob', 0.0),
+            'mixup_alpha': params.get('mixup_alpha', 0.0),
+            'loss_scale': params.get('loss_scale', 'dynamic'),
+            'static_loss_scale': params.get('static_loss_scale', 128.0),
         }
         
         # 将权重配置添加到训练配置中

@@ -104,8 +104,9 @@ class TensorBoardLogger(QObject):
             return
             
         try:
-            # 提取关键超参数
+            # 提取关键超参数（包含第二阶段新参数）
             hparams = {
+                # 基础训练参数
                 'learning_rate': config.get('learning_rate', 0.001),
                 'batch_size': config.get('batch_size', 32),
                 'optimizer': config.get('optimizer', 'Adam'),
@@ -113,7 +114,27 @@ class TensorBoardLogger(QObject):
                 'dropout_rate': config.get('dropout_rate', 0.0),
                 'model_name': config.get('model_name', 'Unknown'),
                 'use_pretrained': config.get('use_pretrained', False),
-                'early_stopping_patience': config.get('early_stopping_patience', 10)
+                'early_stopping_patience': config.get('early_stopping_patience', 10),
+                
+                # 第一阶段高级参数
+                'beta1': config.get('beta1', 0.9),
+                'beta2': config.get('beta2', 0.999),
+                'momentum': config.get('momentum', 0.9),
+                'nesterov': config.get('nesterov', False),
+                'warmup_steps': config.get('warmup_steps', 0),
+                'warmup_ratio': config.get('warmup_ratio', 0.0),
+                'warmup_method': config.get('warmup_method', 'linear'),
+                'min_lr': config.get('min_lr', 1e-6),
+                'label_smoothing': config.get('label_smoothing', 0.0),
+                
+                # 第二阶段高级参数
+                'model_ema': config.get('model_ema', False),
+                'model_ema_decay': config.get('model_ema_decay', 0.9999),
+                'gradient_accumulation_steps': config.get('gradient_accumulation_steps', 1),
+                'cutmix_prob': config.get('cutmix_prob', 0.0),
+                'mixup_alpha': config.get('mixup_alpha', 0.0),
+                'loss_scale': config.get('loss_scale', 'dynamic'),
+                'static_loss_scale': config.get('static_loss_scale', 128.0),
             }
             
             # 记录超参数和指标

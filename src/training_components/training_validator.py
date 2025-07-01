@@ -135,6 +135,10 @@ class TrainingValidator(QObject):
         if not self._validate_advanced_hyperparameters(config):
             return False
         
+        # 验证第二阶段新增超参数
+        if not self._validate_stage_two_hyperparameters(config):
+            return False
+        
         self.status_updated.emit("训练参数验证通过")
         return True
     
@@ -210,6 +214,64 @@ class TrainingValidator(QObject):
             return False
         
         self.status_updated.emit("高级超参数验证通过")
+        return True
+    
+    def _validate_stage_two_hyperparameters(self, config):
+        """验证第二阶段新增超参数"""
+        # 验证模型EMA参数
+        model_ema = config.get('model_ema', False)
+        if isinstance(model_ema, bool):
+            if model_ema:
+                model_ema_decay = config.get('model_ema_decay', 0.9999)
+                if not isinstance(model_ema_decay, (int, float)) or model_ema_decay < 0.9 or model_ema_decay >= 1.0:
+                    self.validation_error.emit("EMA衰减率必须在[0.9, 1.0)范围内")
+                    return False
+        else:
+            self.validation_error.emit("模型EMA设置必须为布尔值")
+            return False
+        
+        # 验证梯度累积参数
+        gradient_accumulation_steps = config.get('gradient_accumulation_steps', 1)
+        if not isinstance(gradient_accumulation_steps, int) or gradient_accumulation_steps < 1:
+            self.validation_error.emit("梯度累积步数必须为正整数")
+            return False
+        
+        if gradient_accumulation_steps > 32:
+            self.status_updated.emit("警告: 梯度累积步数较大，可能会影响训练动态")
+        
+        # 验证高级数据增强参数
+        cutmix_prob = config.get('cutmix_prob', 0.0)
+        if not isinstance(cutmix_prob, (int, float)) or cutmix_prob < 0 or cutmix_prob > 1.0:
+            self.validation_error.emit("CutMix概率必须在[0, 1]范围内")
+            return False
+        
+        mixup_alpha = config.get('mixup_alpha', 0.0)
+        if not isinstance(mixup_alpha, (int, float)) or mixup_alpha < 0 or mixup_alpha > 2.0:
+            self.validation_error.emit("MixUp Alpha参数必须在[0, 2.0]范围内")
+            return False
+        
+        # 验证损失缩放参数
+        loss_scale = config.get('loss_scale', 'dynamic')
+        if loss_scale not in ['dynamic', 'static']:
+            self.validation_error.emit("损失缩放策略必须是'dynamic'或'static'")
+            return False
+        
+        if loss_scale == 'static':
+            static_loss_scale = config.get('static_loss_scale', 128.0)
+            if not isinstance(static_loss_scale, (int, float)) or static_loss_scale < 1.0:
+                self.validation_error.emit("静态损失缩放值必须大于等于1.0")
+                return False
+        
+        # 兼容性检查
+        if cutmix_prob > 0 and mixup_alpha > 0:
+            self.status_updated.emit("警告: 同时启用CutMix和MixUp，将随机选择使用")
+        
+        # 检查与混合精度的兼容性
+        mixed_precision = config.get('mixed_precision', True)
+        if not mixed_precision and loss_scale != 'dynamic':
+            self.status_updated.emit("警告: 未启用混合精度时损失缩放可能无效")
+        
+        self.status_updated.emit("第二阶段超参数验证通过")
         return True
     
     def _validate_model_config(self, config):

@@ -21,11 +21,17 @@ class AdvancedHyperparametersWidget(QWidget):
         main_layout = QVBoxLayout(self)
         main_layout.setSpacing(10)
         
-        # 创建各个参数组
+        # 阶段一功能组
         self.create_optimizer_advanced_group(main_layout)
         self.create_learning_rate_warmup_group(main_layout)
         self.create_advanced_scheduler_group(main_layout)
         self.create_label_smoothing_group(main_layout)
+        
+        # 阶段二新增功能组
+        self.create_model_ema_group(main_layout)
+        self.create_gradient_accumulation_group(main_layout)
+        self.create_advanced_augmentation_group(main_layout)
+        self.create_loss_scaling_group(main_layout)
         
         # 添加弹性空间
         main_layout.addStretch()
@@ -144,8 +150,108 @@ class AdvancedHyperparametersWidget(QWidget):
         
         main_layout.addWidget(group)
     
+    def create_model_ema_group(self, main_layout):
+        """创建模型EMA参数组（阶段二新增）"""
+        group = QGroupBox("模型EMA - 指数移动平均")
+        group.setToolTip("模型权重的指数移动平均，提升模型稳定性和泛化能力")
+        layout = QGridLayout(group)
+        
+        # 启用EMA
+        self.model_ema_checkbox = QCheckBox("启用模型EMA")
+        self.model_ema_checkbox.setToolTip("启用模型权重的指数移动平均，推荐用于提升模型稳定性")
+        self.model_ema_checkbox.setChecked(False)
+        layout.addWidget(self.model_ema_checkbox, 0, 0, 1, 2)
+        
+        # EMA衰减率
+        ema_decay_label = QLabel("EMA衰减率:")
+        ema_decay_label.setToolTip("EMA权重更新的衰减率，越接近1.0更新越平滑")
+        layout.addWidget(ema_decay_label, 1, 0)
+        self.model_ema_decay_spin = QDoubleSpinBox()
+        self.model_ema_decay_spin.setRange(0.9, 0.9999)
+        self.model_ema_decay_spin.setSingleStep(0.0001)
+        self.model_ema_decay_spin.setDecimals(4)
+        self.model_ema_decay_spin.setValue(0.9999)
+        layout.addWidget(self.model_ema_decay_spin, 1, 1)
+        
+        main_layout.addWidget(group)
+    
+    def create_gradient_accumulation_group(self, main_layout):
+        """创建梯度累积参数组（阶段二新增）"""
+        group = QGroupBox("梯度累积")
+        group.setToolTip("梯度累积可以模拟更大的批次大小，在GPU内存有限时很有用")
+        layout = QGridLayout(group)
+        
+        # 梯度累积步数
+        grad_accum_label = QLabel("累积步数:")
+        grad_accum_label.setToolTip("每次优化器更新前累积的梯度步数，1表示不使用梯度累积")
+        layout.addWidget(grad_accum_label, 0, 0)
+        self.gradient_accumulation_steps_spin = QSpinBox()
+        self.gradient_accumulation_steps_spin.setRange(1, 32)
+        self.gradient_accumulation_steps_spin.setValue(1)
+        layout.addWidget(self.gradient_accumulation_steps_spin, 0, 1)
+        
+        main_layout.addWidget(group)
+    
+    def create_advanced_augmentation_group(self, main_layout):
+        """创建高级数据增强参数组（阶段二新增）"""
+        group = QGroupBox("高级数据增强")
+        group.setToolTip("高级数据增强技术：CutMix和MixUp，可提升模型泛化能力")
+        layout = QGridLayout(group)
+        
+        # CutMix概率
+        cutmix_prob_label = QLabel("CutMix概率:")
+        cutmix_prob_label.setToolTip("CutMix数据增强的使用概率，0.0表示不使用")
+        layout.addWidget(cutmix_prob_label, 0, 0)
+        self.cutmix_prob_spin = QDoubleSpinBox()
+        self.cutmix_prob_spin.setRange(0.0, 1.0)
+        self.cutmix_prob_spin.setSingleStep(0.1)
+        self.cutmix_prob_spin.setDecimals(1)
+        self.cutmix_prob_spin.setValue(0.0)
+        layout.addWidget(self.cutmix_prob_spin, 0, 1)
+        
+        # MixUp Alpha参数
+        mixup_alpha_label = QLabel("MixUp Alpha:")
+        mixup_alpha_label.setToolTip("MixUp数据增强的Alpha参数，0.0表示不使用MixUp")
+        layout.addWidget(mixup_alpha_label, 1, 0)
+        self.mixup_alpha_spin = QDoubleSpinBox()
+        self.mixup_alpha_spin.setRange(0.0, 1.0)
+        self.mixup_alpha_spin.setSingleStep(0.1)
+        self.mixup_alpha_spin.setDecimals(1)
+        self.mixup_alpha_spin.setValue(0.0)
+        layout.addWidget(self.mixup_alpha_spin, 1, 1)
+        
+        main_layout.addWidget(group)
+    
+    def create_loss_scaling_group(self, main_layout):
+        """创建损失缩放参数组（阶段二新增）"""
+        group = QGroupBox("损失缩放")
+        group.setToolTip("混合精度训练的损失缩放策略，防止梯度下溢")
+        layout = QGridLayout(group)
+        
+        # 损失缩放策略
+        loss_scale_label = QLabel("缩放策略:")
+        loss_scale_label.setToolTip("损失缩放的策略：dynamic为动态缩放，static为固定缩放")
+        layout.addWidget(loss_scale_label, 0, 0)
+        self.loss_scale_combo = QComboBox()
+        self.loss_scale_combo.addItems(['dynamic', 'static'])
+        layout.addWidget(self.loss_scale_combo, 0, 1)
+        
+        # 静态缩放值
+        static_scale_label = QLabel("静态缩放值:")
+        static_scale_label.setToolTip("静态损失缩放的缩放因子，仅在静态缩放时生效")
+        layout.addWidget(static_scale_label, 1, 0)
+        self.static_loss_scale_spin = QDoubleSpinBox()
+        self.static_loss_scale_spin.setRange(1.0, 65536.0)
+        self.static_loss_scale_spin.setSingleStep(1.0)
+        self.static_loss_scale_spin.setDecimals(0)
+        self.static_loss_scale_spin.setValue(128.0)
+        layout.addWidget(self.static_loss_scale_spin, 1, 1)
+        
+        main_layout.addWidget(group)
+    
     def connect_signals(self):
         """连接信号"""
+        # 阶段一信号
         self.beta1_spin.valueChanged.connect(self.params_changed)
         self.beta2_spin.valueChanged.connect(self.params_changed)
         self.momentum_spin.valueChanged.connect(self.params_changed)
@@ -155,10 +261,20 @@ class AdvancedHyperparametersWidget(QWidget):
         self.warmup_method_combo.currentTextChanged.connect(self.params_changed)
         self.min_lr_spin.valueChanged.connect(self.params_changed)
         self.label_smoothing_spin.valueChanged.connect(self.params_changed)
+        
+        # 阶段二新增信号
+        self.model_ema_checkbox.toggled.connect(self.params_changed)
+        self.model_ema_decay_spin.valueChanged.connect(self.params_changed)
+        self.gradient_accumulation_steps_spin.valueChanged.connect(self.params_changed)
+        self.cutmix_prob_spin.valueChanged.connect(self.params_changed)
+        self.mixup_alpha_spin.valueChanged.connect(self.params_changed)
+        self.loss_scale_combo.currentTextChanged.connect(self.params_changed)
+        self.static_loss_scale_spin.valueChanged.connect(self.params_changed)
     
     def get_config(self):
         """获取高级超参数配置"""
-        return {
+        config = {
+            # 阶段一配置
             'beta1': self.beta1_spin.value(),
             'beta2': self.beta2_spin.value(),
             'momentum': self.momentum_spin.value(),
@@ -168,10 +284,21 @@ class AdvancedHyperparametersWidget(QWidget):
             'warmup_method': self.warmup_method_combo.currentText(),
             'min_lr': self.min_lr_spin.value(),
             'label_smoothing': self.label_smoothing_spin.value(),
+            
+            # 阶段二新增配置
+            'model_ema': self.model_ema_checkbox.isChecked(),
+            'model_ema_decay': self.model_ema_decay_spin.value(),
+            'gradient_accumulation_steps': self.gradient_accumulation_steps_spin.value(),
+            'cutmix_prob': self.cutmix_prob_spin.value(),
+            'mixup_alpha': self.mixup_alpha_spin.value(),
+            'loss_scale': self.loss_scale_combo.currentText(),
+            'static_loss_scale': self.static_loss_scale_spin.value(),
         }
+        return config
     
     def set_config(self, config):
         """设置高级超参数配置"""
+        # 阶段一配置
         if 'beta1' in config:
             self.beta1_spin.setValue(config['beta1'])
         if 'beta2' in config:
@@ -191,4 +318,22 @@ class AdvancedHyperparametersWidget(QWidget):
         if 'min_lr' in config:
             self.min_lr_spin.setValue(config['min_lr'])
         if 'label_smoothing' in config:
-            self.label_smoothing_spin.setValue(config['label_smoothing']) 
+            self.label_smoothing_spin.setValue(config['label_smoothing'])
+        
+        # 阶段二新增配置
+        if 'model_ema' in config:
+            self.model_ema_checkbox.setChecked(config['model_ema'])
+        if 'model_ema_decay' in config:
+            self.model_ema_decay_spin.setValue(config['model_ema_decay'])
+        if 'gradient_accumulation_steps' in config:
+            self.gradient_accumulation_steps_spin.setValue(config['gradient_accumulation_steps'])
+        if 'cutmix_prob' in config:
+            self.cutmix_prob_spin.setValue(config['cutmix_prob'])
+        if 'mixup_alpha' in config:
+            self.mixup_alpha_spin.setValue(config['mixup_alpha'])
+        if 'loss_scale' in config:
+            index = self.loss_scale_combo.findText(config['loss_scale'])
+            if index >= 0:
+                self.loss_scale_combo.setCurrentIndex(index)
+        if 'static_loss_scale' in config:
+            self.static_loss_scale_spin.setValue(config['static_loss_scale']) 
