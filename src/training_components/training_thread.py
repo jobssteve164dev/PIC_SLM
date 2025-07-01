@@ -291,8 +291,23 @@ class TrainingThread(QThread):
             if self.stop_training:
                 return
             
-            # 设置优化器
-            optimizer = optim.Adam(self.model.parameters(), lr=learning_rate)
+            # 设置优化器（使用新的优化器工厂）
+            from .optimizer_factory import OptimizerFactory
+            optimizer = OptimizerFactory.create_optimizer(self.model, self.config)
+            
+            # 计算总训练步数（用于某些调度器）
+            steps_per_epoch = len(dataloaders['train'])
+            total_steps = num_epochs * steps_per_epoch
+            
+            # 设置学习率调度器（支持预热）
+            scheduler = OptimizerFactory.create_scheduler(optimizer, self.config, total_steps)
+            if scheduler:
+                warmup_steps = self.config.get('warmup_steps', 0)
+                warmup_ratio = self.config.get('warmup_ratio', 0.0)
+                if warmup_steps > 0 or warmup_ratio > 0:
+                    self.status_updated.emit(f"启用学习率预热，预热步数: {warmup_steps}")
+                else:
+                    self.status_updated.emit(f"使用学习率调度器: {self.config.get('lr_scheduler', 'StepLR')}")
             
             # 初始化TensorBoard
             tensorboard_log_dir = None
@@ -319,13 +334,13 @@ class TrainingThread(QThread):
                 self.resource_limited_trainer = enable_resource_limited_training(self)
                 best_acc = self._resource_limited_training_loop(
                     dataloaders, dataset_sizes, class_names, num_epochs, 
-                    criterion, optimizer, model_name, model_save_dir
+                    criterion, optimizer, scheduler, model_name, model_save_dir
                 )
             else:
                 # 使用标准训练循环
                 best_acc = self._training_loop(
                     dataloaders, dataset_sizes, class_names, num_epochs, 
-                    criterion, optimizer, model_name, model_save_dir
+                    criterion, optimizer, scheduler, model_name, model_save_dir
                 )
             
             if self.stop_training:
@@ -408,25 +423,39 @@ class TrainingThread(QThread):
         return model
     
     def _setup_loss_function(self, train_dataset, class_names):
-        """设置损失函数"""
+        """设置损失函数（支持标签平滑）"""
         use_class_weights = self.config.get('use_class_weights', True)
         weight_strategy = self.config.get('weight_strategy', 'balanced')
+        label_smoothing = self.config.get('label_smoothing', 0.0)
         
+        # 计算类别权重
+        class_weights = None
         if use_class_weights:
             class_weights = self.weight_calculator.calculate_class_weights(
                 train_dataset.dataset, class_names, self.config, self.device
             )
-            criterion = nn.CrossEntropyLoss(weight=class_weights)
-            self.status_updated.emit(f"使用加权损失函数，权重策略: {weight_strategy}")
+        
+        # 使用优化器工厂创建损失函数（支持标签平滑）
+        from .optimizer_factory import OptimizerFactory
+        criterion = OptimizerFactory.create_criterion(self.config, class_weights)
+        
+        # 更新状态信息
+        if label_smoothing > 0:
+            if use_class_weights:
+                self.status_updated.emit(f"使用标签平滑损失函数（平滑系数: {label_smoothing}），权重策略: {weight_strategy}")
+            else:
+                self.status_updated.emit(f"使用标签平滑损失函数（平滑系数: {label_smoothing}）")
         else:
-            criterion = nn.CrossEntropyLoss()
-            self.status_updated.emit("使用标准损失函数（无类别权重）")
+            if use_class_weights:
+                self.status_updated.emit(f"使用加权损失函数，权重策略: {weight_strategy}")
+            else:
+                self.status_updated.emit("使用标准损失函数（无类别权重）")
         
         return criterion
     
     def _training_loop(self, dataloaders, dataset_sizes, class_names, num_epochs, 
-                      criterion, optimizer, model_name, model_save_dir):
-        """执行训练循环"""
+                      criterion, optimizer, scheduler, model_name, model_save_dir):
+        """执行训练循环（支持高级学习率调度）"""
         best_acc = 0.0
         
         for epoch in range(num_epochs):
@@ -492,6 +521,14 @@ class TrainingThread(QThread):
             if self.stop_training:
                 break
             
+            # 更新学习率调度器
+            if scheduler and phase == 'val':
+                if isinstance(scheduler, optim.lr_scheduler.ReduceLROnPlateau):
+                    # ReduceLROnPlateau需要传入监控的指标
+                    scheduler.step(epoch_loss)
+                else:
+                    scheduler.step()
+            
             # 保存最佳模型
             if phase == 'val' and epoch_acc > best_acc:
                 best_acc = epoch_acc
@@ -500,7 +537,7 @@ class TrainingThread(QThread):
         return best_acc
     
     def _resource_limited_training_loop(self, dataloaders, dataset_sizes, class_names, num_epochs, 
-                                       criterion, optimizer, model_name, model_save_dir):
+                                       criterion, optimizer, scheduler, model_name, model_save_dir):
         """执行带资源限制的训练循环"""
         try:
             best_acc = 0.0

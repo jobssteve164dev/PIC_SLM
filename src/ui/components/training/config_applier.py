@@ -96,6 +96,10 @@ class ConfigApplier:
                 if os.path.exists(config['data_dir']):
                     classification_widget.set_folder_path(config['data_dir'])
             
+            # 应用高级超参数（阶段一新增）
+            if hasattr(classification_widget, 'advanced_hyperparams_widget'):
+                classification_widget.advanced_hyperparams_widget.set_config(config)
+            
             return True
             
         except Exception as e:
@@ -210,6 +214,10 @@ class ConfigApplier:
                     detection_widget.set_folder_path(detection_data_dir)
                 elif os.path.exists(config['data_dir']):
                     detection_widget.set_folder_path(config['data_dir'])
+            
+            # 应用高级超参数（阶段一新增）
+            if hasattr(detection_widget, 'advanced_hyperparams_widget'):
+                detection_widget.advanced_hyperparams_widget.set_config(config)
             
             return True
             

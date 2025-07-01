@@ -100,6 +100,9 @@ class ClassificationTrainingWidget(QWidget):
         # 创建高级训练参数组
         self.create_advanced_params_group(main_layout)
         
+        # 创建新增的高级超参数组件
+        self.create_advanced_hyperparameters_group(main_layout)
+        
         # 添加层配置组件
         self.layer_config_widget = LayerConfigWidget(self)
         self.layer_config_widget.set_task_type("classification")
@@ -320,6 +323,22 @@ class ClassificationTrainingWidget(QWidget):
         advanced_group.setLayout(advanced_layout)
         main_layout.addWidget(advanced_group)
     
+    def create_advanced_hyperparameters_group(self, main_layout):
+        """创建高级超参数组（阶段一新增）"""
+        from .advanced_hyperparameters_widget import AdvancedHyperparametersWidget
+        
+        advanced_hyperparams_group = QGroupBox("高级超参数 (专业)")
+        advanced_hyperparams_group.setToolTip("专业用户使用的高级超参数配置，包括优化器高级参数、学习率预热、标签平滑等")
+        advanced_hyperparams_layout = QVBoxLayout()
+        
+        # 创建高级超参数组件
+        self.advanced_hyperparams_widget = AdvancedHyperparametersWidget(self)
+        self.advanced_hyperparams_widget.params_changed.connect(self.params_changed)
+        advanced_hyperparams_layout.addWidget(self.advanced_hyperparams_widget)
+        
+        advanced_hyperparams_group.setLayout(advanced_hyperparams_layout)
+        main_layout.addWidget(advanced_hyperparams_group)
+    
     def refresh_folder(self):
         """刷新文件夹"""
         try:
@@ -462,6 +481,11 @@ class ClassificationTrainingWidget(QWidget):
             "activation_function": self.activation_combo.currentText(),
             "dropout_rate": self.dropout_spin.value(),
         }
+        
+        # 添加新的高级超参数（阶段一新增）
+        if hasattr(self, 'advanced_hyperparams_widget'):
+            advanced_config = self.advanced_hyperparams_widget.get_config()
+            params.update(advanced_config)
         
         # 添加层配置
         if self.layer_config:

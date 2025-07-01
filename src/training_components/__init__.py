@@ -18,6 +18,7 @@ from .weight_calculator import WeightCalculator
 from .model_configurator import ModelConfigurator
 from .tensorboard_logger import TensorBoardLogger
 from .training_validator import TrainingValidator
+from .optimizer_factory import OptimizerFactory, WarmupLRScheduler, LabelSmoothingCrossEntropy
 
 __all__ = [
     'ModelTrainer',

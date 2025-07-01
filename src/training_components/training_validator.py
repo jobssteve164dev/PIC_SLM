@@ -131,7 +131,85 @@ class TrainingValidator(QObject):
             self.validation_error.emit("Dropout率必须在[0, 1)范围内")
             return False
         
+        # 验证新增的高级超参数
+        if not self._validate_advanced_hyperparameters(config):
+            return False
+        
         self.status_updated.emit("训练参数验证通过")
+        return True
+    
+    def _validate_advanced_hyperparameters(self, config):
+        """验证高级超参数（阶段一新增）"""
+        # 验证优化器高级参数
+        beta1 = config.get('beta1', 0.9)
+        if not isinstance(beta1, (int, float)) or beta1 <= 0 or beta1 >= 1:
+            self.validation_error.emit("Beta1参数必须在(0, 1)范围内")
+            return False
+        
+        beta2 = config.get('beta2', 0.999)
+        if not isinstance(beta2, (int, float)) or beta2 <= 0 or beta2 >= 1:
+            self.validation_error.emit("Beta2参数必须在(0, 1)范围内")
+            return False
+        
+        eps = config.get('eps', 1e-8)
+        if not isinstance(eps, (int, float)) or eps <= 0:
+            self.validation_error.emit("Eps参数必须为正数")
+            return False
+        
+        momentum = config.get('momentum', 0.9)
+        if not isinstance(momentum, (int, float)) or momentum < 0 or momentum >= 1:
+            self.validation_error.emit("Momentum参数必须在[0, 1)范围内")
+            return False
+        
+        # 验证学习率预热参数
+        warmup_steps = config.get('warmup_steps', 0)
+        if not isinstance(warmup_steps, int) or warmup_steps < 0:
+            self.validation_error.emit("预热步数必须为非负整数")
+            return False
+        
+        warmup_ratio = config.get('warmup_ratio', 0.0)
+        if not isinstance(warmup_ratio, (int, float)) or warmup_ratio < 0 or warmup_ratio > 0.5:
+            self.validation_error.emit("预热比例必须在[0, 0.5]范围内")
+            return False
+        
+        warmup_method = config.get('warmup_method', 'linear')
+        if warmup_method not in ['linear', 'cosine']:
+            self.validation_error.emit("预热方法必须是'linear'或'cosine'")
+            return False
+        
+        # 验证高级学习率调度参数
+        min_lr = config.get('min_lr', 1e-6)
+        if not isinstance(min_lr, (int, float)) or min_lr <= 0:
+            self.validation_error.emit("最小学习率必须为正数")
+            return False
+        
+        learning_rate = config.get('learning_rate', 0.001)
+        if min_lr >= learning_rate:
+            self.validation_error.emit("最小学习率必须小于初始学习率")
+            return False
+        
+        # 验证标签平滑参数
+        label_smoothing = config.get('label_smoothing', 0.0)
+        if not isinstance(label_smoothing, (int, float)) or label_smoothing < 0 or label_smoothing >= 0.5:
+            self.validation_error.emit("标签平滑系数必须在[0, 0.5)范围内")
+            return False
+        
+        # 验证优化器名称
+        optimizer = config.get('optimizer', 'Adam')
+        from .optimizer_factory import OptimizerFactory
+        supported_optimizers = OptimizerFactory.get_supported_optimizers()
+        if optimizer not in supported_optimizers:
+            self.validation_error.emit(f"不支持的优化器: {optimizer}")
+            return False
+        
+        # 验证学习率调度器名称
+        lr_scheduler = config.get('lr_scheduler', 'StepLR')
+        supported_schedulers = OptimizerFactory.get_supported_schedulers()
+        if lr_scheduler not in supported_schedulers:
+            self.validation_error.emit(f"不支持的学习率调度器: {lr_scheduler}")
+            return False
+        
+        self.status_updated.emit("高级超参数验证通过")
         return True
     
     def _validate_model_config(self, config):

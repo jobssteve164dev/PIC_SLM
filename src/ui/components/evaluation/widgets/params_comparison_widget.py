@@ -231,12 +231,26 @@ class ParamsComparisonWidget(QWidget):
             
         # 排序参数名称，使得重要参数排在前面
         important_params = [
+            # 基础训练参数
             'task_type', 'model_name', 'model_note', 'data_dir', 
             'num_epochs', 'batch_size', 'learning_rate', 'optimizer',
             'dropout_rate', 'weight_decay', 'activation_function',
-            'use_pretrained', 'pretrained_path', 'metrics',
-            'use_tensorboard', 'iou_threshold', 'conf_threshold', 
-            'resolution', 'nms_threshold', 'use_fpn'
+            'use_pretrained', 'pretrained_path', 'metrics', 'use_tensorboard',
+            
+            # 优化器高级参数（阶段一新增）
+            'beta1', 'beta2', 'eps', 'momentum', 'nesterov',
+            
+            # 学习率预热参数（阶段一新增）
+            'warmup_steps', 'warmup_ratio', 'warmup_method',
+            
+            # 高级学习率调度参数（阶段一新增）
+            'min_lr', 'step_size', 'gamma', 'T_max',
+            
+            # 标签平滑参数（阶段一新增）
+            'label_smoothing',
+            
+            # 检测任务特定参数
+            'iou_threshold', 'conf_threshold', 'resolution', 'nms_threshold', 'use_fpn'
         ]
         
         sorted_params = []
