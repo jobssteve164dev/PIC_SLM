@@ -8,4 +8,19 @@ build/
 *.spec
 # 训练相关文件夹
 runs/
-train_config/ 
+train_config/
+# 日志文件和目录
+logs/
+*.log
+src/logs/
+# 临时文件
+*.tmp
+*.temp
+# IDE文件
+.vscode/
+.idea/
+*.swp
+*.swo
+# 系统文件
+.DS_Store
+Thumbs.db 
