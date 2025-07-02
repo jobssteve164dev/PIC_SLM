@@ -17,15 +17,19 @@ class TensorBoardWidget(QWidget):
     def init_ui(self):
         """初始化用户界面"""
         layout = QVBoxLayout(self)
+        layout.setContentsMargins(5, 5, 5, 5)
+        layout.setSpacing(8)
         
         # 说明标签
         info_label = QLabel("TensorBoard是一个强大的可视化工具，可以帮助您更深入地分析模型训练过程。")
         info_label.setWordWrap(True)
+        info_label.setStyleSheet("color: #2c3e50; font-weight: bold; padding: 5px;")
         layout.addWidget(info_label)
         
         # 状态标签
         self.status_label = QLabel("TensorBoard日志目录: 未设置")
         self.status_label.setWordWrap(True)
+        self.status_label.setStyleSheet("color: #7f8c8d; padding: 5px; background-color: #f8f9fa; border-radius: 3px;")
         layout.addWidget(self.status_label)
         
         # 使用说明
@@ -37,10 +41,17 @@ class TensorBoardWidget(QWidget):
             "4. TensorBoard将在浏览器中打开，显示详细的训练指标和可视化"
         )
         usage_label.setWordWrap(True)
-        usage_label.setStyleSheet("background-color: #f0f0f0; padding: 10px; border-radius: 5px;")
+        usage_label.setStyleSheet("""
+            background-color: #e8f4fd; 
+            padding: 10px; 
+            border-radius: 5px;
+            border-left: 4px solid #3498db;
+            color: #2c3e50;
+        """)
         layout.addWidget(usage_label)
         
-        layout.addStretch()
+        # 设置固定高度，避免占用过多空间
+        self.setMaximumHeight(150)
         
     def update_tensorboard(self, metric_name, value, step):
         """接收并处理来自训练器的TensorBoard更新信号"""
