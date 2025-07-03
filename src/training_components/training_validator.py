@@ -6,10 +6,118 @@
 - 验证训练参数的合理性
 - 验证模型配置的正确性
 - 验证保存路径的可写性
+- 检测超参数冲突并提供用户交互
 """
 
 import os
 from PyQt5.QtCore import QObject, pyqtSignal
+from PyQt5.QtWidgets import QMessageBox, QDialog, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QTextEdit, QCheckBox
+
+
+class HyperparameterConflictDialog(QDialog):
+    """超参数冲突对话框"""
+    
+    def __init__(self, conflicts, suggestions, parent=None):
+        super().__init__(parent)
+        self.conflicts = conflicts
+        self.suggestions = suggestions
+        self.user_choice = None
+        self.setup_ui()
+    
+    def setup_ui(self):
+        """设置用户界面"""
+        self.setWindowTitle("超参数冲突检测")
+        self.setMinimumSize(600, 500)
+        self.setModal(True)
+        
+        layout = QVBoxLayout(self)
+        
+        # 标题
+        title_label = QLabel("⚠️ 检测到超参数配置冲突")
+        title_label.setStyleSheet("font-size: 16px; font-weight: bold; color: #d32f2f; margin-bottom: 10px;")
+        layout.addWidget(title_label)
+        
+        # 冲突描述
+        conflicts_label = QLabel("发现以下参数冲突：")
+        conflicts_label.setStyleSheet("font-weight: bold; margin-top: 10px;")
+        layout.addWidget(conflicts_label)
+        
+        # 冲突列表
+        conflicts_text = QTextEdit()
+        conflicts_text.setMaximumHeight(150)
+        conflicts_text.setReadOnly(True)
+        conflicts_content = ""
+        for i, conflict in enumerate(self.conflicts, 1):
+            conflicts_content += f"{i}. {conflict['type']}: {conflict['description']}\n"
+            conflicts_content += f"   影响: {conflict['impact']}\n\n"
+        conflicts_text.setPlainText(conflicts_content)
+        layout.addWidget(conflicts_text)
+        
+        # 建议修改
+        suggestions_label = QLabel("建议的修改方案：")
+        suggestions_label.setStyleSheet("font-weight: bold; margin-top: 10px;")
+        layout.addWidget(suggestions_label)
+        
+        # 建议列表
+        suggestions_text = QTextEdit()
+        suggestions_text.setMaximumHeight(150)
+        suggestions_text.setReadOnly(True)
+        suggestions_content = ""
+        for i, suggestion in enumerate(self.suggestions, 1):
+            suggestions_content += f"{i}. {suggestion['parameter']}: {suggestion['action']}\n"
+            suggestions_content += f"   原因: {suggestion['reason']}\n\n"
+        suggestions_text.setPlainText(suggestions_content)
+        layout.addWidget(suggestions_text)
+        
+        # 自动修复选项
+        self.auto_fix_checkbox = QCheckBox("自动应用建议的修改（推荐）")
+        self.auto_fix_checkbox.setChecked(True)
+        layout.addWidget(self.auto_fix_checkbox)
+        
+        # 按钮区域
+        button_layout = QHBoxLayout()
+        
+        self.apply_button = QPushButton("应用修改并继续")
+        self.apply_button.setStyleSheet("QPushButton { background-color: #4caf50; color: white; padding: 8px 16px; }")
+        self.apply_button.clicked.connect(self.apply_changes)
+        
+        self.ignore_button = QPushButton("忽略冲突并继续")
+        self.ignore_button.setStyleSheet("QPushButton { background-color: #ff9800; color: white; padding: 8px 16px; }")
+        self.ignore_button.clicked.connect(self.ignore_conflicts)
+        
+        self.cancel_button = QPushButton("取消训练")
+        self.cancel_button.setStyleSheet("QPushButton { background-color: #f44336; color: white; padding: 8px 16px; }")
+        self.cancel_button.clicked.connect(self.cancel_training)
+        
+        button_layout.addWidget(self.apply_button)
+        button_layout.addWidget(self.ignore_button)
+        button_layout.addWidget(self.cancel_button)
+        
+        layout.addLayout(button_layout)
+        
+        # 警告信息
+        warning_label = QLabel("⚠️ 忽略冲突可能导致训练不稳定或失败")
+        warning_label.setStyleSheet("color: #ff5722; font-style: italic; margin-top: 10px;")
+        layout.addWidget(warning_label)
+    
+    def apply_changes(self):
+        """应用修改"""
+        self.user_choice = 'apply'
+        self.accept()
+    
+    def ignore_conflicts(self):
+        """忽略冲突"""
+        self.user_choice = 'ignore'
+        self.accept()
+    
+    def cancel_training(self):
+        """取消训练"""
+        self.user_choice = 'cancel'
+        self.reject()
+    
+    def should_auto_fix(self):
+        """是否自动修复"""
+        return self.auto_fix_checkbox.isChecked()
 
 
 class TrainingValidator(QObject):
@@ -18,45 +126,321 @@ class TrainingValidator(QObject):
     # 信号定义
     status_updated = pyqtSignal(str)
     validation_error = pyqtSignal(str)
+    conflict_detected = pyqtSignal(list, list)  # 冲突列表，建议列表
+    training_cancelled = pyqtSignal()  # 训练被取消
     
     def __init__(self):
         super().__init__()
     
-    def validate_config(self, config):
+    def validate_config(self, config, parent_widget=None):
         """
         验证训练配置
         
         Args:
             config: 训练配置字典
+            parent_widget: 父窗口，用于显示对话框
             
         Returns:
-            bool: 验证是否通过
+            tuple: (验证是否通过, 修改后的配置)
         """
         self.status_updated.emit("开始验证训练配置...")
         
         try:
             # 验证数据集路径
             if not self._validate_dataset_paths(config):
-                return False
+                return False, config
             
             # 验证训练参数
             if not self._validate_training_parameters(config):
-                return False
+                return False, config
             
             # 验证模型配置
             if not self._validate_model_config(config):
-                return False
+                return False, config
             
             # 验证保存路径
             if not self._validate_save_paths(config):
-                return False
+                return False, config
+            
+            # 检测超参数冲突
+            conflicts, suggestions = self._detect_hyperparameter_conflicts(config)
+            
+            if conflicts:
+                self.status_updated.emit(f"检测到 {len(conflicts)} 个超参数冲突")
+                
+                # 显示冲突对话框
+                dialog = HyperparameterConflictDialog(conflicts, suggestions, parent_widget)
+                result = dialog.exec_()
+                
+                if result == QDialog.Accepted:
+                    if dialog.user_choice == 'apply':
+                        # 应用建议的修改
+                        if dialog.should_auto_fix():
+                            modified_config = self._apply_conflict_fixes(config, suggestions)
+                            self.status_updated.emit("已自动修复参数冲突")
+                            return True, modified_config
+                        else:
+                            self.status_updated.emit("用户选择手动修改参数")
+                            return False, config
+                    elif dialog.user_choice == 'ignore':
+                        self.status_updated.emit("用户选择忽略冲突，继续训练")
+                        return True, config
+                else:
+                    # 用户取消训练
+                    self.training_cancelled.emit()
+                    self.status_updated.emit("用户取消训练")
+                    return False, config
             
             self.status_updated.emit("配置验证通过")
-            return True
+            return True, config
             
         except Exception as e:
             self.validation_error.emit(f"配置验证时发生错误: {str(e)}")
-            return False
+            return False, config
+    
+    def _detect_hyperparameter_conflicts(self, config):
+        """
+        检测超参数冲突
+        
+        Returns:
+            tuple: (冲突列表, 建议列表)
+        """
+        conflicts = []
+        suggestions = []
+        
+        # 检测优化器参数冲突
+        optimizer = config.get('optimizer', 'Adam')
+        beta1 = config.get('beta1', 0.9)
+        beta2 = config.get('beta2', 0.999)
+        momentum = config.get('momentum', 0.9)
+        nesterov = config.get('nesterov', False)
+        
+        if optimizer == 'SGD' and (beta1 != 0.9 or beta2 != 0.999):
+            conflicts.append({
+                'type': '优化器参数不匹配',
+                'description': f'SGD优化器不使用beta1/beta2参数，但检测到非默认值',
+                'impact': '这些参数将被忽略，可能造成配置混淆'
+            })
+            suggestions.append({
+                'parameter': 'beta1/beta2',
+                'action': '重置为默认值 (beta1=0.9, beta2=0.999)',
+                'reason': 'SGD优化器不使用这些参数'
+            })
+        
+        if optimizer in ['Adam', 'AdamW'] and (momentum != 0.9 or nesterov):
+            conflicts.append({
+                'type': '优化器参数不匹配',
+                'description': f'{optimizer}优化器不使用momentum/nesterov参数',
+                'impact': '这些参数将被忽略，可能造成配置混淆'
+            })
+            suggestions.append({
+                'parameter': 'momentum/nesterov',
+                'action': '重置为默认值 (momentum=0.9, nesterov=False)',
+                'reason': f'{optimizer}优化器不使用这些参数'
+            })
+        
+        # 检测学习率预热冲突
+        warmup_enabled = config.get('warmup_enabled', False)
+        if warmup_enabled:
+            warmup_steps = config.get('warmup_steps', 0)
+            warmup_ratio = config.get('warmup_ratio', 0.0)
+            
+            if warmup_steps > 0 and warmup_ratio > 0:
+                conflicts.append({
+                    'type': '学习率预热参数冲突',
+                    'description': '同时设置了warmup_steps和warmup_ratio',
+                    'impact': 'warmup_steps将优先使用，warmup_ratio被忽略'
+                })
+                suggestions.append({
+                    'parameter': 'warmup_ratio',
+                    'action': '设置为0.0',
+                    'reason': '避免参数歧义，优先使用warmup_steps'
+                })
+            
+            # 检查预热参数是否合理
+            if warmup_steps == 0 and warmup_ratio == 0.0:
+                conflicts.append({
+                    'type': '预热参数缺失',
+                    'description': '启用了预热但未设置预热参数',
+                    'impact': '预热功能不会生效'
+                })
+                suggestions.append({
+                    'parameter': 'warmup_ratio',
+                    'action': '设置为0.05',
+                    'reason': '提供合理的预热比例'
+                })
+        
+        # 检测数据增强冲突
+        advanced_augmentation_enabled = config.get('advanced_augmentation_enabled', False)
+        if advanced_augmentation_enabled:
+            cutmix_prob = config.get('cutmix_prob', 0.0)
+            mixup_alpha = config.get('mixup_alpha', 0.0)
+            task_type = config.get('task_type', 'classification')
+            
+            if task_type == 'detection':
+                conflicts.append({
+                    'type': '任务类型与数据增强冲突',
+                    'description': '目标检测任务不应使用CutMix/MixUp数据增强',
+                    'impact': '会破坏边界框标注，导致训练失败'
+                })
+                suggestions.append({
+                    'parameter': 'advanced_augmentation_enabled',
+                    'action': '设置为False',
+                    'reason': '目标检测任务不兼容这些数据增强方法'
+                })
+            
+            if cutmix_prob > 0 and mixup_alpha > 0:
+                conflicts.append({
+                    'type': '数据增强过度',
+                    'description': '同时启用CutMix和MixUp可能导致过度增强',
+                    'impact': '可能影响训练稳定性和收敛速度'
+                })
+                suggestions.append({
+                    'parameter': 'cutmix_prob或mixup_alpha',
+                    'action': '建议只启用其中一种',
+                    'reason': '避免过度数据增强'
+                })
+        
+        # 检测梯度累积与批次大小冲突
+        gradient_accumulation_enabled = config.get('gradient_accumulation_enabled', False)
+        if gradient_accumulation_enabled:
+            batch_size = config.get('batch_size', 32)
+            gradient_accumulation_steps = config.get('gradient_accumulation_steps', 1)
+            
+            effective_batch_size = batch_size * gradient_accumulation_steps
+            if effective_batch_size > 512:
+                conflicts.append({
+                    'type': '有效批次过大',
+                    'description': f'有效批次大小 = {batch_size} × {gradient_accumulation_steps} = {effective_batch_size}',
+                    'impact': '可能导致内存不足或BatchNorm统计不准确'
+                })
+                suggestions.append({
+                    'parameter': 'gradient_accumulation_steps',
+                    'action': f'减少到 {512 // batch_size}',
+                    'reason': '保持有效批次大小在合理范围内'
+                })
+        
+        # 检测EMA与优化器动量冲突
+        model_ema = config.get('model_ema', False)
+        if model_ema and optimizer in ['Adam', 'AdamW'] and beta1 > 0.95:
+            conflicts.append({
+                'type': 'EMA与优化器动量冲突',
+                'description': f'EMA与{optimizer}的高beta1值可能产生双重平滑效果',
+                'impact': '可能导致收敛过慢或陷入局部最优'
+            })
+            suggestions.append({
+                'parameter': 'beta1',
+                'action': '降低到0.9',
+                'reason': '避免与EMA的双重平滑效果'
+            })
+        
+        # 检测标签平滑与任务类型冲突
+        label_smoothing_enabled = config.get('label_smoothing_enabled', False)
+        if label_smoothing_enabled:
+            task_type = config.get('task_type', 'classification')
+            if task_type == 'detection':
+                conflicts.append({
+                    'type': '标签平滑与任务类型冲突',
+                    'description': '目标检测任务通常不使用标签平滑',
+                    'impact': '可能影响检测精度'
+                })
+                suggestions.append({
+                    'parameter': 'label_smoothing_enabled',
+                    'action': '设置为False',
+                    'reason': '目标检测任务不推荐使用标签平滑'
+                })
+        
+        # 检测学习率调度器冲突
+        lr_scheduler = config.get('lr_scheduler', 'StepLR')
+        warmup_enabled = config.get('warmup_enabled', False)
+        if lr_scheduler == 'OneCycleLR' and warmup_enabled:
+            conflicts.append({
+                'type': '学习率调度器冲突',
+                'description': 'OneCycleLR已包含预热机制，不需要额外的warmup设置',
+                'impact': '可能导致学习率调度混乱'
+            })
+            suggestions.append({
+                'parameter': 'warmup_enabled',
+                'action': '设置为False',
+                'reason': 'OneCycleLR内置预热机制'
+            })
+        
+        # 检测混合精度与损失缩放冲突
+        mixed_precision = config.get('mixed_precision', True)
+        loss_scaling_enabled = config.get('loss_scaling_enabled', False)
+        if loss_scaling_enabled and not mixed_precision:
+            conflicts.append({
+                'type': '混合精度与损失缩放冲突',
+                'description': '未启用混合精度时，损失缩放设置无效',
+                'impact': '损失缩放参数被忽略'
+            })
+            suggestions.append({
+                'parameter': 'loss_scaling_enabled',
+                'action': '设置为False或启用mixed_precision',
+                'reason': '损失缩放需要混合精度支持'
+            })
+        
+        return conflicts, suggestions
+    
+    def _apply_conflict_fixes(self, config, suggestions):
+        """
+        应用冲突修复建议
+        
+        Args:
+            config: 原始配置
+            suggestions: 修复建议列表
+            
+        Returns:
+            dict: 修复后的配置
+        """
+        modified_config = config.copy()
+        
+        for suggestion in suggestions:
+            parameter = suggestion['parameter']
+            action = suggestion['action']
+            
+            if parameter == 'beta1/beta2':
+                modified_config['beta1'] = 0.9
+                modified_config['beta2'] = 0.999
+            elif parameter == 'momentum/nesterov':
+                modified_config['momentum'] = 0.9
+                modified_config['nesterov'] = False
+            elif parameter == 'warmup_ratio':
+                if '设置为0.05' in action:
+                    modified_config['warmup_ratio'] = 0.05
+                else:
+                    modified_config['warmup_ratio'] = 0.0
+            elif parameter == 'warmup_enabled':
+                modified_config['warmup_enabled'] = False
+            elif parameter == 'advanced_augmentation_enabled':
+                modified_config['advanced_augmentation_enabled'] = False
+            elif parameter == 'cutmix_prob/mixup_alpha':
+                modified_config['cutmix_prob'] = 0.0
+                modified_config['mixup_alpha'] = 0.0
+            elif parameter == 'cutmix_prob或mixup_alpha':
+                # 保留其中一个，优先保留CutMix
+                if modified_config.get('cutmix_prob', 0) > 0:
+                    modified_config['mixup_alpha'] = 0.0
+                else:
+                    modified_config['cutmix_prob'] = 0.0
+            elif parameter == 'gradient_accumulation_steps':
+                batch_size = modified_config.get('batch_size', 32)
+                modified_config['gradient_accumulation_steps'] = max(1, 512 // batch_size)
+            elif parameter == 'beta1':
+                modified_config['beta1'] = 0.9
+            elif parameter == 'label_smoothing':
+                modified_config['label_smoothing'] = 0.0
+            elif parameter == 'label_smoothing_enabled':
+                modified_config['label_smoothing_enabled'] = False
+            elif parameter == 'warmup_steps/warmup_ratio':
+                modified_config['warmup_steps'] = 0
+                modified_config['warmup_ratio'] = 0.0
+            elif parameter == 'loss_scale':
+                modified_config['loss_scale'] = 'dynamic'
+            elif parameter == 'loss_scaling_enabled':
+                modified_config['loss_scaling_enabled'] = False
+        
+        return modified_config
     
     def _validate_dataset_paths(self, config):
         """验证数据集路径"""

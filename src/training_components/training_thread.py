@@ -296,9 +296,13 @@ class TrainingThread(QThread):
                 self.resource_limiter.start_monitoring()
                 self.status_updated.emit("✅ 强制资源限制已启动")
             
-            # 验证配置
-            if not self.validator.validate_config(self.config):
+            # 验证配置（包括冲突检测）
+            is_valid, validated_config = self.validator.validate_config(self.config)
+            if not is_valid:
                 return
+            
+            # 使用验证后的配置
+            self.config = validated_config
             
             # 提取基本参数
             data_dir = self.config.get('data_dir', '')
@@ -757,7 +761,20 @@ class TrainingThread(QThread):
                     # 标准前向传播
                     outputs = self.model(inputs)
                     _, preds = torch.max(outputs, 1)
-                    loss = criterion(outputs, labels)
+                    
+                    # 根据损失函数类型选择调用方式
+                    if self.advanced_criterion and hasattr(self.advanced_criterion, '__call__'):
+                        # 检查是否是MixCriterion类型
+                        if hasattr(self.advanced_criterion, 'criterion'):
+                            # 这是MixCriterion，但没有混合增强，直接使用基础损失函数
+                            loss = self.advanced_criterion.criterion(outputs, labels)
+                        else:
+                            # 这是其他高级损失函数（如标签平滑）
+                            loss = self.advanced_criterion(outputs, labels)
+                    else:
+                        # 使用标准损失函数
+                        loss = criterion(outputs, labels)
+                    
                     corrects = torch.sum(preds == labels.data).float()
                 
                 # 梯度累积：缩放损失

@@ -43,18 +43,24 @@ class ModelTrainer(QObject):
         # 连接验证器信号
         self.validator.status_updated.connect(self.status_updated)
         self.validator.validation_error.connect(self.training_error)
+        self.validator.training_cancelled.connect(self.training_stopped)
 
-    def train_model_with_config(self, config):
+    def train_model_with_config(self, config, parent_widget=None):
         """
         使用配置训练模型
         
         Args:
             config: 训练配置字典
+            parent_widget: 父窗口，用于显示冲突对话框
         """
         try:
-            # 验证配置
-            if not self.validator.validate_config(config):
+            # 验证配置（包括冲突检测）
+            is_valid, validated_config = self.validator.validate_config(config, parent_widget)
+            if not is_valid:
                 return
+            
+            # 使用验证后的配置
+            config = validated_config
             
             # 保存配置文件
             self._save_config_file(config)
