@@ -26,18 +26,19 @@ def test_dependency_check():
     safe_print("=" * 50)
     
     try:
-        # Import startup checker functions
-        sys.path.append(str(Path(__file__).parent / 'src'))
-        from startup_checker import check_minimal_dependencies
+        # Import lightweight main functions
+        sys.path.append(str(Path(__file__).parent.parent / 'src'))
+        from main_lightweight import check_critical_dependencies
         
-        # Check required dependencies
-        missing_required, available_required = check_minimal_dependencies()
-        safe_print(f"Required dependencies check:")
-        safe_print(f"  Installed: {len(available_required)} packages")
-        safe_print(f"  Missing: {len(missing_required)} packages")
+        # Check critical dependencies
+        missing_deps = check_critical_dependencies()
+        safe_print(f"Critical dependencies check:")
+        safe_print(f"  Missing: {len(missing_deps)} packages")
         
-        if missing_required:
-            safe_print(f"  Missing dependencies: {', '.join(missing_required)}")
+        if missing_deps:
+            safe_print(f"  Missing dependencies: {', '.join(missing_deps)}")
+        else:
+            safe_print("  All critical dependencies are available")
         
         return True
         
@@ -53,7 +54,7 @@ def test_minimal_requirements():
     
     try:
         # Import build script functions
-        sys.path.append(str(Path(__file__).parent))
+        sys.path.append(str(Path(__file__).parent.parent))
         from build_exe_simple import create_minimal_requirements
         
         # Create minimal requirements file
@@ -98,10 +99,10 @@ def test_pyinstaller_command():
             return False
         
         # Check if key files exist
-        project_root = Path(__file__).parent
+        project_root = Path(__file__).parent.parent
         
         files_to_check = [
-            'src/startup_checker.py',
+            'src/main_lightweight.py',
             'config.json',
             'config/',
             'setting/'
@@ -123,35 +124,43 @@ def test_pyinstaller_command():
         safe_print(f"X Test PyInstaller command configuration failed: {e}")
         return False
 
-def test_startup_checker():
-    """Test startup checker script"""
+def test_lightweight_main():
+    """Test lightweight main script"""
     safe_print("\n" + "=" * 50)
-    safe_print("Test Startup Checker Script")
+    safe_print("Test Lightweight Main Script")
     safe_print("=" * 50)
     
     try:
-        # Run startup checker script with a timeout
-        result = subprocess.run([
-            sys.executable, 
-            str(Path(__file__).parent / 'src' / 'startup_checker.py')
-        ], input='n\n', capture_output=True, text=True, timeout=10)
+        # Check if lightweight main exists
+        main_path = Path(__file__).parent.parent / 'src' / 'main_lightweight.py'
+        if not main_path.exists():
+            safe_print("X Lightweight main script not found")
+            return False
+            
+        safe_print("+ Lightweight main script exists")
         
-        safe_print(f"Exit code: {result.returncode}")
-        if result.stdout:
-            safe_print("Standard output:")
-            safe_print(result.stdout)
-        if result.stderr:
-            safe_print("Error output:")
-            safe_print(result.stderr)
+        # Try to import the module to check syntax
+        sys.path.append(str(main_path.parent))
+        import main_lightweight
+        safe_print("+ Lightweight main script imports successfully")
         
-        # Consider it successful if it runs without crashing
+        # Check if critical functions exist
+        if hasattr(main_lightweight, 'check_critical_dependencies'):
+            safe_print("+ check_critical_dependencies function exists")
+        else:
+            safe_print("X check_critical_dependencies function missing")
+            return False
+            
+        if hasattr(main_lightweight, 'main'):
+            safe_print("+ main function exists")
+        else:
+            safe_print("X main function missing")
+            return False
+        
         return True
         
-    except subprocess.TimeoutExpired:
-        safe_print("X Startup checker script timeout")
-        return False
     except Exception as e:
-        safe_print(f"X Test startup checker script failed: {e}")
+        safe_print(f"X Test lightweight main script failed: {e}")
         return False
 
 def main():
@@ -163,7 +172,7 @@ def main():
         ("Dependency Check Functionality", test_dependency_check),
         ("Minimal Requirements File Creation", test_minimal_requirements),
         ("PyInstaller Command Configuration", test_pyinstaller_command),
-        ("Startup Checker Script", test_startup_checker),
+        ("Lightweight Main Script", test_lightweight_main),
     ]
     
     results = []
