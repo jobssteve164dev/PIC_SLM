@@ -1,0 +1,20 @@
+
+Dependency Installation Guide
+=============================
+
+Lightweight Version First Use Instructions:
+
+1. Start the program
+2. Go to "Settings" tab
+3. Select "Dependency Management" sub-tab
+4. Configure proxy settings if needed
+5. Click "Check Dependencies" button
+6. Click "Install Missing Dependencies" button
+7. Wait for installation to complete
+
+Common Mirror Sources:
+- Tsinghua: https://pypi.tuna.tsinghua.edu.cn/simple/
+- Alibaba: https://mirrors.aliyun.com/pypi/simple/
+- Douban: https://pypi.douban.com/simple/
+
+If you encounter problems, please check network connection or configure proxy settings.

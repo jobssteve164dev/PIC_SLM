@@ -1,0 +1,22 @@
+# 启动必需的最小依赖集合
+# 这些依赖是程序启动和基本界面显示所必需的
+
+# GUI框架 - 必需
+PyQt5>=5.15.0
+
+# 基础数据处理 - 必需
+numpy>=1.19.0
+pillow>=8.0.0
+
+# 配置和日志 - 必需
+PyYAML>=5.4.0
+colorama>=0.4.0
+
+# 网络请求 - 依赖管理功能必需
+requests>=2.25.0
+
+# 系统监控 - 资源限制功能必需
+psutil>=5.8.0
+
+# 其他依赖将通过程序内置的依赖管理功能自动下载
+# 包括：torch, torchvision, matplotlib, opencv-python, sklearn等
