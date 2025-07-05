@@ -96,8 +96,13 @@ class TrainingThread(QThread):
                     aug_methods.append("MixUp")
                 advanced_features.append(f"高级数据增强({'+'.join(aug_methods)})")
             
-            if self.config.get('loss_scale', 'dynamic') == 'static':
+            # 检查损失缩放状态
+            loss_scaling_enabled = self.config.get('loss_scaling_enabled', False)
+            loss_scale = self.config.get('loss_scale', 'dynamic')
+            if loss_scaling_enabled and loss_scale != 'none' and loss_scale == 'static':
                 advanced_features.append("静态损失缩放")
+            elif loss_scaling_enabled and loss_scale != 'none' and loss_scale == 'dynamic':
+                advanced_features.append("动态损失缩放")
             
             if advanced_features:
                 self.status_updated.emit(f"✨ 启用第二阶段高级特性: {', '.join(advanced_features)}")

@@ -182,14 +182,25 @@ class AdvancedAugmentationManager:
             config: 配置字典
         """
         self.config = config
-        self.mixup_prob = config.get('mixup_alpha', 0.0)
-        self.cutmix_prob = config.get('cutmix_prob', 0.0)
         
-        # 初始化增强器
+        # 检查是否启用高级数据增强
+        self.advanced_augmentation_enabled = config.get('advanced_augmentation_enabled', False)
+        
+        # 只有在启用时才读取参数值
+        if self.advanced_augmentation_enabled:
+            self.mixup_prob = config.get('mixup_alpha', 0.0)
+            self.cutmix_prob = config.get('cutmix_prob', 0.0)
+        else:
+            # 如果禁用，强制设置为0
+            self.mixup_prob = 0.0
+            self.cutmix_prob = 0.0
+        
+        # 初始化增强器（只有在启用且参数值大于0时）
         self.mixup = MixUpAugmentation(alpha=self.mixup_prob) if self.mixup_prob > 0 else None
         self.cutmix = CutMixAugmentation(alpha=1.0) if self.cutmix_prob > 0 else None
         
-        self.enabled = self.mixup_prob > 0 or self.cutmix_prob > 0
+        # 启用状态：必须同时满足启用开关和参数值大于0
+        self.enabled = self.advanced_augmentation_enabled and (self.mixup_prob > 0 or self.cutmix_prob > 0)
     
     def is_enabled(self) -> bool:
         """检查是否启用了高级增强"""
@@ -290,9 +301,11 @@ def create_advanced_criterion(config: dict, base_criterion=None):
     Returns:
         增强的损失函数
     """
-    label_smoothing = config.get('label_smoothing', 0.0)
+    # 检查标签平滑启用状态
+    label_smoothing_enabled = config.get('label_smoothing_enabled', False)
+    label_smoothing = config.get('label_smoothing', 0.0) if label_smoothing_enabled else 0.0
     
-    if label_smoothing > 0:
+    if label_smoothing_enabled and label_smoothing > 0:
         # 使用标签平滑交叉熵
         criterion = LabelSmoothingCrossEntropy(smoothing=label_smoothing)
     else:

@@ -549,38 +549,44 @@ class TrainingValidator(QObject):
             self.validation_error.emit("Momentum参数必须在[0, 1)范围内")
             return False
         
-        # 验证学习率预热参数
-        warmup_steps = config.get('warmup_steps', 0)
-        if not isinstance(warmup_steps, int) or warmup_steps < 0:
-            self.validation_error.emit("预热步数必须为非负整数")
-            return False
+        # 验证学习率预热参数 - 只在启用时验证
+        warmup_enabled = config.get('warmup_enabled', False)
+        if warmup_enabled:
+            warmup_steps = config.get('warmup_steps', 0)
+            if not isinstance(warmup_steps, int) or warmup_steps < 0:
+                self.validation_error.emit("预热步数必须为非负整数")
+                return False
+            
+            warmup_ratio = config.get('warmup_ratio', 0.0)
+            if not isinstance(warmup_ratio, (int, float)) or warmup_ratio < 0 or warmup_ratio > 0.5:
+                self.validation_error.emit("预热比例必须在[0, 0.5]范围内")
+                return False
+            
+            warmup_method = config.get('warmup_method', 'linear')
+            if warmup_method not in ['linear', 'cosine']:
+                self.validation_error.emit("预热方法必须是'linear'或'cosine'")
+                return False
         
-        warmup_ratio = config.get('warmup_ratio', 0.0)
-        if not isinstance(warmup_ratio, (int, float)) or warmup_ratio < 0 or warmup_ratio > 0.5:
-            self.validation_error.emit("预热比例必须在[0, 0.5]范围内")
-            return False
+        # 验证最小学习率参数 - 只在启用时验证
+        min_lr_enabled = config.get('min_lr_enabled', False)
+        if min_lr_enabled:
+            min_lr = config.get('min_lr', 1e-6)
+            if not isinstance(min_lr, (int, float)) or min_lr <= 0:
+                self.validation_error.emit("最小学习率必须为正数")
+                return False
+            
+            learning_rate = config.get('learning_rate', 0.001)
+            if min_lr >= learning_rate:
+                self.validation_error.emit("最小学习率必须小于初始学习率")
+                return False
         
-        warmup_method = config.get('warmup_method', 'linear')
-        if warmup_method not in ['linear', 'cosine']:
-            self.validation_error.emit("预热方法必须是'linear'或'cosine'")
-            return False
-        
-        # 验证高级学习率调度参数
-        min_lr = config.get('min_lr', 1e-6)
-        if not isinstance(min_lr, (int, float)) or min_lr <= 0:
-            self.validation_error.emit("最小学习率必须为正数")
-            return False
-        
-        learning_rate = config.get('learning_rate', 0.001)
-        if min_lr >= learning_rate:
-            self.validation_error.emit("最小学习率必须小于初始学习率")
-            return False
-        
-        # 验证标签平滑参数
-        label_smoothing = config.get('label_smoothing', 0.0)
-        if not isinstance(label_smoothing, (int, float)) or label_smoothing < 0 or label_smoothing >= 0.5:
-            self.validation_error.emit("标签平滑系数必须在[0, 0.5)范围内")
-            return False
+        # 验证标签平滑参数 - 只在启用时验证
+        label_smoothing_enabled = config.get('label_smoothing_enabled', False)
+        if label_smoothing_enabled:
+            label_smoothing = config.get('label_smoothing', 0.0)
+            if not isinstance(label_smoothing, (int, float)) or label_smoothing < 0 or label_smoothing >= 0.5:
+                self.validation_error.emit("标签平滑系数必须在[0, 0.5)范围内")
+                return False
         
         # 验证优化器名称
         optimizer = config.get('optimizer', 'Adam')
@@ -614,46 +620,56 @@ class TrainingValidator(QObject):
             self.validation_error.emit("模型EMA设置必须为布尔值")
             return False
         
-        # 验证梯度累积参数
-        gradient_accumulation_steps = config.get('gradient_accumulation_steps', 1)
-        if not isinstance(gradient_accumulation_steps, int) or gradient_accumulation_steps < 1:
-            self.validation_error.emit("梯度累积步数必须为正整数")
-            return False
-        
-        if gradient_accumulation_steps > 32:
-            self.status_updated.emit("警告: 梯度累积步数较大，可能会影响训练动态")
-        
-        # 验证高级数据增强参数
-        cutmix_prob = config.get('cutmix_prob', 0.0)
-        if not isinstance(cutmix_prob, (int, float)) or cutmix_prob < 0 or cutmix_prob > 1.0:
-            self.validation_error.emit("CutMix概率必须在[0, 1]范围内")
-            return False
-        
-        mixup_alpha = config.get('mixup_alpha', 0.0)
-        if not isinstance(mixup_alpha, (int, float)) or mixup_alpha < 0 or mixup_alpha > 2.0:
-            self.validation_error.emit("MixUp Alpha参数必须在[0, 2.0]范围内")
-            return False
-        
-        # 验证损失缩放参数
-        loss_scale = config.get('loss_scale', 'dynamic')
-        if loss_scale not in ['dynamic', 'static']:
-            self.validation_error.emit("损失缩放策略必须是'dynamic'或'static'")
-            return False
-        
-        if loss_scale == 'static':
-            static_loss_scale = config.get('static_loss_scale', 128.0)
-            if not isinstance(static_loss_scale, (int, float)) or static_loss_scale < 1.0:
-                self.validation_error.emit("静态损失缩放值必须大于等于1.0")
+        # 验证梯度累积参数 - 只在启用时验证
+        gradient_accumulation_enabled = config.get('gradient_accumulation_enabled', False)
+        if gradient_accumulation_enabled:
+            gradient_accumulation_steps = config.get('gradient_accumulation_steps', 1)
+            if not isinstance(gradient_accumulation_steps, int) or gradient_accumulation_steps < 1:
+                self.validation_error.emit("梯度累积步数必须为正整数")
                 return False
+            
+            if gradient_accumulation_steps > 32:
+                self.status_updated.emit("警告: 梯度累积步数较大，可能会影响训练动态")
         
-        # 兼容性检查
-        if cutmix_prob > 0 and mixup_alpha > 0:
-            self.status_updated.emit("警告: 同时启用CutMix和MixUp，将随机选择使用")
+        # 验证高级数据增强参数 - 只在启用时验证
+        advanced_augmentation_enabled = config.get('advanced_augmentation_enabled', False)
+        if advanced_augmentation_enabled:
+            cutmix_prob = config.get('cutmix_prob', 0.0)
+            if not isinstance(cutmix_prob, (int, float)) or cutmix_prob < 0 or cutmix_prob > 1.0:
+                self.validation_error.emit("CutMix概率必须在[0, 1]范围内")
+                return False
+            
+            mixup_alpha = config.get('mixup_alpha', 0.0)
+            if not isinstance(mixup_alpha, (int, float)) or mixup_alpha < 0 or mixup_alpha > 2.0:
+                self.validation_error.emit("MixUp Alpha参数必须在[0, 2.0]范围内")
+                return False
+            
+            # 兼容性检查
+            if cutmix_prob > 0 and mixup_alpha > 0:
+                self.status_updated.emit("警告: 同时启用CutMix和MixUp，将随机选择使用")
         
-        # 检查与混合精度的兼容性
-        mixed_precision = config.get('mixed_precision', True)
-        if not mixed_precision and loss_scale != 'dynamic':
-            self.status_updated.emit("警告: 未启用混合精度时损失缩放可能无效")
+        # 验证损失缩放参数 - 只在启用时验证
+        loss_scaling_enabled = config.get('loss_scaling_enabled', False)
+        if loss_scaling_enabled:
+            loss_scale = config.get('loss_scale', 'dynamic')
+            if loss_scale == 'none':
+                # 如果loss_scale为'none'但启用状态为True，这是矛盾的，重置为禁用
+                self.status_updated.emit("警告: 损失缩放参数矛盾，已自动禁用")
+            else:
+                if loss_scale not in ['dynamic', 'static']:
+                    self.validation_error.emit("损失缩放策略必须是'dynamic'或'static'")
+                    return False
+                
+                if loss_scale == 'static':
+                    static_loss_scale = config.get('static_loss_scale', 128.0)
+                    if not isinstance(static_loss_scale, (int, float)) or static_loss_scale < 1.0:
+                        self.validation_error.emit("静态损失缩放值必须大于等于1.0")
+                        return False
+                
+                # 检查与混合精度的兼容性
+                mixed_precision = config.get('mixed_precision', True)
+                if not mixed_precision:
+                    self.status_updated.emit("警告: 未启用混合精度时损失缩放可能无效")
         
         self.status_updated.emit("第二阶段超参数验证通过")
         return True

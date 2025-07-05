@@ -222,14 +222,18 @@ class OptimizerFactory:
         # 基础调度器配置（向后兼容）
         scheduler_name = config.get('lr_scheduler', 'StepLR')
         
+        # 检查预热启用状态
+        warmup_enabled = config.get('warmup_enabled', False)
+        min_lr_enabled = config.get('min_lr_enabled', False)
+        
         # 高级调度器参数（新增，带默认值）
-        warmup_steps = config.get('warmup_steps', 0)
-        warmup_ratio = config.get('warmup_ratio', 0.0)
+        warmup_steps = config.get('warmup_steps', 0) if warmup_enabled else 0
+        warmup_ratio = config.get('warmup_ratio', 0.0) if warmup_enabled else 0.0
         warmup_method = config.get('warmup_method', 'linear')
-        min_lr = config.get('min_lr', 1e-6)
+        min_lr = config.get('min_lr', 1e-6) if min_lr_enabled else 1e-6
         
         # 如果设置了warmup_ratio但没有设置warmup_steps，计算warmup_steps
-        if warmup_ratio > 0 and warmup_steps == 0 and total_steps:
+        if warmup_enabled and warmup_ratio > 0 and warmup_steps == 0 and total_steps:
             warmup_steps = int(total_steps * warmup_ratio)
         
         # 创建基础调度器
@@ -242,15 +246,19 @@ class OptimizerFactory:
             )
         elif scheduler_name == 'CosineAnnealingLR':
             T_max = config.get('T_max', 50)
+            # 只有在启用最小学习率时才使用，否则使用默认值0
+            eta_min = min_lr if min_lr_enabled else 0
             base_scheduler = optim.lr_scheduler.CosineAnnealingLR(
-                optimizer, T_max=T_max, eta_min=min_lr
+                optimizer, T_max=T_max, eta_min=eta_min
             )
         elif scheduler_name == 'ReduceLROnPlateau':
             mode = config.get('scheduler_mode', 'min')
             patience = config.get('scheduler_patience', 10)
             factor = config.get('scheduler_factor', 0.1)
+            # 只有在启用最小学习率时才使用，否则使用默认值0
+            min_lr_value = min_lr if min_lr_enabled else 0
             base_scheduler = optim.lr_scheduler.ReduceLROnPlateau(
-                optimizer, mode=mode, patience=patience, factor=factor, min_lr=min_lr
+                optimizer, mode=mode, patience=patience, factor=factor, min_lr=min_lr_value
             )
         elif scheduler_name == 'OneCycleLR' and total_steps:
             max_lr = config.get('max_lr', config.get('learning_rate', 0.001) * 10)
@@ -265,12 +273,12 @@ class OptimizerFactory:
                 optimizer, base_lr=base_lr, max_lr=max_lr, step_size_up=step_size_up
             )
         
-        # 如果需要预热，创建预热调度器
-        if warmup_steps > 0 and base_scheduler:
+        # 如果启用了预热且有预热步数，创建预热调度器
+        if warmup_enabled and warmup_steps > 0 and base_scheduler:
             scheduler = WarmupLRScheduler(
                 optimizer, warmup_steps, warmup_method, base_scheduler
             )
-        elif warmup_steps > 0:
+        elif warmup_enabled and warmup_steps > 0:
             # 只有预热，没有基础调度器
             scheduler = WarmupLRScheduler(
                 optimizer, warmup_steps, warmup_method
@@ -293,10 +301,13 @@ class OptimizerFactory:
         Returns:
             criterion: 配置好的损失函数
         """
-        # 标签平滑参数（新增，带默认值）
-        label_smoothing = config.get('label_smoothing', 0.0)
+        # 检查标签平滑启用状态
+        label_smoothing_enabled = config.get('label_smoothing_enabled', False)
         
-        if label_smoothing > 0:
+        # 标签平滑参数（新增，带默认值）
+        label_smoothing = config.get('label_smoothing', 0.0) if label_smoothing_enabled else 0.0
+        
+        if label_smoothing_enabled and label_smoothing > 0:
             # 使用标签平滑损失函数
             criterion = LabelSmoothingCrossEntropy(
                 smoothing=label_smoothing, 
