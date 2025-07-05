@@ -190,6 +190,10 @@ class AdvancedAugmentationManager:
         if self.advanced_augmentation_enabled:
             self.mixup_prob = config.get('mixup_alpha', 0.0)
             self.cutmix_prob = config.get('cutmix_prob', 0.0)
+            
+            # 参数验证
+            self.mixup_prob = max(0.0, min(2.0, self.mixup_prob))  # 限制在合理范围内
+            self.cutmix_prob = max(0.0, min(1.0, self.cutmix_prob))  # 限制在合理范围内
         else:
             # 如果禁用，强制设置为0
             self.mixup_prob = 0.0
@@ -201,6 +205,35 @@ class AdvancedAugmentationManager:
         
         # 启用状态：必须同时满足启用开关和参数值大于0
         self.enabled = self.advanced_augmentation_enabled and (self.mixup_prob > 0 or self.cutmix_prob > 0)
+        
+        # 记录配置信息
+        self._log_configuration()
+    
+    def _log_configuration(self):
+        """记录配置信息（用于调试）"""
+        if self.enabled:
+            methods = []
+            if self.mixup_prob > 0:
+                methods.append(f"MixUp(α={self.mixup_prob})")
+            if self.cutmix_prob > 0:
+                methods.append(f"CutMix(p={self.cutmix_prob})")
+            print(f"🚀 高级数据增强已启用: {', '.join(methods)}")
+        else:
+            if self.advanced_augmentation_enabled:
+                print("⚪ 高级数据增强已启用但参数值为0，实际未生效")
+            else:
+                print("⚪ 高级数据增强已禁用")
+    
+    def get_augmentation_info(self) -> dict:
+        """获取增强配置信息"""
+        return {
+            'enabled': self.enabled,
+            'advanced_augmentation_enabled': self.advanced_augmentation_enabled,
+            'mixup_prob': self.mixup_prob,
+            'cutmix_prob': self.cutmix_prob,
+            'mixup_available': self.mixup is not None,
+            'cutmix_available': self.cutmix is not None
+        }
     
     def is_enabled(self) -> bool:
         """检查是否启用了高级增强"""

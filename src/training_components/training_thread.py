@@ -478,14 +478,35 @@ class TrainingThread(QThread):
         
         self.status_updated.emit("加载分类数据集...")
         
-        # 数据转换
+        # 检查是否启用基础数据增强
+        use_augmentation = self.config.get('use_augmentation', True)
+        
+        # 构建训练时的transform列表
+        train_transforms = [
+            transforms.Resize((224, 224)),
+        ]
+        
+        # 基础数据增强（只有在启用时才添加）
+        if use_augmentation:
+            train_transforms.extend([
+                transforms.RandomHorizontalFlip(p=0.5),
+                transforms.RandomRotation(degrees=15),
+                transforms.ColorJitter(brightness=0.2, contrast=0.2, saturation=0.2, hue=0.1),
+                transforms.RandomAffine(degrees=0, translate=(0.1, 0.1), scale=(0.9, 1.1)),
+            ])
+            self.status_updated.emit("✅ 启用基础数据增强（翻转、旋转、颜色抖动、仿射变换）")
+        else:
+            self.status_updated.emit("⚪ 基础数据增强已禁用")
+        
+        # 添加必要的转换
+        train_transforms.extend([
+            transforms.ToTensor(),
+            transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
+        ])
+        
+        # 数据转换配置
         data_transforms = {
-            'train': transforms.Compose([
-                transforms.Resize((224, 224)),
-                transforms.RandomHorizontalFlip(),
-                transforms.ToTensor(),
-                transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
-            ]),
+            'train': transforms.Compose(train_transforms),
             'val': transforms.Compose([
                 transforms.Resize((224, 224)),
                 transforms.ToTensor(),
@@ -507,6 +528,18 @@ class TrainingThread(QThread):
         dataset_sizes = {x: len(image_datasets[x]) for x in ['train', 'val']}
         class_names = image_datasets['train'].classes
         num_classes = len(class_names)
+        
+        # 输出数据增强配置信息
+        augmentation_status = []
+        if use_augmentation:
+            augmentation_status.append("基础增强")
+        if self.augmentation_manager and self.augmentation_manager.is_enabled():
+            augmentation_status.append("高级增强")
+        
+        if augmentation_status:
+            self.status_updated.emit(f"📊 数据增强配置: {' + '.join(augmentation_status)}")
+        else:
+            self.status_updated.emit("📊 数据增强配置: 无增强")
         
         return dataloaders, dataset_sizes, class_names, num_classes
     
@@ -743,65 +776,37 @@ class TrainingThread(QThread):
             with torch.set_grad_enabled(phase == 'train'):
                 # 应用高级数据增强（第二阶段）
                 if phase == 'train' and self.augmentation_manager and self.augmentation_manager.is_enabled():
-                    # 使用高级数据增强
+                    # 使用高级数据增强（MixUp/CutMix）
                     mixed_inputs, y_a, y_b, lam, aug_method = self.augmentation_manager(inputs, labels)
                     outputs = self.model(mixed_inputs)
                     
                     # 计算混合损失
-                    if self.advanced_criterion:
-                        loss = self.advanced_criterion(outputs, y_a, y_b, lam)
-                    else:
-                        loss = lam * criterion(outputs, y_a) + (1 - lam) * criterion(outputs, y_b)
+                    loss = self._calculate_mixed_loss(outputs, y_a, y_b, lam, criterion)
                     
-                    # 对于预测准确率，使用原始标签
+                    # 计算混合增强的准确率
                     _, preds = torch.max(outputs, 1)
-                    # 混合增强时，准确率计算需要考虑两个标签
                     corrects = lam * preds.eq(y_a.data).sum().float() + (1 - lam) * preds.eq(y_b.data).sum().float()
                     
-                    # 记录使用的增强方法
-                    if i == 0:  # 只在第一个batch记录
-                        self.status_updated.emit(f"📊 使用{aug_method}数据增强")
+                    # 记录使用的增强方法（只在第一个batch记录）
+                    if i == 0:
+                        self.status_updated.emit(f"📊 使用{aug_method}高级数据增强")
                     
                 else:
-                    # 标准前向传播
+                    # 标准前向传播（可能包含基础数据增强）
                     outputs = self.model(inputs)
                     _, preds = torch.max(outputs, 1)
                     
-                    # 根据损失函数类型选择调用方式
-                    if self.advanced_criterion and hasattr(self.advanced_criterion, '__call__'):
-                        # 检查是否是MixCriterion类型
-                        if hasattr(self.advanced_criterion, 'criterion'):
-                            # 这是MixCriterion，但没有混合增强，直接使用基础损失函数
-                            loss = self.advanced_criterion.criterion(outputs, labels)
-                        else:
-                            # 这是其他高级损失函数（如标签平滑）
-                            loss = self.advanced_criterion(outputs, labels)
-                    else:
-                        # 使用标准损失函数
-                        loss = criterion(outputs, labels)
-                    
+                    # 计算标准损失
+                    loss = self._calculate_standard_loss(outputs, labels, criterion)
                     corrects = torch.sum(preds == labels.data).float()
                 
                 # 梯度累积：缩放损失
                 if phase == 'train' and accumulation_steps > 1:
                     loss = loss / accumulation_steps
                 
-                # 反向传播
+                # 反向传播和参数更新
                 if phase == 'train':
-                    loss.backward()
-                    
-                    # 只在累积步骤结束时更新参数
-                    if (i + 1) % accumulation_steps == 0 or (i + 1) == len(dataloaders[phase]):
-                        # 梯度裁剪（如果启用）
-                        if self.config.get('gradient_clipping', False):
-                            clip_value = self.config.get('gradient_clipping_value', 1.0)
-                            torch.nn.utils.clip_grad_norm_(self.model.parameters(), clip_value)
-                        
-                        optimizer.step()
-                        
-                        # 更新EMA模型（第二阶段）
-                        if self.ema_manager and self.ema_manager.is_enabled():
-                            self.ema_manager.update(self.model)
+                    self._backward_and_update(loss, optimizer, i, accumulation_steps, dataloaders[phase])
             
             if self.stop_training:
                 break
@@ -875,6 +880,44 @@ class TrainingThread(QThread):
         self.epoch_finished.emit(epoch_data)
         
         return epoch_loss, epoch_acc, all_preds, all_labels
+    
+    def _calculate_mixed_loss(self, outputs, y_a, y_b, lam, criterion):
+        """计算混合损失（MixUp/CutMix）"""
+        if self.advanced_criterion:
+            return self.advanced_criterion(outputs, y_a, y_b, lam)
+        else:
+            return lam * criterion(outputs, y_a) + (1 - lam) * criterion(outputs, y_b)
+    
+    def _calculate_standard_loss(self, outputs, labels, criterion):
+        """计算标准损失"""
+        if self.advanced_criterion and hasattr(self.advanced_criterion, '__call__'):
+            # 检查是否是MixCriterion类型
+            if hasattr(self.advanced_criterion, 'criterion'):
+                # 这是MixCriterion，但没有混合增强，直接使用基础损失函数
+                return self.advanced_criterion.criterion(outputs, labels)
+            else:
+                # 这是其他高级损失函数（如标签平滑）
+                return self.advanced_criterion(outputs, labels)
+        else:
+            # 使用标准损失函数
+            return criterion(outputs, labels)
+    
+    def _backward_and_update(self, loss, optimizer, batch_idx, accumulation_steps, dataloader):
+        """反向传播和参数更新"""
+        loss.backward()
+        
+        # 只在累积步骤结束时更新参数
+        if (batch_idx + 1) % accumulation_steps == 0 or (batch_idx + 1) == len(dataloader):
+            # 梯度裁剪（如果启用）
+            if self.config.get('gradient_clipping', False):
+                clip_value = self.config.get('gradient_clipping_value', 1.0)
+                torch.nn.utils.clip_grad_norm_(self.model.parameters(), clip_value)
+            
+            optimizer.step()
+            
+            # 更新EMA模型（第二阶段）
+            if self.ema_manager and self.ema_manager.is_enabled():
+                self.ema_manager.update(self.model)
     
     def _save_best_model(self, model_name, model_save_dir, epoch, best_acc):
         """保存最佳模型（支持EMA模型）"""
