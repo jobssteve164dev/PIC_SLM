@@ -7,6 +7,7 @@ from PyQt5.QtGui import QFont, QPixmap, QImage
 import os
 from .base_tab import BaseTab
 from .components.prediction.auto_review_widget import AutoReviewWidget
+from .components.prediction.accuracy_calculator_widget import AccuracyCalculatorWidget
 
 class PredictionTab(BaseTab):
     """预测标签页，负责模型预测功能，包括单张预测和批量预测"""
@@ -372,6 +373,16 @@ class PredictionTab(BaseTab):
         button_layout.addWidget(self.open_output_btn)
         
         layout.addLayout(button_layout)
+        
+        # 添加准确率计算组件
+        accuracy_group = QGroupBox("预测准确率分析")
+        accuracy_layout = QVBoxLayout()
+        
+        self.accuracy_calculator = AccuracyCalculatorWidget(parent=self)
+        accuracy_layout.addWidget(self.accuracy_calculator)
+        
+        accuracy_group.setLayout(accuracy_layout)
+        layout.addWidget(accuracy_group)
     
     def switch_prediction_mode(self, button):
         """切换预测模式"""
@@ -631,6 +642,10 @@ class PredictionTab(BaseTab):
         self.update_status("批量预测完成")
         self.update_progress(100)
         
+        # 自动设置准确率计算组件的文件夹路径
+        if hasattr(self, 'accuracy_calculator') and self.input_folder and self.output_folder:
+            self.accuracy_calculator.set_folders_from_parent(self.input_folder, self.output_folder)
+        
         # 显示预测结果统计
         if results and isinstance(results, dict):
             total = results.get('total', 0)
@@ -651,6 +666,9 @@ class PredictionTab(BaseTab):
                 for class_name, count in class_counts.items():
                     if count > 0:
                         result_msg += f"  {class_name}: {count} 张\n"
+            
+            # 添加准确率计算提示
+            result_msg += "\n💡 提示: 您可以使用下方的准确率分析工具来计算预测准确率。"
             
             QMessageBox.information(self, "批量预测完成", result_msg)
         else:
