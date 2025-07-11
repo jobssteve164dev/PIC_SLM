@@ -166,10 +166,13 @@ def create_test_data():
     os.makedirs(source_dir)
     os.makedirs(output_dir)
     
-    # 创建源文件夹结构和文件
+    # 创建源文件夹结构和文件（测试多种格式）
     source_files = [
-        "A(1).jpg", "A(2).jpg", "A(3).jpg", "A(4).jpg", "A(5).jpg",
-        "B(1).jpg", "B(2).jpg", "B(3).jpg", "B(4).jpg", "B(5).jpg",
+        # 测试数字_类别_数字格式
+        "01_spur_07.jpg", "01_spur_08.jpg", "01_spur_09.jpg", "01_spur_10.jpg", "01_spur_11.jpg",
+        # 测试类别_数字格式
+        "crack_01.jpg", "crack_02.jpg", "crack_03.jpg", "crack_04.jpg", "crack_05.jpg",
+        # 测试传统A(1)格式
         "C(1).jpg", "C(2).jpg", "C(3).jpg", "C(4).jpg", "C(5).jpg"
     ]
     
@@ -179,25 +182,25 @@ def create_test_data():
             f.write("fake image content")
     
     # 创建输出文件夹结构
-    os.makedirs(os.path.join(output_dir, "A"))
-    os.makedirs(os.path.join(output_dir, "B"))
+    os.makedirs(os.path.join(output_dir, "SPUR"))
+    os.makedirs(os.path.join(output_dir, "CRACK"))
     os.makedirs(os.path.join(output_dir, "C"))
     
     # 模拟预测结果 - 一些正确，一些错误
     prediction_results = {
-        # A类别 - 4个正确，1个错误
-        "A(1).jpg": "A",
-        "A(2).jpg": "A", 
-        "A(3).jpg": "A",
-        "A(4).jpg": "B",  # 错误预测
-        "A(5).jpg": "A",
+        # SPUR类别 - 4个正确，1个错误
+        "01_spur_07.jpg": "SPUR",
+        "01_spur_08.jpg": "SPUR", 
+        "01_spur_09.jpg": "SPUR",
+        "01_spur_10.jpg": "CRACK",  # 错误预测
+        "01_spur_11.jpg": "SPUR",
         
-        # B类别 - 3个正确，2个错误
-        "B(1).jpg": "B",
-        "B(2).jpg": "C",  # 错误预测
-        "B(3).jpg": "B",
-        "B(4).jpg": "A",  # 错误预测
-        "B(5).jpg": "B",
+        # CRACK类别 - 3个正确，2个错误
+        "crack_01.jpg": "CRACK",
+        "crack_02.jpg": "C",  # 错误预测
+        "crack_03.jpg": "CRACK",
+        "crack_04.jpg": "SPUR",  # 错误预测
+        "crack_05.jpg": "CRACK",
         
         # C类别 - 5个正确，0个错误
         "C(1).jpg": "C",
@@ -299,7 +302,7 @@ def test_accuracy_calculation():
             print("❌ 总体准确率计算错误")
         
         # 验证各类别准确率
-        expected_class_accuracies = {'A': 80.0, 'B': 60.0, 'C': 100.0}
+        expected_class_accuracies = {'SPUR': 80.0, 'CRACK': 60.0, 'C': 100.0}
         for class_name, expected in expected_class_accuracies.items():
             actual = results['class_accuracies'].get(class_name, 0)
             if abs(actual - expected) < 0.01:

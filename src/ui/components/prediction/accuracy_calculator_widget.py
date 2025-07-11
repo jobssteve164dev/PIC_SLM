@@ -125,19 +125,25 @@ class AccuracyCalculationThread(QThread):
         
         # 尝试多种模式匹配，按优先级排序
         patterns = [
-            # 模式1: 字母+数字组合，如 A123, B456
+            # 模式1: 数字_类别_数字格式，如 01_spur_07 -> spur
+            r'^\d+_([A-Za-z]+)_\d+.*',
+            # 模式2: 类别_数字格式，如 spur_07 -> spur
+            r'^([A-Za-z]+)_\d+.*',
+            # 模式3: 数字_类别格式，如 01_spur -> spur
+            r'^\d+_([A-Za-z]+).*',
+            # 模式4: 字母+数字组合，如 A123, B456
             r'^([A-Za-z]+)\d+.*',
-            # 模式2: 字母+括号数字，如 A(1), B(2)
+            # 模式5: 字母+括号数字，如 A(1), B(2)
             r'^([A-Za-z]+)\(\d+\).*',
-            # 模式3: 字母+下划线，如 A_001, B_test
+            # 模式6: 字母+下划线，如 A_001, B_test
             r'^([A-Za-z]+)_.*',
-            # 模式4: 字母+连字符，如 A-001, B-test
+            # 模式7: 字母+连字符，如 A-001, B-test
             r'^([A-Za-z]+)-.*',
-            # 模式5: 字母+点，如 A.001, B.test
+            # 模式8: 字母+点，如 A.001, B.test
             r'^([A-Za-z]+)\..*',
-            # 模式6: 纯字母开头，如 Apple123, Banana456
+            # 模式9: 纯字母开头，如 Apple123, Banana456
             r'^([A-Za-z]+)[\d_\-\(\)\.].*',
-            # 模式7: 任何字母序列开头
+            # 模式10: 任何字母序列开头
             r'^([A-Za-z]+)',
         ]
         
@@ -662,6 +668,9 @@ class AccuracyCalculatorWidget(QWidget):
         report_text += f"<h4>💡 文件名模式建议</h4>"
         report_text += f"<p>为了提高类别提取的准确性，建议使用以下文件名格式：</p>"
         report_text += f"<ul>"
+        report_text += f"<li><b>01_spur_07.jpg</b> - 数字_类别_数字（推荐用于复杂命名）</li>"
+        report_text += f"<li><b>spur_07.jpg</b> - 类别_数字</li>"
+        report_text += f"<li><b>01_spur.jpg</b> - 数字_类别</li>"
         report_text += f"<li><b>A123.jpg</b> - 字母+数字</li>"
         report_text += f"<li><b>A(1).jpg</b> - 字母+括号数字</li>"
         report_text += f"<li><b>A_001.jpg</b> - 字母+下划线+数字</li>"
