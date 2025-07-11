@@ -409,7 +409,19 @@ class MainWindow(QMainWindow):
         """训练开始时调用"""
         # 重置评估标签页的实时训练曲线
         self.evaluation_tab.reset_training_visualization()
-        # 这里可以添加实际的训练逻辑
+        
+        # 修复：调用prepare_training_config方法来正确传递参数
+        # 检查是否有worker和model_trainer
+        if hasattr(self, 'worker') and hasattr(self.worker, 'model_trainer'):
+            # 调用prepare_training_config方法
+            if hasattr(self, 'prepare_training_config'):
+                self.prepare_training_config(self.worker.model_trainer)
+            else:
+                print("错误：prepare_training_config方法未找到")
+        else:
+            print("错误：worker或model_trainer未找到")
+        
+        # 发射训练开始信号
         self.training_started.emit()
 
     def on_prediction_started(self, predict_params):

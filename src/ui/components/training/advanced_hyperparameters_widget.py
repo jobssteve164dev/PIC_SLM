@@ -397,36 +397,36 @@ class AdvancedHyperparametersWidget(QWidget):
             'momentum': self.momentum_spin.value(),
             'nesterov': self.nesterov_checkbox.isChecked(),
             
-            # 预热配置
+            # 预热配置 - 修复：同时传递开关状态和参数值
             'warmup_enabled': self.warmup_enabled_checkbox.isChecked(),
-            'warmup_steps': self.warmup_steps_spin.value() if self.warmup_enabled_checkbox.isChecked() else 0,
-            'warmup_ratio': self.warmup_ratio_spin.value() if self.warmup_enabled_checkbox.isChecked() else 0.0,
+            'warmup_steps': self.warmup_steps_spin.value(),
+            'warmup_ratio': self.warmup_ratio_spin.value(),
             'warmup_method': self.warmup_method_combo.currentText(),
             
-            # 最小学习率配置
+            # 最小学习率配置 - 修复：同时传递开关状态和参数值
             'min_lr_enabled': self.min_lr_enabled_checkbox.isChecked(),
-            'min_lr': self.min_lr_spin.value() if self.min_lr_enabled_checkbox.isChecked() else 0.0,
+            'min_lr': self.min_lr_spin.value(),
             
-            # 标签平滑配置
+            # 标签平滑配置 - 修复：同时传递开关状态和参数值
             'label_smoothing_enabled': self.label_smoothing_enabled_checkbox.isChecked(),
-            'label_smoothing': self.label_smoothing_spin.value() if self.label_smoothing_enabled_checkbox.isChecked() else 0.0,
+            'label_smoothing': self.label_smoothing_spin.value(),
             
             # 阶段二新增配置
             'model_ema': self.model_ema_checkbox.isChecked(),
             'model_ema_decay': self.model_ema_decay_spin.value(),
             
-            # 梯度累积配置
+            # 梯度累积配置 - 修复：同时传递开关状态和参数值
             'gradient_accumulation_enabled': self.gradient_accumulation_enabled_checkbox.isChecked(),
-            'gradient_accumulation_steps': self.gradient_accumulation_steps_spin.value() if self.gradient_accumulation_enabled_checkbox.isChecked() else 1,
+            'gradient_accumulation_steps': self.gradient_accumulation_steps_spin.value(),
             
-            # 高级数据增强配置
+            # 高级数据增强配置 - 修复：同时传递开关状态和参数值
             'advanced_augmentation_enabled': self.advanced_augmentation_enabled_checkbox.isChecked(),
-            'cutmix_prob': self.cutmix_prob_spin.value() if self.advanced_augmentation_enabled_checkbox.isChecked() else 0.0,
-            'mixup_alpha': self.mixup_alpha_spin.value() if self.advanced_augmentation_enabled_checkbox.isChecked() else 0.0,
+            'cutmix_prob': self.cutmix_prob_spin.value(),
+            'mixup_alpha': self.mixup_alpha_spin.value(),
             
-            # 损失缩放配置
+            # 损失缩放配置 - 修复：同时传递开关状态和参数值
             'loss_scaling_enabled': self.loss_scaling_enabled_checkbox.isChecked(),
-            'loss_scale': self.loss_scale_combo.currentText() if self.loss_scaling_enabled_checkbox.isChecked() else 'none',
+            'loss_scale': self.loss_scale_combo.currentText(),
             'static_loss_scale': self.static_loss_scale_spin.value(),
         }
         return config

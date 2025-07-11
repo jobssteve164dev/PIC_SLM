@@ -508,23 +508,41 @@ def main():
             'dropout_rate': dropout_rate,  # 添加dropout率参数
             'activation_function': params.get('activation_function', 'ReLU'),  # 添加激活函数参数
             
-            # 第一阶段高级超参数
+            # 第一阶段高级超参数（修复：添加开关状态参数）
             'beta1': params.get('beta1', 0.9),
             'beta2': params.get('beta2', 0.999),
             'momentum': params.get('momentum', 0.9),
             'nesterov': params.get('nesterov', False),
+            
+            # 预热相关参数（包含开关状态）
+            'warmup_enabled': params.get('warmup_enabled', False),
             'warmup_steps': params.get('warmup_steps', 0),
             'warmup_ratio': params.get('warmup_ratio', 0.0),
             'warmup_method': params.get('warmup_method', 'linear'),
+            
+            # 最小学习率参数（包含开关状态）
+            'min_lr_enabled': params.get('min_lr_enabled', False),
             'min_lr': params.get('min_lr', 1e-6),
+            
+            # 标签平滑参数（包含开关状态）
+            'label_smoothing_enabled': params.get('label_smoothing_enabled', False),
             'label_smoothing': params.get('label_smoothing', 0.0),
             
-            # 第二阶段高级超参数
+            # 第二阶段高级超参数（修复：添加开关状态参数）
             'model_ema': params.get('model_ema', False),
             'model_ema_decay': params.get('model_ema_decay', 0.9999),
+            
+            # 梯度累积参数（包含开关状态）
+            'gradient_accumulation_enabled': params.get('gradient_accumulation_enabled', False),
             'gradient_accumulation_steps': params.get('gradient_accumulation_steps', 1),
+            
+            # 高级数据增强参数（包含开关状态）
+            'advanced_augmentation_enabled': params.get('advanced_augmentation_enabled', False),
             'cutmix_prob': params.get('cutmix_prob', 0.0),
             'mixup_alpha': params.get('mixup_alpha', 0.0),
+            
+            # 损失缩放参数（包含开关状态）
+            'loss_scaling_enabled': params.get('loss_scaling_enabled', False),
             'loss_scale': params.get('loss_scale', 'dynamic'),
             'static_loss_scale': params.get('static_loss_scale', 128.0),
         }
