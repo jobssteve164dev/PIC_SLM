@@ -96,11 +96,10 @@ class ConfigApplier:
                 if os.path.exists(config['data_dir']):
                     classification_widget.set_folder_path(config['data_dir'])
             
-            # 应用高级超参数（阶段一新增）
+            # 应用高级超参数（直接使用配置，不进行智能推断）
             if hasattr(classification_widget, 'advanced_hyperparams_widget'):
-                # 智能推断启用状态 - 如果配置文件中没有启用状态字段，根据参数值推断
-                enhanced_config = ConfigApplier._enhance_config_with_enable_states(config)
-                classification_widget.advanced_hyperparams_widget.set_config(enhanced_config)
+                # 直接使用配置文件中的启用状态字段，不进行任何推断
+                classification_widget.advanced_hyperparams_widget.set_config(config)
             
             return True
             
@@ -217,11 +216,10 @@ class ConfigApplier:
                 elif os.path.exists(config['data_dir']):
                     detection_widget.set_folder_path(config['data_dir'])
             
-            # 应用高级超参数（阶段一新增）
+            # 应用高级超参数（直接使用配置，不进行智能推断）
             if hasattr(detection_widget, 'advanced_hyperparams_widget'):
-                # 智能推断启用状态 - 如果配置文件中没有启用状态字段，根据参数值推断
-                enhanced_config = ConfigApplier._enhance_config_with_enable_states(config)
-                detection_widget.advanced_hyperparams_widget.set_config(enhanced_config)
+                # 直接使用配置文件中的启用状态字段，不进行任何推断
+                detection_widget.advanced_hyperparams_widget.set_config(config)
             
             return True
             
@@ -260,53 +258,4 @@ class ConfigApplier:
             error_text = f"应用配置失败"
             if error_msg:
                 error_text += f": {error_msg}"
-            QMessageBox.warning(None, "警告", error_text)
-
-    @staticmethod
-    def _enhance_config_with_enable_states(config):
-        """
-        智能推断并增强配置中的启用状态字段
-        
-        当配置文件中缺少启用状态字段时，根据参数值自动推断启用状态
-        """
-        enhanced_config = config.copy()
-        
-        # 学习率预热启用状态推断
-        if 'warmup_enabled' not in enhanced_config:
-            warmup_steps = enhanced_config.get('warmup_steps', 0)
-            warmup_ratio = enhanced_config.get('warmup_ratio', 0.0)
-            # 如果预热步数大于0或预热比例大于0，则认为启用了预热
-            enhanced_config['warmup_enabled'] = warmup_steps > 0 or warmup_ratio > 0.0
-        
-        # 最小学习率启用状态推断
-        if 'min_lr_enabled' not in enhanced_config:
-            min_lr = enhanced_config.get('min_lr', 0.0)
-            # 如果最小学习率大于0，则认为启用了最小学习率限制
-            enhanced_config['min_lr_enabled'] = min_lr > 0.0
-        
-        # 标签平滑启用状态推断
-        if 'label_smoothing_enabled' not in enhanced_config:
-            label_smoothing = enhanced_config.get('label_smoothing', 0.0)
-            # 如果标签平滑值大于0，则认为启用了标签平滑
-            enhanced_config['label_smoothing_enabled'] = label_smoothing > 0.0
-        
-        # 梯度累积启用状态推断
-        if 'gradient_accumulation_enabled' not in enhanced_config:
-            gradient_accumulation_steps = enhanced_config.get('gradient_accumulation_steps', 1)
-            # 如果梯度累积步数大于1，则认为启用了梯度累积
-            enhanced_config['gradient_accumulation_enabled'] = gradient_accumulation_steps > 1
-        
-        # 高级数据增强启用状态推断
-        if 'advanced_augmentation_enabled' not in enhanced_config:
-            cutmix_prob = enhanced_config.get('cutmix_prob', 0.0)
-            mixup_alpha = enhanced_config.get('mixup_alpha', 0.0)
-            # 如果CutMix概率或MixUp Alpha大于0，则认为启用了高级数据增强
-            enhanced_config['advanced_augmentation_enabled'] = cutmix_prob > 0.0 or mixup_alpha > 0.0
-        
-        # 损失缩放启用状态推断
-        if 'loss_scaling_enabled' not in enhanced_config:
-            loss_scale = enhanced_config.get('loss_scale', 'none')
-            # 如果损失缩放策略不是'none'，则认为启用了损失缩放
-            enhanced_config['loss_scaling_enabled'] = loss_scale != 'none'
-        
-        return enhanced_config 
+            QMessageBox.warning(None, "警告", error_text) 

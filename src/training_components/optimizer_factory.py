@@ -230,7 +230,7 @@ class OptimizerFactory:
         warmup_steps = config.get('warmup_steps', 0) if warmup_enabled else 0
         warmup_ratio = config.get('warmup_ratio', 0.0) if warmup_enabled else 0.0
         warmup_method = config.get('warmup_method', 'linear')
-        min_lr = config.get('min_lr', 1e-6) if min_lr_enabled else 1e-6
+        min_lr = config.get('min_lr', 1e-6) if min_lr_enabled else 0
         
         # 如果设置了warmup_ratio但没有设置warmup_steps，计算warmup_steps
         if warmup_enabled and warmup_ratio > 0 and warmup_steps == 0 and total_steps:
