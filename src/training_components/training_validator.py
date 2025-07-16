@@ -147,23 +147,23 @@ class TrainingValidator(QObject):
         
         try:
             # 验证数据集路径
-            if not self._validate_dataset_paths(config):
+            if not self.validate_dataset_paths(config):
                 return False, config
             
             # 验证训练参数
-            if not self._validate_training_parameters(config):
+            if not self.validate_training_parameters(config):
                 return False, config
             
             # 验证模型配置
-            if not self._validate_model_config(config):
+            if not self.validate_model_config(config):
                 return False, config
             
             # 验证保存路径
-            if not self._validate_save_paths(config):
+            if not self.validate_save_paths(config):
                 return False, config
             
             # 检测超参数冲突
-            conflicts, suggestions = self._detect_hyperparameter_conflicts(config)
+            conflicts, suggestions = self.detect_hyperparameter_conflicts(config)
             
             if conflicts:
                 self.status_updated.emit(f"检测到 {len(conflicts)} 个超参数冲突")
@@ -176,7 +176,7 @@ class TrainingValidator(QObject):
                     if dialog.user_choice == 'apply':
                         # 应用建议的修改
                         if dialog.should_auto_fix():
-                            modified_config = self._apply_conflict_fixes(config, suggestions)
+                            modified_config = self.apply_conflict_fixes(config, suggestions)
                             self.status_updated.emit("已自动修复参数冲突")
                             return True, modified_config
                         else:
@@ -198,7 +198,7 @@ class TrainingValidator(QObject):
             self.validation_error.emit(f"配置验证时发生错误: {str(e)}")
             return False, config
     
-    def _detect_hyperparameter_conflicts(self, config):
+    def detect_hyperparameter_conflicts(self, config):
         """
         检测超参数冲突
         
@@ -382,7 +382,7 @@ class TrainingValidator(QObject):
         
         return conflicts, suggestions
     
-    def _apply_conflict_fixes(self, config, suggestions):
+    def apply_conflict_fixes(self, config, suggestions):
         """
         应用冲突修复建议
         
@@ -442,7 +442,7 @@ class TrainingValidator(QObject):
         
         return modified_config
     
-    def _validate_dataset_paths(self, config):
+    def validate_dataset_paths(self, config):
         """验证数据集路径"""
         data_dir = config.get('data_dir', '')
         
@@ -478,7 +478,7 @@ class TrainingValidator(QObject):
         self.status_updated.emit("数据集路径验证通过")
         return True
     
-    def _validate_training_parameters(self, config):
+    def validate_training_parameters(self, config):
         """验证训练参数"""
         # 验证num_epochs
         num_epochs = config.get('num_epochs', 20)
@@ -516,17 +516,17 @@ class TrainingValidator(QObject):
             return False
         
         # 验证新增的高级超参数
-        if not self._validate_advanced_hyperparameters(config):
+        if not self.validate_advanced_hyperparameters(config):
             return False
         
         # 验证第二阶段新增超参数
-        if not self._validate_stage_two_hyperparameters(config):
+        if not self.validate_stage_two_hyperparameters(config):
             return False
         
         self.status_updated.emit("训练参数验证通过")
         return True
     
-    def _validate_advanced_hyperparameters(self, config):
+    def validate_advanced_hyperparameters(self, config):
         """验证高级超参数（阶段一新增）"""
         # 验证优化器高级参数
         beta1 = config.get('beta1', 0.9)
@@ -606,7 +606,7 @@ class TrainingValidator(QObject):
         self.status_updated.emit("高级超参数验证通过")
         return True
     
-    def _validate_stage_two_hyperparameters(self, config):
+    def validate_stage_two_hyperparameters(self, config):
         """验证第二阶段新增超参数"""
         # 验证模型EMA参数
         model_ema = config.get('model_ema', False)
@@ -674,7 +674,7 @@ class TrainingValidator(QObject):
         self.status_updated.emit("第二阶段超参数验证通过")
         return True
     
-    def _validate_model_config(self, config):
+    def validate_model_config(self, config):
         """验证模型配置"""
         # 验证model_name
         model_name = config.get('model_name', '')
@@ -722,7 +722,7 @@ class TrainingValidator(QObject):
         self.status_updated.emit("模型配置验证通过")
         return True
     
-    def _validate_save_paths(self, config):
+    def validate_save_paths(self, config):
         """验证保存路径"""
         # 验证model_save_dir
         model_save_dir = config.get('model_save_dir', 'models/saved_models')

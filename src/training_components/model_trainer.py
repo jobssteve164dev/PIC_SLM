@@ -54,13 +54,8 @@ class ModelTrainer(QObject):
             parent_widget: 父窗口，用于显示冲突对话框
         """
         try:
-            # 验证配置（包括冲突检测）
-            is_valid, validated_config = self.validator.validate_config(config, parent_widget)
-            if not is_valid:
-                return
-            
-            # 使用验证后的配置
-            config = validated_config
+            # 注意：配置验证（包括冲突检测）现在在TrainingThread中进行
+            # 这里不再执行验证，避免重复的冲突检测对话框
             
             # 保存配置文件
             self._save_config_file(config)
@@ -123,6 +118,10 @@ class ModelTrainer(QObject):
         """启动分类模型训练"""
         self.status_updated.emit("启动分类模型训练...")
         
+        # 如果之前有线程，先断开连接
+        if self.training_thread:
+            self._disconnect_classification_signals()
+        
         # 创建训练线程
         self.training_thread = TrainingThread(config)
         
@@ -162,6 +161,64 @@ class ModelTrainer(QObject):
             self.training_thread.epoch_finished.connect(self.epoch_finished)
             self.training_thread.model_download_failed.connect(self.model_download_failed)
             self.training_thread.training_stopped.connect(self.training_stopped)
+            self.training_thread.conflict_detected.connect(self.handle_conflict_detected)
+            self.training_thread.waiting_for_conflict_resolution.connect(self.waiting_for_conflict_resolution)
+    
+    def _disconnect_classification_signals(self):
+        """断开分类训练信号连接"""
+        if self.training_thread:
+            try:
+                self.training_thread.progress_updated.disconnect(self.progress_updated)
+                self.training_thread.status_updated.disconnect(self.status_updated)
+                self.training_thread.training_finished.disconnect(self.training_finished)
+                self.training_thread.training_error.disconnect(self.training_error)
+                self.training_thread.epoch_finished.disconnect(self.epoch_finished)
+                self.training_thread.model_download_failed.disconnect(self.model_download_failed)
+                self.training_thread.training_stopped.disconnect(self.training_stopped)
+                self.training_thread.conflict_detected.disconnect(self.handle_conflict_detected)
+                self.training_thread.waiting_for_conflict_resolution.disconnect(self.waiting_for_conflict_resolution)
+            except Exception as e:
+                # 如果断开连接时出错，忽略错误（可能是因为连接不存在）
+                pass
+
+    def handle_conflict_detected(self, conflicts, suggestions):
+        """处理来自TrainingThread的冲突检测信号"""
+        try:
+            from .training_validator import HyperparameterConflictDialog
+            from PyQt5.QtWidgets import QDialog
+            
+            # 在主线程中显示冲突对话框
+            dialog = HyperparameterConflictDialog(conflicts, suggestions, None)
+            result = dialog.exec_()
+            
+            if result == QDialog.Accepted:
+                if dialog.user_choice == 'apply':
+                    # 应用建议的修改
+                    if dialog.should_auto_fix():
+                        # 自动修复
+                        modified_config = self.training_thread.validator.apply_conflict_fixes(
+                            self.training_thread.config, suggestions
+                        )
+                        self.training_thread.resolve_conflict('apply', modified_config)
+                    else:
+                        # 用户手动修改
+                        self.training_thread.resolve_conflict('apply', None)
+                elif dialog.user_choice == 'ignore':
+                    # 忽略冲突
+                    self.training_thread.resolve_conflict('ignore', None)
+            else:
+                # 用户取消训练
+                self.training_thread.resolve_conflict('cancel', None)
+                
+        except Exception as e:
+            self.training_error.emit(f"处理冲突检测时发生错误: {str(e)}")
+            self.training_thread.resolve_conflict('cancel', None)
+
+    def waiting_for_conflict_resolution(self):
+        """等待冲突解决信号处理"""
+        # 这个信号主要用于调试和状态监控
+        # 实际的冲突解决通过conflict_detected信号处理
+        pass
 
     def _connect_detection_signals(self):
         """连接检测训练信号"""
@@ -184,6 +241,8 @@ class ModelTrainer(QObject):
             if self.training_thread and self.training_thread.isRunning():
                 self.training_thread.stop()
                 self.training_thread.wait()
+                # 断开信号连接
+                self._disconnect_classification_signals()
             
             # 停止检测训练
             if self.detection_trainer:

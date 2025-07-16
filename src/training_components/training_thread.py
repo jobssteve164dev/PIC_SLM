@@ -42,6 +42,8 @@ class TrainingThread(QThread):
     epoch_finished = pyqtSignal(dict)
     model_download_failed = pyqtSignal(str, str)  # 模型名称，下载链接
     training_stopped = pyqtSignal()
+    conflict_detected = pyqtSignal(list, list)  # 冲突列表，建议列表
+    waiting_for_conflict_resolution = pyqtSignal()  # 等待冲突解决信号
     
     def __init__(self, config, parent=None):
         super().__init__(parent)
@@ -50,6 +52,11 @@ class TrainingThread(QThread):
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         self.model = None
         self.training_info = {}
+        
+        # 冲突解决相关状态
+        self.conflict_resolution_result = None
+        self.conflict_resolution_config = None
+        self.waiting_for_resolution = False
         
         # 初始化各个组件
         self.model_factory = ModelFactory()
@@ -180,6 +187,80 @@ class TrainingThread(QThread):
         self.validator.status_updated.connect(self.status_updated)
         self.validator.validation_error.connect(self.training_error)
     
+    def resolve_conflict(self, user_choice, modified_config=None):
+        """从主线程接收冲突解决结果"""
+        self.conflict_resolution_result = user_choice
+        self.conflict_resolution_config = modified_config
+        self.waiting_for_resolution = False
+        
+    def _wait_for_conflict_resolution(self):
+        """等待主线程的冲突解决结果"""
+        self.waiting_for_resolution = True
+        self.waiting_for_conflict_resolution.emit()
+        
+        # 等待主线程响应
+        while self.waiting_for_resolution and not self.stop_training:
+            self.msleep(100)  # 睡眠100ms避免忙等待
+            
+        return self.conflict_resolution_result, self.conflict_resolution_config
+    
+    def _validate_config_thread_safe(self, config):
+        """线程安全的配置验证方法"""
+        self.status_updated.emit("开始验证训练配置...")
+        
+        try:
+            # 验证数据集路径
+            if not self.validator.validate_dataset_paths(config):
+                return False, config
+            
+            # 验证训练参数
+            if not self.validator.validate_training_parameters(config):
+                return False, config
+            
+            # 验证模型配置
+            if not self.validator.validate_model_config(config):
+                return False, config
+            
+            # 验证保存路径
+            if not self.validator.validate_save_paths(config):
+                return False, config
+            
+            # 检测超参数冲突
+            conflicts, suggestions = self.validator.detect_hyperparameter_conflicts(config)
+            
+            if conflicts:
+                self.status_updated.emit(f"检测到 {len(conflicts)} 个超参数冲突")
+                
+                # 通过信号通知主线程显示对话框
+                self.conflict_detected.emit(conflicts, suggestions)
+                
+                # 等待主线程的用户选择
+                user_choice, modified_config = self._wait_for_conflict_resolution()
+                
+                if user_choice == 'apply':
+                    if modified_config:
+                        self.status_updated.emit("已应用参数冲突修复")
+                        return True, modified_config
+                    else:
+                        # 如果没有修复配置，应用自动修复
+                        auto_fixed_config = self.validator.apply_conflict_fixes(config, suggestions)
+                        self.status_updated.emit("已自动修复参数冲突")
+                        return True, auto_fixed_config
+                elif user_choice == 'ignore':
+                    self.status_updated.emit("用户选择忽略冲突，继续训练")
+                    return True, config
+                else:
+                    # 用户取消训练
+                    self.status_updated.emit("用户取消训练")
+                    return False, config
+            
+            self.status_updated.emit("配置验证通过")
+            return True, config
+            
+        except Exception as e:
+            self.training_error.emit(f"配置验证时发生错误: {str(e)}")
+            return False, config
+    
     def run(self):
         """线程运行入口，执行模型训练"""
         try:
@@ -301,8 +382,8 @@ class TrainingThread(QThread):
                 self.resource_limiter.start_monitoring()
                 self.status_updated.emit("✅ 强制资源限制已启动")
             
-            # 验证配置（包括冲突检测）
-            is_valid, validated_config = self.validator.validate_config(self.config)
+            # 验证配置（线程安全版本）
+            is_valid, validated_config = self._validate_config_thread_safe(self.config)
             if not is_valid:
                 return
             
