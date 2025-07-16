@@ -8,7 +8,9 @@ import os
 import json
 from collections import defaultdict, Counter
 import re
+from difflib import SequenceMatcher
 from src.utils.logger import get_logger
+from src.utils.config_path import get_config_file_path
 
 
 class AccuracyCalculationThread(QThread):
@@ -25,6 +27,43 @@ class AccuracyCalculationThread(QThread):
         self.output_folder = output_folder
         self.class_names = class_names or []
         self.logger = get_logger(__name__, "accuracy_calculation")
+        
+        # 尝试从配置文件加载类别信息
+        if not self.class_names:
+            self.class_names = self._load_class_names_from_config()
+        
+    def _load_class_names_from_config(self):
+        """从配置文件加载类别名称"""
+        try:
+            config_file = get_config_file_path()
+            if os.path.exists(config_file):
+                with open(config_file, 'r', encoding='utf-8') as f:
+                    config = json.load(f)
+                    
+                # 尝试多种可能的类别配置源
+                class_names = []
+                
+                # 1. 从default_classes获取
+                if 'default_classes' in config and config['default_classes']:
+                    class_names = config['default_classes']
+                    self.logger.info(f"从default_classes加载类别: {class_names}")
+                
+                # 2. 从class_weights的键获取
+                elif 'class_weights' in config and config['class_weights']:
+                    class_names = list(config['class_weights'].keys())
+                    self.logger.info(f"从class_weights加载类别: {class_names}")
+                
+                # 3. 从defect_classes获取
+                elif 'defect_classes' in config and config['defect_classes']:
+                    class_names = config['defect_classes']
+                    self.logger.info(f"从defect_classes加载类别: {class_names}")
+                
+                return class_names
+                
+        except Exception as e:
+            self.logger.warning(f"从配置文件加载类别失败: {str(e)}")
+            
+        return []
         
     def run(self):
         """执行准确率计算"""
@@ -71,8 +110,8 @@ class AccuracyCalculationThread(QThread):
         for root, _, files in os.walk(self.source_folder):
             for file in files:
                 if file.lower().endswith(supported_formats):
-                    # 从文件名中提取类别信息
-                    true_class = self._extract_class_from_filename(file)
+                    # 使用改进的类别提取算法
+                    true_class = self._extract_class_from_filename_smart(file)
                     if true_class:
                         file_path = os.path.join(root, file)
                         source_images[file] = {
@@ -118,47 +157,162 @@ class AccuracyCalculationThread(QThread):
         
         return output_images
     
-    def _extract_class_from_filename(self, filename):
-        """从文件名中提取类别信息"""
+    def _extract_class_from_filename_smart(self, filename):
+        """智能类别提取算法 - 支持字符串相似度匹配"""
         # 移除文件扩展名
         name_without_ext = os.path.splitext(filename)[0]
         
+        # 如果有已知的类别列表，使用智能匹配
+        if self.class_names:
+            return self._smart_class_matching(name_without_ext, self.class_names)
+        
+        # 如果没有类别列表，使用传统的模式匹配
+        return self._extract_class_from_filename_traditional(name_without_ext)
+    
+    def _smart_class_matching(self, filename, class_names):
+        """智能类别匹配算法 - 基于字符串相似度的真正智能匹配"""
+        filename_upper = filename.upper()
+        best_match = None
+        best_score = 0.0
+        match_details = []
+        
+        # 对每个类别进行全面的相似度分析
+        for class_name in class_names:
+            class_upper = class_name.upper()
+            max_similarity = 0.0
+            best_match_type = ""
+            
+            # 1. 完整字符串相似度
+            full_similarity = SequenceMatcher(None, filename_upper, class_upper).ratio()
+            if full_similarity > max_similarity:
+                max_similarity = full_similarity
+                best_match_type = f"完整匹配(相似度:{full_similarity:.3f})"
+            
+            # 2. 类别名的各个部分与文件名的相似度
+            class_parts = re.split(r'[_\-\s]+', class_upper)
+            for part in class_parts:
+                if part and len(part) >= 2:  # 忽略过短的部分
+                    part_similarity = SequenceMatcher(None, filename_upper, part).ratio()
+                    if part_similarity > max_similarity:
+                        max_similarity = part_similarity
+                        best_match_type = f"部分匹配({part},相似度:{part_similarity:.3f})"
+            
+            # 3. 文件名的各个部分与类别名的相似度
+            filename_parts = re.split(r'[_\-\s\d]+', filename_upper)
+            for file_part in filename_parts:
+                if file_part and len(file_part) >= 2:  # 忽略过短的部分
+                    file_part_similarity = SequenceMatcher(None, file_part, class_upper).ratio()
+                    if file_part_similarity > max_similarity:
+                        max_similarity = file_part_similarity
+                        best_match_type = f"文件名部分匹配({file_part},相似度:{file_part_similarity:.3f})"
+                    
+                    # 文件名部分与类别名部分的交叉匹配
+                    for class_part in class_parts:
+                        if class_part and len(class_part) >= 2:
+                            cross_similarity = SequenceMatcher(None, file_part, class_part).ratio()
+                            if cross_similarity > max_similarity:
+                                max_similarity = cross_similarity
+                                best_match_type = f"交叉匹配({file_part}↔{class_part},相似度:{cross_similarity:.3f})"
+            
+            # 4. 包含关系检查（作为高分奖励）
+            if class_upper in filename_upper:
+                max_similarity = max(max_similarity, 0.9)  # 给包含关系高分
+                best_match_type = f"包含匹配({class_upper} in {filename_upper})"
+            elif filename_upper in class_upper:
+                max_similarity = max(max_similarity, 0.85)  # 反向包含也给高分
+                best_match_type = f"反向包含匹配({filename_upper} in {class_upper})"
+            
+            # 记录匹配详情
+            match_details.append({
+                'class_name': class_name,
+                'similarity': max_similarity,
+                'match_type': best_match_type
+            })
+            
+            # 更新最佳匹配
+            if max_similarity > best_score:
+                best_score = max_similarity
+                best_match = class_name
+        
+        # 按相似度排序，用于调试
+        match_details.sort(key=lambda x: x['similarity'], reverse=True)
+        
+        # 记录详细的匹配分析
+        self.logger.debug(f"文件名: {filename} 的匹配分析:")
+        for detail in match_details[:3]:  # 只显示前3个最佳匹配
+            self.logger.debug(f"  {detail['class_name']}: {detail['similarity']:.3f} ({detail['match_type']})")
+        
+        # 设置一个较低的阈值，因为我们现在有更精确的相似度计算
+        if best_score >= 0.4:  # 40%相似度阈值
+            self.logger.debug(f"最终匹配: {filename} -> {best_match} (相似度: {best_score:.3f})")
+            return best_match
+        
+        # 如果所有方法都失败，记录并返回None
+        self.logger.warning(f"无法匹配类别: {filename} (最高相似度: {best_score:.3f}, 可用类别: {class_names})")
+        return None
+    
+    def _extract_identifiers_from_filename(self, filename):
+        """从文件名中提取可能的类别标识符"""
+        identifiers = []
+        
+        # 提取模式
+        patterns = [
+            r'([A-Z][A-Z_]*[A-Z])',  # 大写字母组合，如 MOUSE_BITE
+            r'([A-Z]+)',             # 连续大写字母，如 SPUR
+            r'([A-Za-z]+)(?=\d)',    # 字母后跟数字，如 Missing123
+            r'([A-Za-z]+)(?=_)',     # 字母后跟下划线，如 Open_
+            r'([A-Za-z]+)(?=-)',     # 字母后跟连字符，如 Short-
+        ]
+        
+        for pattern in patterns:
+            matches = re.findall(pattern, filename)
+            for match in matches:
+                if len(match) >= 2:  # 至少2个字符
+                    identifiers.append(match)
+        
+        # 去重并按长度排序（长的优先）
+        identifiers = list(set(identifiers))
+        identifiers.sort(key=len, reverse=True)
+        
+        return identifiers
+    
+    def _extract_class_from_filename_traditional(self, filename):
+        """传统的类别提取算法（作为备选方案）"""
         # 尝试多种模式匹配，按优先级排序
         patterns = [
             # 模式1: 数字_类别_数字格式，如 01_spur_07 -> spur
-            r'^\d+_([A-Za-z]+)_\d+.*',
+            r'^\d+_([A-Za-z_]+?)_\d+.*',
             # 模式2: 类别_数字格式，如 spur_07 -> spur
-            r'^([A-Za-z]+)_\d+.*',
+            r'^([A-Za-z_]+?)_\d+.*',
             # 模式3: 数字_类别格式，如 01_spur -> spur
-            r'^\d+_([A-Za-z]+).*',
+            r'^\d+_([A-Za-z_]+?).*',
             # 模式4: 字母+数字组合，如 A123, B456
-            r'^([A-Za-z]+)\d+.*',
+            r'^([A-Za-z_]+?)\d+.*',
             # 模式5: 字母+括号数字，如 A(1), B(2)
-            r'^([A-Za-z]+)\(\d+\).*',
+            r'^([A-Za-z_]+?)\(\d+\).*',
             # 模式6: 字母+下划线，如 A_001, B_test
-            r'^([A-Za-z]+)_.*',
+            r'^([A-Za-z_]+?)_.*',
             # 模式7: 字母+连字符，如 A-001, B-test
-            r'^([A-Za-z]+)-.*',
+            r'^([A-Za-z_]+?)-.*',
             # 模式8: 字母+点，如 A.001, B.test
-            r'^([A-Za-z]+)\..*',
+            r'^([A-Za-z_]+?)\..*',
             # 模式9: 纯字母开头，如 Apple123, Banana456
-            r'^([A-Za-z]+)[\d_\-\(\)\.].*',
+            r'^([A-Za-z_]+?)[\d_\-\(\)\.].*',
             # 模式10: 任何字母序列开头
-            r'^([A-Za-z]+)',
+            r'^([A-Za-z_]+)',
         ]
         
         for i, pattern in enumerate(patterns):
-            match = re.match(pattern, name_without_ext)
+            match = re.match(pattern, filename)
             if match:
                 class_name = match.group(1).upper()
-                # 记录使用的模式（用于调试）
-                if hasattr(self, 'debug_mode') and self.debug_mode:
-                    print(f"文件 {filename} 使用模式 {i+1}: {pattern} -> {class_name}")
+                # 清理类别名称（移除尾部的下划线）
+                class_name = class_name.rstrip('_')
+                self.logger.debug(f"传统匹配: {filename} 使用模式 {i+1}: {pattern} -> {class_name}")
                 return class_name
         
         # 如果所有模式都不匹配，返回None
-        if hasattr(self, 'debug_mode') and self.debug_mode:
-            print(f"警告：无法从文件名 {filename} 中提取类别信息")
+        self.logger.warning(f"传统匹配失败: {filename}")
         return None
     
     def _extract_class_from_path(self, path):
@@ -169,9 +323,20 @@ class AccuracyCalculationThread(QThread):
         # 分割路径，取最后一个文件夹名作为类别
         path_parts = rel_path.split(os.sep)
         if path_parts and path_parts[-1] != '.':
-            predicted_class = path_parts[-1].upper()
-            if hasattr(self, 'debug_mode') and self.debug_mode:
-                print(f"从路径 {path} 提取预测类别: {predicted_class}")
+            predicted_class = path_parts[-1]
+            
+            # 如果有已知的类别列表，尝试匹配
+            if self.class_names:
+                # 尝试精确匹配
+                for class_name in self.class_names:
+                    if class_name.upper() == predicted_class.upper():
+                        return class_name
+                
+                # 尝试部分匹配
+                for class_name in self.class_names:
+                    if class_name.upper() in predicted_class.upper() or predicted_class.upper() in class_name.upper():
+                        return class_name
+            
             return predicted_class
         
         return None
@@ -283,8 +448,35 @@ class AccuracyCalculatorWidget(QWidget):
         self.logger = get_logger(__name__, "accuracy_calculator")
         self.calculation_thread = None
         self.last_results = None
+        self.class_names = []  # 存储类别名称
         
         self.init_ui()
+    
+    def set_class_names(self, class_names):
+        """设置类别名称列表"""
+        self.class_names = class_names if class_names else []
+        self.logger.info(f"设置类别名称: {self.class_names}")
+    
+    def get_class_names_from_config(self):
+        """从配置文件获取类别名称"""
+        try:
+            config_file = get_config_file_path()
+            if os.path.exists(config_file):
+                with open(config_file, 'r', encoding='utf-8') as f:
+                    config = json.load(f)
+                    
+                # 尝试多种可能的类别配置源
+                if 'default_classes' in config and config['default_classes']:
+                    return config['default_classes']
+                elif 'class_weights' in config and config['class_weights']:
+                    return list(config['class_weights'].keys())
+                elif 'defect_classes' in config and config['defect_classes']:
+                    return config['defect_classes']
+                    
+        except Exception as e:
+            self.logger.warning(f"从配置文件获取类别名称失败: {str(e)}")
+            
+        return []
     
     def init_ui(self):
         """初始化UI"""
@@ -470,9 +662,12 @@ class AccuracyCalculatorWidget(QWidget):
             QMessageBox.warning(self, "警告", "请先选择源文件夹和输出文件夹")
             return
         
+        # 获取类别名称
+        class_names = self.class_names or self.get_class_names_from_config()
+        
         # 创建计算线程
         self.calculation_thread = AccuracyCalculationThread(
-            self.source_folder, self.output_folder
+            self.source_folder, self.output_folder, class_names
         )
         
         # 连接信号

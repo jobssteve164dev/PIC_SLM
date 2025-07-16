@@ -460,6 +460,12 @@ class PredictionTab(BaseTab):
             # 模型加载成功
             self.update_status("模型加载成功")
             
+            # 获取类别信息并传递给准确率计算器
+            if hasattr(self.main_window.worker.predictor, 'class_names') and self.main_window.worker.predictor.class_names:
+                class_names = self.main_window.worker.predictor.class_names
+                self.accuracy_calculator.set_class_names(class_names)
+                self.update_status(f"模型加载成功，类别数量: {len(class_names)}")
+            
             # 显示成功提示弹窗
             QMessageBox.information(self, "成功", f"模型 {model_arch} 加载成功！\n现在可以进行图像预测了。")
             
