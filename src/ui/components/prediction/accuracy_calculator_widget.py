@@ -170,11 +170,25 @@ class AccuracyCalculationThread(QThread):
         return self._extract_class_from_filename_traditional(name_without_ext)
     
     def _smart_class_matching(self, filename, class_names):
-        """智能类别匹配算法 - 基于字符串相似度的真正智能匹配"""
+        """智能类别匹配算法 - 修复版本：优先精确匹配"""
         filename_upper = filename.upper()
         best_match = None
         best_score = 0.0
         match_details = []
+        
+        # 如果提取的类别太短（单字符），直接拒绝
+        if len(filename.strip()) <= 1:
+            self.logger.warning(f"单字符类别提取被拒绝: {filename}")
+            return None
+        
+        # 如果包含明显的"噪音"关键词，直接拒绝
+        noise_keywords = ['UNKNOWN', 'TEST', 'SAMPLE', 'TEMP', 'DEBUG', 'CLASS']
+        if any(noise in filename_upper for noise in noise_keywords):
+            self.logger.warning(f"噪音关键词类别被拒绝: {filename}")
+            return None
+        
+        # 先去掉文件名中的数字和括号，获得核心类名
+        filename_core = re.sub(r'[\d\(\)\s_]+$', '', filename_upper).rstrip('_')
         
         # 对每个类别进行全面的相似度分析
         for class_name in class_names:
@@ -182,70 +196,70 @@ class AccuracyCalculationThread(QThread):
             max_similarity = 0.0
             best_match_type = ""
             
-            # 1. 完整字符串相似度
-            full_similarity = SequenceMatcher(None, filename_upper, class_upper).ratio()
-            if full_similarity > max_similarity:
-                max_similarity = full_similarity
-                best_match_type = f"完整匹配(相似度:{full_similarity:.3f})"
+            # 1. 核心类名精确匹配（最高优先级）
+            if filename_core == class_upper:
+                max_similarity = 1.0
+                best_match_type = f"核心精确匹配"
             
-            # 2. 类别名的各个部分与文件名的相似度
-            class_parts = re.split(r'[_\-\s]+', class_upper)
-            for part in class_parts:
-                if part and len(part) >= 2:  # 忽略过短的部分
-                    part_similarity = SequenceMatcher(None, filename_upper, part).ratio()
-                    if part_similarity > max_similarity:
-                        max_similarity = part_similarity
-                        best_match_type = f"部分匹配({part},相似度:{part_similarity:.3f})"
+            # 2. 完整精确匹配
+            elif filename_upper == class_upper:
+                max_similarity = 0.99
+                best_match_type = f"完整精确匹配"
             
-            # 3. 文件名的各个部分与类别名的相似度
-            filename_parts = re.split(r'[_\-\s\d]+', filename_upper)
-            for file_part in filename_parts:
-                if file_part and len(file_part) >= 2:  # 忽略过短的部分
-                    file_part_similarity = SequenceMatcher(None, file_part, class_upper).ratio()
-                    if file_part_similarity > max_similarity:
-                        max_similarity = file_part_similarity
-                        best_match_type = f"文件名部分匹配({file_part},相似度:{file_part_similarity:.3f})"
-                    
-                    # 文件名部分与类别名部分的交叉匹配
-                    for class_part in class_parts:
-                        if class_part and len(class_part) >= 2:
-                            cross_similarity = SequenceMatcher(None, file_part, class_part).ratio()
-                            if cross_similarity > max_similarity:
-                                max_similarity = cross_similarity
-                                best_match_type = f"交叉匹配({file_part}↔{class_part},相似度:{cross_similarity:.3f})"
+            # 3. 核心类名包含关系检查（高优先级）
+            elif class_upper == filename_core:
+                max_similarity = 0.95
+                best_match_type = f"核心类名匹配"
             
-            # 4. 包含关系检查（作为高分奖励）
-            if class_upper in filename_upper:
-                max_similarity = max(max_similarity, 0.9)  # 给包含关系高分
-                best_match_type = f"包含匹配({class_upper} in {filename_upper})"
+            # 4. 传统包含关系检查
+            elif class_upper in filename_upper:
+                # 计算精确度：类名在文件名中的占比
+                precision = len(class_upper) / len(filename_upper)
+                # 关键修复：提高包含匹配的基础分数
+                max_similarity = 0.9 + precision * 0.05  # 0.9-0.95 之间
+                best_match_type = f"包含匹配(精确度:{precision:.3f})"
+            
             elif filename_upper in class_upper:
-                max_similarity = max(max_similarity, 0.85)  # 反向包含也给高分
-                best_match_type = f"反向包含匹配({filename_upper} in {class_upper})"
+                # 反向包含匹配：文件名完全包含在类名中
+                precision = len(filename_upper) / len(class_upper)
+                max_similarity = 0.85 + precision * 0.05  # 0.85-0.9 之间
+                best_match_type = f"反向包含匹配(精确度:{precision:.3f})"
+            
+            else:
+                # 5. 字符串相似度（最低优先级）
+                full_similarity = SequenceMatcher(None, filename_upper, class_upper).ratio()
+                # 关键修复：降低纯相似度匹配的分数，确保它低于包含匹配
+                max_similarity = full_similarity * 0.8  # 最高只能到0.8
+                best_match_type = f"相似度匹配({full_similarity:.3f})"
             
             # 记录匹配详情
             match_details.append({
                 'class_name': class_name,
                 'similarity': max_similarity,
-                'match_type': best_match_type
+                'match_type': best_match_type,
+                'class_length': len(class_upper),
+                'length_diff': abs(len(class_upper) - len(filename_upper))
             })
-            
-            # 更新最佳匹配
-            if max_similarity > best_score:
-                best_score = max_similarity
-                best_match = class_name
         
-        # 按相似度排序，用于调试
-        match_details.sort(key=lambda x: x['similarity'], reverse=True)
+        # 排序策略：优先相似度，然后优先较短的类名（避免过度匹配）
+        match_details.sort(key=lambda x: (-x['similarity'], x['class_length'], x['length_diff']))
         
         # 记录详细的匹配分析
-        self.logger.debug(f"文件名: {filename} 的匹配分析:")
-        for detail in match_details[:3]:  # 只显示前3个最佳匹配
-            self.logger.debug(f"  {detail['class_name']}: {detail['similarity']:.3f} ({detail['match_type']})")
+        self.logger.debug(f"文件名: {filename} (核心: {filename_core}) 的匹配分析:")
+        for i, detail in enumerate(match_details[:3]):  # 只显示前3个最佳匹配
+            self.logger.debug(f"  {i+1}. {detail['class_name']}: {detail['similarity']:.3f} ({detail['match_type']})")
         
-        # 设置一个较低的阈值，因为我们现在有更精确的相似度计算
-        if best_score >= 0.4:  # 40%相似度阈值
-            self.logger.debug(f"最终匹配: {filename} -> {best_match} (相似度: {best_score:.3f})")
-            return best_match
+        if match_details:
+            best_match_detail = match_details[0]
+            best_score = best_match_detail['similarity']
+            best_match = best_match_detail['class_name']
+            
+            # 使用合理的阈值
+            threshold = 0.4
+            
+            if best_score >= threshold:
+                self.logger.debug(f"最终匹配: {filename} -> {best_match} (相似度: {best_score:.3f})")
+                return best_match
         
         # 如果所有方法都失败，记录并返回None
         self.logger.warning(f"无法匹配类别: {filename} (最高相似度: {best_score:.3f}, 可用类别: {class_names})")
