@@ -181,14 +181,21 @@ class AccuracyCalculationThread(QThread):
             self.logger.warning(f"单字符类别提取被拒绝: {filename}")
             return None
         
-        # 如果包含明显的"噪音"关键词，直接拒绝
-        noise_keywords = ['UNKNOWN', 'TEST', 'SAMPLE', 'TEMP', 'DEBUG', 'CLASS']
-        if any(noise in filename_upper for noise in noise_keywords):
-            self.logger.warning(f"噪音关键词类别被拒绝: {filename}")
-            return None
-        
         # 先去掉文件名中的数字和括号，获得核心类名
         filename_core = re.sub(r'[\d\(\)\s_]+$', '', filename_upper).rstrip('_')
+        
+        # 修复的关键：更智能的噪音关键词过滤
+        # 只有当文件名不在已知类别列表中时，才进行噪音过滤
+        class_names_upper = [name.upper() for name in class_names]
+        
+        # 如果核心类名或完整文件名在类别列表中，跳过噪音过滤
+        if filename_core not in class_names_upper and filename_upper not in class_names_upper:
+            # 只对明确的噪音关键词进行过滤，并且要更精确
+            noise_keywords = ['UNKNOWN', 'TEST', 'SAMPLE', 'TEMP', 'DEBUG', 'CLASS']
+            # 使用精确匹配而不是包含匹配，避免误判
+            if filename_core in noise_keywords or filename_upper in noise_keywords:
+                self.logger.warning(f"噪音关键词类别被拒绝: {filename} (核心: {filename_core})")
+                return None
         
         # 对每个类别进行全面的相似度分析
         for class_name in class_names:
