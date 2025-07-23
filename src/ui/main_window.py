@@ -22,6 +22,7 @@ from .evaluation_tab import EvaluationTab
 from .about_tab import AboutTab
 from .dataset_evaluation_tab import DatasetEvaluationTab  # 导入新的数据集评估标签页
 from .model_analysis_tab import ModelAnalysisTab  # 导入新的模型分析标签页
+from .model_factory_tab import ModelFactoryTab  # 导入新的模型工厂标签页
 from .base_tab import BaseTab
 
 # 导入预处理线程
@@ -179,6 +180,7 @@ class MainWindow(QMainWindow):
         self.about_tab = AboutTab(self.tabs, self)
         self.dataset_evaluation_tab = DatasetEvaluationTab(self.tabs, self)  # 创建数据集评估标签页
         self.model_analysis_tab = ModelAnalysisTab(self.tabs, self)  # 创建模型分析标签页
+        self.model_factory_tab = ModelFactoryTab(self.tabs, self)  # 创建模型工厂标签页
         
         # 添加标签页（调整顺序，将模型预测放在模型评估与可视化后面）
         self.tabs.addTab(self.data_processing_tab, "图像预处理")
@@ -187,6 +189,7 @@ class MainWindow(QMainWindow):
         self.tabs.addTab(self.training_tab, "模型训练")
         self.tabs.addTab(self.evaluation_tab, "模型评估与可视化")
         self.tabs.addTab(self.model_analysis_tab, "模型分析")  # 添加新的模型分析标签页
+        self.tabs.addTab(self.model_factory_tab, "🏭 AI模型工厂")  # 添加新的模型工厂标签页
         self.tabs.addTab(self.prediction_tab, "模型预测")
         self.tabs.addTab(self.settings_tab, "设置")
         self.tabs.addTab(self.about_tab, "关于")
