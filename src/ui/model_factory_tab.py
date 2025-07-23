@@ -184,23 +184,56 @@ class LLMChatWidget(QWidget):
             self.status_label.setText("正在切换AI模型...")
             self.status_label.setStyleSheet("color: #ffc107; font-weight: bold;")
             
+            # 加载AI设置配置
+            ai_config = self.load_ai_config()
+            
             if adapter_name == "模拟适配器":
                 adapter_type = 'mock'
                 adapter_config = {}
             elif adapter_name == "OpenAI GPT-4":
-                # 这里需要配置API密钥
                 adapter_type = 'openai'
-                adapter_config = {'api_key': 'your-api-key'}
+                openai_config = ai_config.get('openai', {})
+                adapter_config = {
+                    'api_key': openai_config.get('api_key', ''),
+                    'model': openai_config.get('model', 'gpt-4'),
+                    'base_url': openai_config.get('base_url', '') or None,
+                    'temperature': openai_config.get('temperature', 0.7),
+                    'max_tokens': openai_config.get('max_tokens', 1000)
+                }
+                
+                # 检查API密钥
+                if not adapter_config['api_key']:
+                    self.add_system_message("❌ 未配置OpenAI API密钥，请在设置中配置")
+                    self.status_label.setText("配置缺失")
+                    self.status_label.setStyleSheet("color: #dc3545; font-weight: bold;")
+                    return
+                    
             elif adapter_name == "本地Ollama":
                 adapter_type = 'local'
-                adapter_config = {'model_name': 'llama2'}
+                ollama_config = ai_config.get('ollama', {})
+                adapter_config = {
+                    'model_name': ollama_config.get('model', 'llama2'),
+                    'base_url': ollama_config.get('base_url', 'http://localhost:11434'),
+                    'temperature': ollama_config.get('temperature', 0.7),
+                    'num_predict': ollama_config.get('num_predict', 1000)
+                }
             else:
                 return
                 
             self.llm_framework.switch_adapter(adapter_type, adapter_config)
             success = True
+            
             if success:
                 self.add_system_message(f"✅ 已切换到: {adapter_name}")
+                if adapter_name == "OpenAI GPT-4":
+                    model_name = adapter_config.get('model', 'gpt-4')
+                    self.add_system_message(f"   使用模型: {model_name}")
+                elif adapter_name == "本地Ollama":
+                    model_name = adapter_config.get('model_name', 'llama2')
+                    base_url = adapter_config.get('base_url', 'localhost:11434')
+                    self.add_system_message(f"   使用模型: {model_name}")
+                    self.add_system_message(f"   服务器: {base_url}")
+                    
                 self.status_label.setText("AI助手已就绪")
                 self.status_label.setStyleSheet("color: #28a745; font-weight: bold;")
             else:
@@ -421,6 +454,54 @@ class LLMChatWidget(QWidget):
     def update_training_context(self, context):
         """更新训练上下文"""
         self.training_context.update(context)
+    
+    def load_ai_config(self):
+        """加载AI设置配置"""
+        import json
+        import os
+        
+        config_file = "setting/ai_config.json"
+        default_config = {
+            'openai': {
+                'api_key': '',
+                'base_url': '',
+                'model': 'gpt-4',
+                'temperature': 0.7,
+                'max_tokens': 1000
+            },
+            'ollama': {
+                'base_url': 'http://localhost:11434',
+                'model': 'llama2',
+                'temperature': 0.7,
+                'num_predict': 1000
+            },
+            'general': {
+                'default_adapter': 'mock',
+                'request_timeout': 60,
+                'max_retries': 3,
+                'enable_cache': True,
+                'enable_streaming': False
+            }
+        }
+        
+        try:
+            if os.path.exists(config_file):
+                with open(config_file, 'r', encoding='utf-8') as f:
+                    config = json.load(f)
+                    # 合并默认配置，确保所有必需的键都存在
+                    for key in default_config:
+                        if key not in config:
+                            config[key] = default_config[key]
+                        elif isinstance(default_config[key], dict):
+                            for subkey in default_config[key]:
+                                if subkey not in config[key]:
+                                    config[key][subkey] = default_config[key][subkey]
+                    return config
+            else:
+                return default_config
+        except Exception as e:
+            print(f"加载AI配置失败: {str(e)}")
+            return default_config
 
 
 class AnalysisPanelWidget(QWidget):
@@ -729,4 +810,34 @@ class ModelFactoryTab(BaseTab):
             'final_results': results,
             'completion_time': datetime.now().isoformat()
         }
-        self.update_training_context(context) 
+        self.update_training_context(context)
+    
+    def reload_ai_config(self):
+        """重新加载AI配置并更新适配器"""
+        if hasattr(self, 'chat_widget') and self.chat_widget:
+            try:
+                # 重新初始化LLM框架
+                self.chat_widget.init_llm_framework()
+                self.update_status("AI配置已重新加载")
+            except Exception as e:
+                self.update_status(f"重新加载AI配置失败: {str(e)}")
+    
+    def update_ai_adapter_from_settings(self, ai_config):
+        """从设置更新AI适配器配置"""
+        if hasattr(self, 'chat_widget') and self.chat_widget and hasattr(self.chat_widget, 'llm_framework'):
+            try:
+                default_adapter = ai_config.get('general', {}).get('default_adapter', 'mock')
+                
+                # 更新下拉框显示
+                if default_adapter == 'openai':
+                    self.chat_widget.adapter_combo.setCurrentText("OpenAI GPT-4")
+                elif default_adapter == 'local':
+                    self.chat_widget.adapter_combo.setCurrentText("本地Ollama")
+                else:
+                    self.chat_widget.adapter_combo.setCurrentText("模拟适配器")
+                
+                # 切换适配器
+                self.chat_widget.switch_adapter(self.chat_widget.adapter_combo.currentText())
+                
+            except Exception as e:
+                print(f"更新AI适配器配置时出错: {str(e)}") 

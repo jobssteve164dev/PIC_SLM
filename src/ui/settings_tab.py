@@ -702,45 +702,7 @@ class SettingsTab(BaseTab):
         # 通知模型工厂Tab更新配置
         if hasattr(self.main_window, 'model_factory_tab'):
             try:
-                # 获取默认适配器类型
-                default_adapter = ai_config.get('general', {}).get('default_adapter', 'mock')
-                
-                # 更新模型工厂Tab的适配器配置
-                if hasattr(self.main_window.model_factory_tab, 'chat_widget'):
-                    chat_widget = self.main_window.model_factory_tab.chat_widget
-                    
-                    # 更新适配器选择下拉框
-                    if default_adapter == 'openai':
-                        chat_widget.adapter_combo.setCurrentText("OpenAI GPT-4")
-                    elif default_adapter == 'local':
-                        chat_widget.adapter_combo.setCurrentText("本地Ollama")
-                    else:
-                        chat_widget.adapter_combo.setCurrentText("模拟适配器")
-                    
-                    # 如果LLM框架存在，更新其配置
-                    if hasattr(chat_widget, 'llm_framework') and chat_widget.llm_framework:
-                        if default_adapter == 'openai':
-                            openai_config = ai_config.get('openai', {})
-                            adapter_config = {
-                                'api_key': openai_config.get('api_key', ''),
-                                'model': openai_config.get('model', 'gpt-4'),
-                                'base_url': openai_config.get('base_url', '') or None,
-                                'temperature': openai_config.get('temperature', 0.7),
-                                'max_tokens': openai_config.get('max_tokens', 1000)
-                            }
-                            chat_widget.llm_framework.switch_adapter('openai', adapter_config)
-                        elif default_adapter == 'local':
-                            ollama_config = ai_config.get('ollama', {})
-                            adapter_config = {
-                                'model_name': ollama_config.get('model', 'llama2'),
-                                'base_url': ollama_config.get('base_url', 'http://localhost:11434'),
-                                'temperature': ollama_config.get('temperature', 0.7),
-                                'num_predict': ollama_config.get('num_predict', 1000)
-                            }
-                            chat_widget.llm_framework.switch_adapter('local', adapter_config)
-                        else:
-                            chat_widget.llm_framework.switch_adapter('mock', {})
-                            
+                self.main_window.model_factory_tab.update_ai_adapter_from_settings(ai_config)
             except Exception as e:
                 print(f"更新模型工厂Tab配置时出错: {str(e)}")
         
