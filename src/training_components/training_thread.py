@@ -491,11 +491,14 @@ class TrainingThread(QThread):
                 else:
                     self.status_updated.emit(f"使用学习率调度器: {self.config.get('lr_scheduler', 'StepLR')}")
             
-            # 初始化TensorBoard
+            # 初始化TensorBoard和数据流服务器
             tensorboard_log_dir = None
             if use_tensorboard:
                 tensorboard_log_dir = self.tensorboard_logger.initialize(self.config, model_name)
                 self.training_info['tensorboard_log_dir'] = tensorboard_log_dir
+                
+                # 初始化数据流服务器
+                self._initialize_stream_server()
                 
                 # 记录模型图和类别信息
                 self.tensorboard_logger.log_model_graph(self.model, dataloaders['train'], self.device)
@@ -1082,3 +1085,56 @@ class TrainingThread(QThread):
         
         with open(os.path.join(model_save_dir, 'training_info.json'), 'w') as f:
             json.dump(training_info, f, indent=4) 
+
+    def _initialize_stream_server(self):
+        """初始化数据流服务器"""
+        try:
+            # 导入数据流服务器
+            from ..api.stream_server import TrainingStreamServer
+            
+            # 创建数据流服务器配置
+            stream_config = {
+                'sse_host': '127.0.0.1',
+                'sse_port': 8888,
+                'websocket_host': '127.0.0.1',
+                'websocket_port': 8889,
+                'rest_api_host': '127.0.0.1',
+                'rest_api_port': 8890,
+                'buffer_size': 1000,
+                'debug_mode': False
+            }
+            
+            # 创建并启动数据流服务器
+            self.stream_server = TrainingStreamServer(
+                training_system=self.parent() if self.parent() else None,
+                config=stream_config
+            )
+            
+            # 设置TensorBoard日志器的数据流服务器
+            self.tensorboard_logger.set_stream_server(self.stream_server)
+            
+            # 在独立线程中启动数据流服务器
+            import threading
+            def start_stream_server():
+                try:
+                    self.stream_server.start_all_servers()
+                except Exception as e:
+                    print(f"启动数据流服务器失败: {str(e)}")
+            
+            stream_thread = threading.Thread(target=start_stream_server, daemon=True)
+            stream_thread.start()
+            
+            # 等待服务器启动
+            import time
+            time.sleep(2)
+            
+            # 获取API端点信息
+            endpoints = self.stream_server.get_api_endpoints()
+            self.status_updated.emit(f"数据流服务已启动:")
+            self.status_updated.emit(f"• SSE: {endpoints.get('sse_stream')}")
+            self.status_updated.emit(f"• WebSocket: {endpoints.get('websocket')}")
+            self.status_updated.emit(f"• REST API: {endpoints.get('rest_current_metrics')}")
+            
+        except Exception as e:
+            print(f"初始化数据流服务器失败: {str(e)}")
+            self.stream_server = None 
