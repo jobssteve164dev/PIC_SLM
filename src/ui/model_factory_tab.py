@@ -127,15 +127,53 @@ class LLMChatWidget(QWidget):
             return
             
         try:
-            # 创建默认的模拟适配器
-            adapter = create_llm_adapter('mock')
-            self.llm_framework = LLMFramework(adapter)
-            self.add_system_message("✅ AI助手已启动，使用模拟适配器")
+            # 加载AI设置配置
+            ai_config = self.load_ai_config()
+            
+            # 根据配置初始化适配器
+            default_adapter = ai_config.get('general', {}).get('default_adapter', 'mock')
+            
+            if default_adapter == 'openai':
+                openai_config = ai_config.get('openai', {})
+                api_key = openai_config.get('api_key', '')
+                if api_key:
+                    self.llm_framework = LLMFramework('openai', openai_config)
+                    self.adapter_combo.setCurrentText("OpenAI GPT-4")
+                    self.add_system_message("✅ AI助手已启动，使用OpenAI GPT-4")
+                else:
+                    # 没有API密钥，回退到模拟适配器
+                    self.llm_framework = LLMFramework('mock')
+                    self.adapter_combo.setCurrentText("模拟适配器")
+                    self.add_system_message("⚠️ 未配置OpenAI API密钥，使用模拟适配器")
+            elif default_adapter == 'local':
+                ollama_config = ai_config.get('ollama', {})
+                self.llm_framework = LLMFramework('local', ollama_config)
+                self.adapter_combo.setCurrentText("本地Ollama")
+                self.add_system_message("✅ AI助手已启动，使用本地Ollama")
+            else:
+                # 默认使用模拟适配器
+                self.llm_framework = LLMFramework('mock')
+                self.adapter_combo.setCurrentText("模拟适配器")
+                self.add_system_message("✅ AI助手已启动，使用模拟适配器")
+            
+            # 启动框架
+            self.llm_framework.start()
             self.status_label.setText("AI助手已就绪")
             self.status_label.setStyleSheet("color: #28a745; font-weight: bold;")
+            
         except Exception as e:
-            self.add_system_message(f"❌ LLM框架初始化失败: {str(e)}")
-            self.set_ui_enabled(False)
+            # 初始化失败，回退到模拟适配器
+            try:
+                self.llm_framework = LLMFramework('mock')
+                self.llm_framework.start()
+                self.adapter_combo.setCurrentText("模拟适配器")
+                self.add_system_message(f"⚠️ 配置的适配器初始化失败: {str(e)}")
+                self.add_system_message("✅ 已回退到模拟适配器")
+                self.status_label.setText("AI助手已就绪")
+                self.status_label.setStyleSheet("color: #ffc107; font-weight: bold;")
+            except Exception as fallback_error:
+                self.add_system_message(f"❌ LLM框架初始化失败: {str(fallback_error)}")
+                self.set_ui_enabled(False)
     
     def switch_adapter(self, adapter_name):
         """切换LLM适配器"""
@@ -147,16 +185,20 @@ class LLMChatWidget(QWidget):
             self.status_label.setStyleSheet("color: #ffc107; font-weight: bold;")
             
             if adapter_name == "模拟适配器":
-                adapter = create_llm_adapter('mock')
+                adapter_type = 'mock'
+                adapter_config = {}
             elif adapter_name == "OpenAI GPT-4":
                 # 这里需要配置API密钥
-                adapter = create_llm_adapter('openai', api_key='your-api-key')
+                adapter_type = 'openai'
+                adapter_config = {'api_key': 'your-api-key'}
             elif adapter_name == "本地Ollama":
-                adapter = create_llm_adapter('local', model_name='llama2')
+                adapter_type = 'local'
+                adapter_config = {'model_name': 'llama2'}
             else:
                 return
                 
-            success = self.llm_framework.switch_adapter(adapter)
+            self.llm_framework.switch_adapter(adapter_type, adapter_config)
+            success = True
             if success:
                 self.add_system_message(f"✅ 已切换到: {adapter_name}")
                 self.status_label.setText("AI助手已就绪")
@@ -519,22 +561,7 @@ class ModelFactoryTab(BaseTab):
         main_layout.setContentsMargins(10, 10, 10, 10)
         main_layout.setSpacing(10)
         
-        # 添加标题
-        title_label = QLabel("🏭 AI模型工厂")
-        title_label.setFont(QFont('微软雅黑', 16, QFont.Bold))
-        title_label.setAlignment(Qt.AlignCenter)
-        title_label.setStyleSheet("""
-            QLabel {
-                color: #2c3e50;
-                padding: 10px;
-                background: qlineargradient(x1:0, y1:0, x2:1, y2:0, 
-                    stop:0 #3498db, stop:1 #2980b9);
-                color: white;
-                border-radius: 8px;
-                margin-bottom: 10px;
-            }
-        """)
-        main_layout.addWidget(title_label)
+
         
         # 创建水平分割器
         main_splitter = QSplitter(Qt.Horizontal)

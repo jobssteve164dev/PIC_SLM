@@ -12,7 +12,7 @@ from .base_tab import BaseTab
 from .components.settings import (ConfigManager, FolderConfigWidget, 
                                 ClassWeightWidget, ModelConfigWidget, WeightStrategy,
                                 ConfigProfileSelector, ResourceLimitWidget, LogViewerWidget,
-                                DependencyManagerWidget)
+                                DependencyManagerWidget, AISettingsWidget)
 
 
 class SettingsTab(BaseTab):
@@ -137,6 +137,18 @@ class SettingsTab(BaseTab):
         # 添加依赖管理选项卡
         self.settings_tabs.addTab(dependency_tab, "依赖管理")
         
+        # 创建AI设置选项卡
+        ai_tab = QWidget()
+        ai_layout = QVBoxLayout(ai_tab)
+        ai_layout.setContentsMargins(10, 10, 10, 10)
+        
+        # 添加AI设置组件
+        self.ai_settings_widget = AISettingsWidget()
+        ai_layout.addWidget(self.ai_settings_widget)
+        
+        # 添加AI设置选项卡
+        self.settings_tabs.addTab(ai_tab, "🤖 AI设置")
+        
         main_layout.addWidget(self.settings_tabs)
         
         # 添加按钮组
@@ -226,6 +238,9 @@ class SettingsTab(BaseTab):
         # 连接资源限制组件信号
         self.resource_limit_widget.limits_changed.connect(self.on_resource_limits_changed)
         self.resource_limit_widget.monitoring_toggled.connect(self.on_resource_monitoring_toggled)
+        
+        # 连接AI设置组件信号
+        self.ai_settings_widget.settings_changed.connect(self.on_ai_settings_changed)
     
     def on_folder_changed(self, folder_type: str, folder_path: str):
         """处理文件夹变化"""
@@ -680,3 +695,54 @@ class SettingsTab(BaseTab):
         """处理资源监控开关"""
         print(f"资源监控状态: {'启用' if enabled else '禁用'}")
         # 这里可以添加更多处理逻辑，比如通知主窗口
+    
+    def on_ai_settings_changed(self, ai_config: dict):
+        """处理AI设置变化"""
+        print(f"AI设置已更新: {ai_config}")
+        # 通知模型工厂Tab更新配置
+        if hasattr(self.main_window, 'model_factory_tab'):
+            try:
+                # 获取默认适配器类型
+                default_adapter = ai_config.get('general', {}).get('default_adapter', 'mock')
+                
+                # 更新模型工厂Tab的适配器配置
+                if hasattr(self.main_window.model_factory_tab, 'chat_widget'):
+                    chat_widget = self.main_window.model_factory_tab.chat_widget
+                    
+                    # 更新适配器选择下拉框
+                    if default_adapter == 'openai':
+                        chat_widget.adapter_combo.setCurrentText("OpenAI GPT-4")
+                    elif default_adapter == 'local':
+                        chat_widget.adapter_combo.setCurrentText("本地Ollama")
+                    else:
+                        chat_widget.adapter_combo.setCurrentText("模拟适配器")
+                    
+                    # 如果LLM框架存在，更新其配置
+                    if hasattr(chat_widget, 'llm_framework') and chat_widget.llm_framework:
+                        if default_adapter == 'openai':
+                            openai_config = ai_config.get('openai', {})
+                            adapter_config = {
+                                'api_key': openai_config.get('api_key', ''),
+                                'model': openai_config.get('model', 'gpt-4'),
+                                'base_url': openai_config.get('base_url', '') or None,
+                                'temperature': openai_config.get('temperature', 0.7),
+                                'max_tokens': openai_config.get('max_tokens', 1000)
+                            }
+                            chat_widget.llm_framework.switch_adapter('openai', adapter_config)
+                        elif default_adapter == 'local':
+                            ollama_config = ai_config.get('ollama', {})
+                            adapter_config = {
+                                'model_name': ollama_config.get('model', 'llama2'),
+                                'base_url': ollama_config.get('base_url', 'http://localhost:11434'),
+                                'temperature': ollama_config.get('temperature', 0.7),
+                                'num_predict': ollama_config.get('num_predict', 1000)
+                            }
+                            chat_widget.llm_framework.switch_adapter('local', adapter_config)
+                        else:
+                            chat_widget.llm_framework.switch_adapter('mock', {})
+                            
+            except Exception as e:
+                print(f"更新模型工厂Tab配置时出错: {str(e)}")
+        
+        # 保存AI配置到主配置文件
+        self.update_status("AI设置已更新")

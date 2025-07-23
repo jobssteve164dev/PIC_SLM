@@ -21,9 +21,11 @@ def test_llm_framework():
         from src.llm.llm_framework import LLMFramework
         from src.llm.model_adapters import create_llm_adapter
         
-        # 创建模拟适配器
-        adapter = create_llm_adapter('mock')
-        framework = LLMFramework(adapter)
+        # 创建LLM框架使用模拟适配器
+        framework = LLMFramework('mock')
+        
+        # 启动框架
+        framework.start()
         
         print("✅ LLM框架导入成功")
         
@@ -41,12 +43,20 @@ def test_llm_framework():
         print(f"   分析结果: {analysis.get('combined_insights', 'N/A')[:100]}...")
         
         print("💡 测试超参数建议...")
-        suggestions = framework.get_hyperparameter_suggestions(test_metrics, [])
-        print(f"   建议结果: {suggestions[:100]}...")
+        suggestions = framework.get_hyperparameter_suggestions(test_metrics)
+        if isinstance(suggestions, dict):
+            suggestions_text = suggestions.get('llm_suggestions', str(suggestions))
+        else:
+            suggestions_text = str(suggestions)
+        print(f"   建议结果: {suggestions_text[:100]}...")
         
         print("🔧 测试问题诊断...")
         diagnosis = framework.diagnose_training_problems(test_metrics)
-        print(f"   诊断结果: {diagnosis[:100]}...")
+        if isinstance(diagnosis, dict):
+            diagnosis_text = diagnosis.get('llm_diagnosis', str(diagnosis))
+        else:
+            diagnosis_text = str(diagnosis)
+        print(f"   诊断结果: {diagnosis_text[:100]}...")
         
         print("📈 测试模型对比...")
         model_results = [
@@ -54,11 +64,19 @@ def test_llm_framework():
             {'model_name': 'EfficientNet', 'accuracy': 0.92, 'val_loss': 0.19}
         ]
         comparison = framework.compare_model_results(model_results)
-        print(f"   对比结果: {comparison.get('analysis', 'N/A')[:100]}...")
+        if isinstance(comparison, dict):
+            comparison_text = comparison.get('analysis', str(comparison))
+        else:
+            comparison_text = str(comparison)
+        print(f"   对比结果: {comparison_text[:100]}...")
         
         print("💬 测试对话功能...")
-        response = framework.chat_with_training_context("训练状态如何？", test_metrics)
-        print(f"   对话响应: {response[:100]}...")
+        response = framework.chat_with_training_context("训练状态如何？")
+        if isinstance(response, dict):
+            response_text = response.get('response', str(response))
+        else:
+            response_text = str(response)
+        print(f"   对话响应: {response_text[:100]}...")
         
         # 获取统计信息
         stats = framework.get_framework_stats()
