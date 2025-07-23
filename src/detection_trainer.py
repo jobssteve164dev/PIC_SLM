@@ -609,11 +609,15 @@ class DetectionTrainer(QObject):
             train_dataset = DetectionDataset(os.path.join(data_dir, 'train'), transform=transform)
             val_dataset = DetectionDataset(os.path.join(data_dir, 'val'), transform=transform, is_train=False)
             
+            # 根据操作系统选择合适的num_workers
+            import platform
+            num_workers = 0 if platform.system() == 'Windows' else 4
+            
             train_loader = torch.utils.data.DataLoader(
-                train_dataset, batch_size=batch_size, shuffle=True, num_workers=4,
+                train_dataset, batch_size=batch_size, shuffle=True, num_workers=num_workers,
                 collate_fn=lambda x: tuple(zip(*x)))
             val_loader = torch.utils.data.DataLoader(
-                val_dataset, batch_size=batch_size, shuffle=False, num_workers=4,
+                val_dataset, batch_size=batch_size, shuffle=False, num_workers=num_workers,
                 collate_fn=lambda x: tuple(zip(*x)))
             
             # 创建模型
@@ -679,11 +683,15 @@ class DetectionTrainer(QObject):
             train_dataset = DetectionDataset(os.path.join(data_dir, 'train'), transform=transform)
             val_dataset = DetectionDataset(os.path.join(data_dir, 'val'), transform=transform, is_train=False)
             
+            # 根据操作系统选择合适的num_workers
+            import platform
+            num_workers = 0 if platform.system() == 'Windows' else 4
+            
             train_loader = torch.utils.data.DataLoader(
-                train_dataset, batch_size=batch_size, shuffle=True, num_workers=4,
+                train_dataset, batch_size=batch_size, shuffle=True, num_workers=num_workers,
                 collate_fn=lambda x: tuple(zip(*x)))
             val_loader = torch.utils.data.DataLoader(
-                val_dataset, batch_size=batch_size, shuffle=False, num_workers=4,
+                val_dataset, batch_size=batch_size, shuffle=False, num_workers=num_workers,
                 collate_fn=lambda x: tuple(zip(*x)))
             
             # 创建模型
@@ -750,11 +758,15 @@ class DetectionTrainer(QObject):
             train_dataset = DetectionDataset(os.path.join(data_dir, 'train'), transform=transform)
             val_dataset = DetectionDataset(os.path.join(data_dir, 'val'), transform=transform, is_train=False)
             
+            # 根据操作系统选择合适的num_workers
+            import platform
+            num_workers = 0 if platform.system() == 'Windows' else 4
+            
             train_loader = torch.utils.data.DataLoader(
-                train_dataset, batch_size=batch_size, shuffle=True, num_workers=4,
+                train_dataset, batch_size=batch_size, shuffle=True, num_workers=num_workers,
                 collate_fn=lambda x: tuple(zip(*x)))
             val_loader = torch.utils.data.DataLoader(
-                val_dataset, batch_size=batch_size, shuffle=False, num_workers=4,
+                val_dataset, batch_size=batch_size, shuffle=False, num_workers=num_workers,
                 collate_fn=lambda x: tuple(zip(*x)))
             
             # 创建模型
@@ -820,11 +832,15 @@ class DetectionTrainer(QObject):
             train_dataset = DetectionDataset(os.path.join(data_dir, 'train'), transform=transform)
             val_dataset = DetectionDataset(os.path.join(data_dir, 'val'), transform=transform, is_train=False)
             
+            # 根据操作系统选择合适的num_workers
+            import platform
+            num_workers = 0 if platform.system() == 'Windows' else 4
+            
             train_loader = torch.utils.data.DataLoader(
-                train_dataset, batch_size=batch_size, shuffle=True, num_workers=4,
+                train_dataset, batch_size=batch_size, shuffle=True, num_workers=num_workers,
                 collate_fn=lambda x: tuple(zip(*x)))
             val_loader = torch.utils.data.DataLoader(
-                val_dataset, batch_size=batch_size, shuffle=False, num_workers=4,
+                val_dataset, batch_size=batch_size, shuffle=False, num_workers=num_workers,
                 collate_fn=lambda x: tuple(zip(*x)))
             
             # 创建模型

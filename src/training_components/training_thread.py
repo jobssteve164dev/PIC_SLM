@@ -600,10 +600,14 @@ class TrainingThread(QThread):
                                                 data_transforms[x])
                         for x in ['train', 'val']}
         
+        # 根据操作系统选择合适的num_workers
+        import platform
+        num_workers = 0 if platform.system() == 'Windows' else 4
+        
         dataloaders = {x: DataLoader(image_datasets[x],
                                    batch_size=batch_size,
                                    shuffle=True,
-                                   num_workers=4)
+                                   num_workers=num_workers)
                       for x in ['train', 'val']}
         
         dataset_sizes = {x: len(image_datasets[x]) for x in ['train', 'val']}

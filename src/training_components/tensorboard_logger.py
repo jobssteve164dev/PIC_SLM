@@ -10,6 +10,7 @@ TensorBoard日志记录器 - 负责记录训练过程中的各种指标和可视
 - 记录模型权重和梯度统计
 - 记录性能和资源使用情况
 - 记录高级评估指标
+- 支持实时数据流输出到API服务器
 """
 
 import os
@@ -29,10 +30,12 @@ import psutil  # 用于系统资源监控
 
 
 class TensorBoardLogger(QObject):
-    """增强版TensorBoard日志记录器"""
+    """增强版TensorBoard日志记录器，支持实时数据流"""
     
     # 信号定义
     status_updated = pyqtSignal(str)
+    # 新增：实时指标数据流信号
+    metrics_stream = pyqtSignal(dict)
     
     def __init__(self):
         super().__init__()
@@ -40,6 +43,11 @@ class TensorBoardLogger(QObject):
         self.log_dir = None
         self.start_time = None
         self.last_log_time = None
+        
+        # 数据流相关
+        self.stream_server = None
+        self.enable_streaming = False
+        self.current_metrics = {}
     
     def initialize(self, config, model_name):
         """
@@ -367,6 +375,15 @@ class TensorBoardLogger(QObject):
         
         self.writer.add_scalar(f'Loss/{phase}', loss, epoch)
         self.writer.add_scalar(f'Accuracy/{phase}', accuracy, epoch)
+        
+        # 更新当前指标并发送到数据流
+        self._update_current_metrics({
+            'epoch': epoch,
+            'phase': phase,
+            'loss': float(loss) if hasattr(loss, 'item') else float(loss),
+            'accuracy': float(accuracy) if hasattr(accuracy, 'item') else float(accuracy),
+            'timestamp': time.time()
+        })
     
     def log_sample_images(self, dataloader, epoch, max_images=8):
         """
@@ -589,3 +606,78 @@ class TensorBoardLogger(QObject):
     def get_log_dir(self):
         """获取日志目录"""
         return self.log_dir 
+    
+    def set_stream_server(self, stream_server):
+        """设置数据流服务器"""
+        self.stream_server = stream_server
+        self.enable_streaming = True
+        
+    def _update_current_metrics(self, metrics_update):
+        """更新当前指标并发送到数据流"""
+        # 更新当前指标缓存
+        self.current_metrics.update(metrics_update)
+        
+        # 发送到数据流服务器
+        if self.enable_streaming and self.stream_server:
+            try:
+                self.stream_server.broadcast_metrics(self.current_metrics.copy())
+            except Exception as e:
+                print(f"发送指标到数据流时出错: {str(e)}")
+        
+        # 发送信号
+        self.metrics_stream.emit(self.current_metrics.copy())
+    
+    def _get_gpu_memory_info(self):
+        """获取GPU内存信息"""
+        if not torch.cuda.is_available():
+            return {'gpu_memory_used': 0, 'gpu_memory_total': 0}
+        
+        try:
+            memory_allocated = torch.cuda.memory_allocated() / 1024**3  # GB
+            memory_reserved = torch.cuda.memory_reserved() / 1024**3    # GB
+            return {
+                'gpu_memory_used': round(memory_allocated, 2),
+                'gpu_memory_total': round(memory_reserved, 2)
+            }
+        except:
+            return {'gpu_memory_used': 0, 'gpu_memory_total': 0}
+    
+    def _get_system_info(self):
+        """获取系统资源信息"""
+        try:
+            cpu_percent = psutil.cpu_percent()
+            memory_info = psutil.virtual_memory()
+            return {
+                'cpu_usage_percent': round(cpu_percent, 1),
+                'memory_usage_percent': round(memory_info.percent, 1),
+                'memory_available_gb': round(memory_info.available / 1024**3, 2)
+            }
+        except:
+            return {
+                'cpu_usage_percent': 0,
+                'memory_usage_percent': 0,
+                'memory_available_gb': 0
+            }
+    
+    def log_comprehensive_metrics(self, epoch, phase, metrics_dict):
+        """记录综合指标并发送到数据流"""
+        if not self.writer:
+            return
+        
+        # 记录到TensorBoard
+        for key, value in metrics_dict.items():
+            if isinstance(value, (int, float)):
+                self.writer.add_scalar(f'{key}', value, epoch)
+        
+        # 准备数据流格式的指标
+        stream_metrics = {
+            'epoch': epoch,
+            'phase': phase,
+            'timestamp': time.time(),
+            **metrics_dict,
+            **self._get_gpu_memory_info(),
+            **self._get_system_info()
+        }
+        
+        # 发送到数据流
+        self._update_current_metrics(stream_metrics) 
