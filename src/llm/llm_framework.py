@@ -50,7 +50,15 @@ class LLMFramework:
             'successful_requests': 0,
             'failed_requests': 0,
             'average_response_time': 0,
-            'last_request_time': None
+            'last_request_time': None,
+            'start_time': time.time(),
+            'request_types': {
+                'analyze_metrics': 0,
+                'get_suggestions': 0,
+                'diagnose_issues': 0,
+                'chat': 0,
+                'compare_models': 0
+            }
         }
         
         print(f"LLM框架初始化完成，使用适配器: {type(self.llm_adapter).__name__}")
@@ -85,6 +93,7 @@ class LLMFramework:
         
         try:
             self.stats['total_requests'] += 1
+            self.stats['request_types']['analyze_metrics'] += 1
             
             # 使用分析引擎进行分析
             result = self.analysis_engine.analyze_training_progress(metrics_data)
@@ -316,6 +325,7 @@ class LLMFramework:
         
         try:
             self.stats['total_requests'] += 1
+            self.stats['request_types']['get_suggestions'] += 1
             
             result = self.analysis_engine.suggest_hyperparameter_tuning(
                 current_metrics, current_params
@@ -354,6 +364,7 @@ class LLMFramework:
         
         try:
             self.stats['total_requests'] += 1
+            self.stats['request_types']['diagnose_issues'] += 1
             
             result = self.analysis_engine.diagnose_training_issues(metrics_data, error_info)
             
@@ -388,6 +399,7 @@ class LLMFramework:
         
         try:
             self.stats['total_requests'] += 1
+            self.stats['request_types']['chat'] += 1
             
             result = self.analysis_engine.chat_with_context(user_question)
             
@@ -423,6 +435,7 @@ class LLMFramework:
         
         try:
             self.stats['total_requests'] += 1
+            self.stats['request_types']['compare_models'] += 1
             
             result = self.analysis_engine.compare_models(model_results)
             

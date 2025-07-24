@@ -170,10 +170,15 @@ class DeepSeekAdapter(LLMAdapter):
         try:
             import openai
             self.client = openai.OpenAI(api_key=api_key, base_url=self.base_url)
-            self.available = True
+            # 如果有API密钥且库导入成功，则认为可用
+            self.available = bool(api_key.strip())
         except ImportError:
             print("警告: OpenAI库未安装，将使用HTTP请求方式")
             self.client = None
+            # 即使没有OpenAI库，如果有API密钥也可以使用HTTP请求
+            self.available = bool(api_key.strip())
+        except Exception as e:
+            print(f"DeepSeek适配器初始化失败: {str(e)}")
             self.available = False
     
     def generate_response(self, prompt: str, context: Optional[Dict] = None) -> str:
@@ -237,6 +242,7 @@ class DeepSeekAdapter(LLMAdapter):
 请始终基于提供的数据进行分析，避免过度推测。
 回答要简洁明了，重点突出，用中文回答。
 """
+
     
     def _http_request(self, messages: List[Dict]) -> str:
         """使用HTTP请求方式调用API"""

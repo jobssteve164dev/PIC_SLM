@@ -7,6 +7,7 @@ from PyQt5.QtGui import QFont, QTextCursor, QColor, QPalette
 import os
 import sys
 import json
+import time
 from datetime import datetime
 from .base_tab import BaseTab
 
@@ -1193,12 +1194,61 @@ class ModelFactoryTab(BaseTab):
         try:
             if hasattr(self.chat_widget, 'llm_framework') and self.chat_widget.llm_framework:
                 stats = self.chat_widget.llm_framework.get_framework_stats()
+                
+                # 获取性能统计数据
+                perf_stats = stats.get('performance_stats', {})
+                adapter_info = stats.get('adapter_info', {})
+                engine_stats = stats.get('engine_stats', {})
+                
+                # 计算成功率
+                total_requests = perf_stats.get('total_requests', 0)
+                successful_requests = perf_stats.get('successful_requests', 0)
+                success_rate = (successful_requests / total_requests * 100) if total_requests > 0 else 0
+                
+                # 获取平均响应时间
+                avg_response_time = perf_stats.get('average_response_time', 0)
+                
+                # 获取适配器信息
+                adapter_type = adapter_info.get('type', 'Unknown')
+                adapter_available = adapter_info.get('available', False)
+                
+                # 获取引擎统计
+                analyses_performed = engine_stats.get('analyses_performed', 0)
+                metrics_processed = engine_stats.get('metrics_processed', 0)
+                
+                # 获取请求类型统计
+                request_types = perf_stats.get('request_types', {})
+                
+                # 计算运行时间
+                start_time = perf_stats.get('start_time', time.time())
+                uptime_seconds = time.time() - start_time
+                uptime_hours = uptime_seconds / 3600
+                
                 stats_text = f"""
 📊 框架统计信息:
-• 总请求数: {stats.get('total_requests', 0)}
-• 成功率: {stats.get('success_rate', 0):.1f}%
-• 平均响应时间: {stats.get('avg_response_time', 0):.2f}秒
-• 当前适配器: {stats.get('current_adapter', 'Unknown')}
+• 框架状态: {stats.get('framework_status', 'Unknown')}
+• 运行时间: {uptime_hours:.1f}小时
+• 总请求数: {total_requests}
+• 成功请求数: {successful_requests}
+• 失败请求数: {perf_stats.get('failed_requests', 0)}
+• 成功率: {success_rate:.1f}%
+• 平均响应时间: {avg_response_time:.2f}秒
+
+📈 请求类型分布:
+• 指标分析: {request_types.get('analyze_metrics', 0)}次
+• 获取建议: {request_types.get('get_suggestions', 0)}次
+• 问题诊断: {request_types.get('diagnose_issues', 0)}次
+• 对话交互: {request_types.get('chat', 0)}次
+• 模型对比: {request_types.get('compare_models', 0)}次
+
+🔧 适配器信息:
+• 类型: {adapter_type}
+• 状态: {'可用' if adapter_available else '不可用'}
+• 模型: {adapter_info.get('model_name', 'Unknown')}
+
+📊 引擎统计:
+• 已执行分析: {analyses_performed}次
+• 已处理指标: {metrics_processed}条
                 """.strip()
                 self.system_status_display.setText(stats_text)
             else:
