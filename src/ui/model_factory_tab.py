@@ -706,9 +706,16 @@ class LLMChatWidget(QWidget):
     
     def switch_to_evaluation_tab(self):
         """切换到模型评估Tab"""
-        if self.main_window:
+        # 通过parent链查找主窗口
+        main_window = None
+        widget = self.parent()
+        while widget and not hasattr(widget, 'tab_widget'):
+            widget = widget.parent()
+        main_window = widget
+        
+        if main_window and hasattr(main_window, 'tab_widget'):
             # 获取主窗口的标签页控件
-            tab_widget = self.main_window.tab_widget
+            tab_widget = main_window.tab_widget
             
             # 查找模型评估标签页的索引
             for i in range(tab_widget.count()):
@@ -716,6 +723,8 @@ class LLMChatWidget(QWidget):
                 if "评估" in tab_text or "Evaluation" in tab_text:
                     tab_widget.setCurrentIndex(i)
                     break
+        else:
+            QMessageBox.warning(self, "错误", "无法找到主窗口，无法切换到模型评估页面")
         
     def on_models_selected_for_comparison(self, models_data):
         """处理用户选择的模型数据"""
