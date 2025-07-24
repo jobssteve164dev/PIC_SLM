@@ -722,6 +722,12 @@ class LLMChatWidget(QWidget):
                 tab_text = tab_widget.tabText(i)
                 if "模型评估与可视化" in tab_text:
                     tab_widget.setCurrentIndex(i)
+                    
+                    # 进一步切换到模型评估子标签页
+                    evaluation_tab = tab_widget.widget(i)
+                    if hasattr(evaluation_tab, 'switch_view'):
+                        # 切换到模型评估子标签页（索引3）
+                        evaluation_tab.switch_view(3)
                     break
         else:
             QMessageBox.warning(self, "错误", "无法找到主窗口，无法切换到模型评估页面")
