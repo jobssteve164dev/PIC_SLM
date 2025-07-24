@@ -102,8 +102,8 @@ class AISettingsWidget(QWidget):
     def init_ui(self):
         """初始化用户界面"""
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(10, 10, 10, 10)
-        layout.setSpacing(10)
+        layout.setContentsMargins(5, 5, 5, 5)  # 减少边距
+        layout.setSpacing(8)  # 减少间距
         
         # 创建标签页
         self.tabs = QTabWidget()
@@ -120,10 +120,13 @@ class AISettingsWidget(QWidget):
         self.general_tab = self.create_general_tab()
         self.tabs.addTab(self.general_tab, "通用设置")
         
+        # 设置标签页的最大高度以减少空白
+        self.tabs.setMaximumHeight(400)
         layout.addWidget(self.tabs)
         
         # 添加重置按钮（保持重置功能，但移除保存按钮）
         button_layout = QHBoxLayout()
+        button_layout.setContentsMargins(0, 5, 0, 0)  # 减少按钮区域的上边距
         
         self.reset_btn = QPushButton("🔄 重置默认")
         self.reset_btn.clicked.connect(self.reset_to_defaults)
@@ -131,11 +134,16 @@ class AISettingsWidget(QWidget):
         
         button_layout.addStretch()
         layout.addLayout(button_layout)
+        
+        # 添加一个小的stretch以填充剩余空间，但不会太大
+        layout.addStretch(1)
     
     def create_openai_tab(self):
         """创建OpenAI设置标签页"""
         widget = QWidget()
         layout = QVBoxLayout(widget)
+        layout.setContentsMargins(5, 5, 5, 5)  # 减少边距
+        layout.setSpacing(8)  # 减少间距
         
         # API配置组
         api_group = QGroupBox("API配置")
@@ -207,13 +215,15 @@ class AISettingsWidget(QWidget):
         model_group.setLayout(model_layout)
         layout.addWidget(model_group)
         
-        layout.addStretch()
+        # 移除addStretch()以减少空白空间
         return widget
     
     def create_ollama_tab(self):
         """创建Ollama设置标签页"""
         widget = QWidget()
         layout = QVBoxLayout(widget)
+        layout.setContentsMargins(5, 5, 5, 5)  # 减少边距
+        layout.setSpacing(8)  # 减少间距
         
         # 服务器配置组
         server_group = QGroupBox("服务器配置")
@@ -280,13 +290,15 @@ class AISettingsWidget(QWidget):
         model_group.setLayout(model_layout)
         layout.addWidget(model_group)
         
-        layout.addStretch()
+        # 移除addStretch()以减少空白空间
         return widget
     
     def create_general_tab(self):
         """创建通用设置标签页"""
         widget = QWidget()
         layout = QVBoxLayout(widget)
+        layout.setContentsMargins(5, 5, 5, 5)  # 减少边距
+        layout.setSpacing(8)  # 减少间距
         
         # 默认适配器组
         adapter_group = QGroupBox("默认适配器")
@@ -329,7 +341,7 @@ class AISettingsWidget(QWidget):
         advanced_group.setLayout(advanced_layout)
         layout.addWidget(advanced_group)
         
-        layout.addStretch()
+        # 移除addStretch()以减少空白空间
         return widget
     
     def toggle_api_key_visibility(self):
