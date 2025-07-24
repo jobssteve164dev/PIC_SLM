@@ -14,6 +14,7 @@ from .base_tab import BaseTab
 try:
     from src.llm.llm_framework import LLMFramework
     from src.llm.model_adapters import create_llm_adapter
+    from src.ui.components.model_analysis.model_selection_dialog import ModelSelectionDialog
     LLM_AVAILABLE = True
 except ImportError as e:
     print(f"LLM模块导入失败: {e}")
@@ -191,30 +192,34 @@ class LLMChatThread(QThread):
     
     def _handle_model_comparison(self):
         """处理模型对比请求"""
-        # 模拟多个模型结果
-        model_results = [
-            {
-                'model_name': 'ResNet50',
-                'accuracy': 0.892,
-                'val_loss': 0.234,
-                'params': 25557032,
-                'inference_time': 0.05
-            },
-            {
-                'model_name': 'EfficientNet-B0',
-                'accuracy': 0.900,
-                'val_loss': 0.198,
-                'params': 5288548,
-                'inference_time': 0.03
-            },
-            {
-                'model_name': 'MobileNetV2',
-                'accuracy': 0.875,
-                'val_loss': 0.267,
-                'params': 3504872,
-                'inference_time': 0.02
-            }
-        ]
+        # 使用传入的真实模型数据，如果没有则使用默认模拟数据
+        if self.task_params and isinstance(self.task_params, list) and len(self.task_params) > 0:
+            model_results = self.task_params
+        else:
+            # 默认模拟数据（保持兼容性）
+            model_results = [
+                {
+                    'model_name': 'ResNet50',
+                    'accuracy': 0.892,
+                    'val_loss': 0.234,
+                    'params': 25557032,
+                    'inference_time': 0.05
+                },
+                {
+                    'model_name': 'EfficientNet-B0',
+                    'accuracy': 0.900,
+                    'val_loss': 0.198,
+                    'params': 5288548,
+                    'inference_time': 0.03
+                },
+                {
+                    'model_name': 'MobileNetV2',
+                    'accuracy': 0.875,
+                    'val_loss': 0.267,
+                    'params': 3504872,
+                    'inference_time': 0.02
+                }
+            ]
         
         result = self.llm_framework.analysis_engine.compare_models(model_results)
         
@@ -667,16 +672,62 @@ class LLMChatWidget(QWidget):
         self.chat_thread.start()
     
     def compare_models(self):
-        """模型对比分析"""
-        if not self.llm_framework:
+        """模型对比分析 - 引导用户到模型评估Tab进行实际评估"""
+        # 显示引导对话框
+        reply = QMessageBox.question(
+            self, "模型对比分析", 
+            "模型对比分析需要使用真实的测试数据集对模型进行评估。\n\n"
+            "系统将引导您切换到「模型评估与可视化」标签页进行以下操作：\n"
+            "1. 选择要对比的多个模型\n"
+            "2. 设置测试集数据目录\n" 
+            "3. 执行模型评估获得真实性能数据\n"
+            "4. 使用AI分析评估结果\n\n"
+            "是否现在切换到模型评估页面？",
+            QMessageBox.Yes | QMessageBox.No,
+            QMessageBox.Yes
+        )
+        
+        if reply == QMessageBox.Yes:
+            # 切换到模型评估Tab
+            self.switch_to_evaluation_tab()
+            
+            # 在聊天界面显示引导信息
+            self.add_ai_message(
+                "已为您切换到模型评估页面。请按以下步骤进行模型对比分析：\n\n"
+                "📋 操作步骤：\n"
+                "1. 选择「模型目录」- 包含要对比的模型文件\n"
+                "2. 选择「测试集目录」- 用于评估的测试数据\n"
+                "3. 设置「模型类型」和「模型架构」\n"
+                "4. 在模型列表中选择多个要对比的模型\n"
+                "5. 点击「对比选中模型」进行评估\n"
+                "6. 评估完成后，点击「AI结果分析」获得智能分析报告\n\n"
+                                 "💡 提示：确保选择的模型类型和架构与训练时一致，以获得准确的评估结果。"
+             )
+    
+    def switch_to_evaluation_tab(self):
+        """切换到模型评估Tab"""
+        if self.main_window:
+            # 获取主窗口的标签页控件
+            tab_widget = self.main_window.tab_widget
+            
+            # 查找模型评估标签页的索引
+            for i in range(tab_widget.count()):
+                tab_text = tab_widget.tabText(i)
+                if "评估" in tab_text or "Evaluation" in tab_text:
+                    tab_widget.setCurrentIndex(i)
+                    break
+        
+    def on_models_selected_for_comparison(self, models_data):
+        """处理用户选择的模型数据"""
+        if not models_data or len(models_data) < 2:
+            QMessageBox.warning(self, "警告", "需要至少选择2个模型进行对比")
             return
             
-        # 检查是否有线程正在运行
-        if self.chat_thread and self.chat_thread.isRunning():
-            QMessageBox.information(self, "提示", "AI正在处理中，请稍等...")
-            return
+        # 显示用户选择的模型信息
+        model_names = [model['model_name'] for model in models_data]
+        user_message = f"请对比分析以下 {len(models_data)} 个模型：{', '.join(model_names)}"
+        self.add_user_message(user_message)
         
-        self.add_user_message("请对比分析这些模型")
         self.progress_bar.setVisible(True)
         self.progress_bar.setRange(0, 0)
         self.status_label.setText("正在对比模型...")
@@ -685,9 +736,9 @@ class LLMChatWidget(QWidget):
         # 禁用UI控件
         self.set_ui_enabled(False)
         
-        # 创建并启动分析线程
+        # 创建并启动分析线程，传入真实的模型数据
         self.chat_thread = LLMChatThread(self.llm_framework)
-        self.chat_thread.set_analysis_task("compare_models")
+        self.chat_thread.set_analysis_task("compare_models", models_data)
         
         # 连接信号
         self.chat_thread.analysis_finished.connect(self.on_analysis_finished)
@@ -715,6 +766,35 @@ class LLMChatWidget(QWidget):
         self.add_ai_message(f"抱歉，处理您的问题时出现错误: {error_message}")
         self._reset_ui_state()
     
+    def start_ai_analysis_with_data(self, analysis_data):
+        """使用真实评估数据启动AI分析"""
+        if not self.llm_framework:
+            return
+            
+        # 检查是否有线程正在运行
+        if self.chat_thread and self.chat_thread.isRunning():
+            QMessageBox.information(self, "提示", "AI正在处理中，请稍等...")
+            return
+        
+        self.progress_bar.setVisible(True)
+        self.progress_bar.setRange(0, 0)
+        self.status_label.setText("正在分析模型评估结果...")
+        self.status_label.setStyleSheet("color: #ffc107; font-weight: bold;")
+        
+        # 禁用UI控件
+        self.set_ui_enabled(False)
+        
+        # 创建并启动分析线程，传入真实的评估数据
+        self.chat_thread = LLMChatThread(self.llm_framework)
+        self.chat_thread.set_analysis_task("compare_models", analysis_data)
+        
+        # 连接信号
+        self.chat_thread.analysis_finished.connect(self.on_analysis_finished)
+        self.chat_thread.analysis_error.connect(self.on_analysis_error)
+        
+        # 启动线程
+        self.chat_thread.start()
+
     def on_analysis_finished(self, response_text):
         """分析完成处理"""
         self.add_ai_message(response_text)

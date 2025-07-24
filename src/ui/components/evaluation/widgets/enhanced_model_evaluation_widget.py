@@ -556,6 +556,41 @@ class EnhancedModelEvaluationWidget(QWidget):
         layout.addWidget(QLabel("性能对比图"))
         layout.addWidget(self.comparison_canvas)
         
+        # 添加AI分析按钮
+        ai_analysis_layout = QHBoxLayout()
+        self.ai_analysis_btn = QPushButton("🤖 AI结果分析")
+        self.ai_analysis_btn.setMinimumHeight(40)
+        self.ai_analysis_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #007bff;
+                color: white;
+                border: none;
+                border-radius: 8px;
+                font-size: 14px;
+                font-weight: bold;
+                padding: 10px 20px;
+            }
+            QPushButton:hover {
+                background-color: #0056b3;
+            }
+            QPushButton:pressed {
+                background-color: #004085;
+            }
+            QPushButton:disabled {
+                background-color: #6c757d;
+                color: #ffffff;
+            }
+        """)
+        self.ai_analysis_btn.setToolTip("将评估结果提交给AI进行智能分析，获得专业的模型对比报告")
+        self.ai_analysis_btn.clicked.connect(self.analyze_comparison_results_with_ai)
+        self.ai_analysis_btn.setEnabled(False)  # 初始状态禁用
+        
+        ai_analysis_layout.addStretch()
+        ai_analysis_layout.addWidget(self.ai_analysis_btn)
+        ai_analysis_layout.addStretch()
+        
+        layout.addLayout(ai_analysis_layout)
+        
         return widget
     
     def select_models_dir(self):
@@ -988,6 +1023,121 @@ class EnhancedModelEvaluationWidget(QWidget):
         # 使用tight_layout但设置更多的底部边距以容纳旋转的标签
         self.comparison_figure.tight_layout(pad=2.0, rect=[0, 0.05, 1, 0.98])
         self.comparison_canvas.draw()
+        
+        # 启用AI分析按钮（模型对比完成后）
+        self.ai_analysis_btn.setEnabled(True)
+        
+        # 保存当前对比的模型列表，供AI分析使用
+        self.current_comparison_models = model_names
+    
+    def analyze_comparison_results_with_ai(self):
+        """使用AI分析模型对比结果"""
+        if not hasattr(self, 'current_comparison_models') or not self.current_comparison_models:
+            QMessageBox.warning(self, "警告", "没有可分析的对比结果")
+            return
+            
+        # 准备分析数据
+        analysis_data = []
+        for model_name in self.current_comparison_models:
+            if model_name in self.evaluation_results:
+                result = self.evaluation_results[model_name]
+                
+                # 构建完整的模型数据，包含所有评估指标
+                model_data = {
+                    'model_name': model_name.replace('.pth', '').replace('.h5', '').replace('.pt', ''),
+                    'accuracy': result.get('accuracy', 0),
+                    'precision': result.get('precision', 0),
+                    'recall': result.get('recall', 0),
+                    'f1_score': result.get('f1_score', 0),
+                    'auc_score': result.get('auc_score', 0),
+                    'params': result.get('params_count', 0),
+                    'inference_time': result.get('avg_inference_time', 0),
+                    'total_samples': result.get('total_samples', 0)
+                }
+                
+                # 添加详细指标（如果可用）
+                if 'ap_score' in result:
+                    model_data['ap_score'] = result['ap_score']
+                if 'class_names' in result:
+                    model_data['class_count'] = len(result['class_names'])
+                
+                analysis_data.append(model_data)
+        
+        if not analysis_data:
+            QMessageBox.warning(self, "警告", "没有有效的评估数据可供分析")
+            return
+        
+        # 调用模型工厂的AI分析功能
+        self.request_ai_analysis(analysis_data)
+    
+    def request_ai_analysis(self, analysis_data):
+        """请求AI分析评估结果"""
+        try:
+            # 获取主窗口
+            main_window = self.main_window
+            if not main_window:
+                # 尝试通过parent链找到主窗口
+                widget = self.parent()
+                while widget and not hasattr(widget, 'tab_widget'):
+                    widget = widget.parent()
+                main_window = widget
+            
+            if not main_window or not hasattr(main_window, 'tab_widget'):
+                QMessageBox.warning(self, "错误", "无法找到主窗口，无法启动AI分析")
+                return
+            
+            # 查找模型工厂标签页
+            model_factory_tab = None
+            tab_widget = main_window.tab_widget
+            
+            for i in range(tab_widget.count()):
+                tab_text = tab_widget.tabText(i)
+                widget = tab_widget.widget(i)
+                if "工厂" in tab_text or "Factory" in tab_text:
+                    model_factory_tab = widget
+                    break
+            
+            if not model_factory_tab:
+                QMessageBox.warning(self, "错误", "无法找到模型工厂标签页")
+                return
+            
+            # 检查模型工厂标签页是否有chat_widget
+            if not hasattr(model_factory_tab, 'chat_widget'):
+                QMessageBox.warning(self, "错误", "模型工厂标签页未正确初始化")
+                return
+            
+            chat_widget = model_factory_tab.chat_widget
+            
+            # 检查LLM框架是否可用
+            if not chat_widget.llm_framework:
+                QMessageBox.warning(self, "错误", "AI分析功能不可用，请检查LLM配置")
+                return
+            
+            # 切换到模型工厂标签页
+            for i in range(tab_widget.count()):
+                if tab_widget.widget(i) == model_factory_tab:
+                    tab_widget.setCurrentIndex(i)
+                    break
+            
+            # 准备分析消息
+            model_names = [data['model_name'] for data in analysis_data]
+            user_message = f"已完成 {len(analysis_data)} 个模型的性能评估，请分析对比结果：{', '.join(model_names)}"
+            
+            # 在聊天界面显示用户消息
+            chat_widget.add_user_message(user_message)
+            
+            # 启动AI分析
+            chat_widget.start_ai_analysis_with_data(analysis_data)
+            
+            # 显示成功消息
+            QMessageBox.information(
+                self, "AI分析启动", 
+                f"已将 {len(analysis_data)} 个模型的评估结果提交给AI进行分析。\n\n"
+                "请查看模型工厂标签页中的AI分析结果。"
+            )
+            
+        except Exception as e:
+            QMessageBox.critical(self, "错误", f"启动AI分析时发生错误：{str(e)}")
     
     def _on_bar_hover(self, sel, metric_name, model_list, values_list):
         """处理柱状图悬停事件（mplcursors版本）"""
