@@ -1053,16 +1053,291 @@ class AnalysisPanelWidget(QWidget):
         return widget
     
     def refresh_analysis(self):
-        """刷新分析结果"""
-        self.status_updated.emit("正在刷新分析结果...")
+        """刷新分析结果 - 使用真实训练数据"""
+        self.status_updated.emit("正在获取真实训练数据...")
         
-        # 模拟分析结果
-        self.status_display.setText("✅ 训练状态正常\n📈 损失函数收敛良好\n🎯 准确率稳步提升")
-        self.performance_display.setText("🚀 GPU利用率: 85%\n⚡ 训练速度: 1.2 samples/sec\n💾 内存使用: 6.2GB/8GB")
-        self.diagnosis_display.setText("⚠️ 检测到轻微过拟合趋势\n💡 建议增加数据增强\n🔧 可考虑调整学习率")
-        self.suggestions_display.setText("1. 降低学习率至0.0005\n2. 增加Dropout至0.3\n3. 使用余弦退火调度器")
-        
-        self.status_updated.emit("分析结果已更新")
+        try:
+            # 获取实时指标采集器
+            from src.training_components.real_time_metrics_collector import get_global_metrics_collector
+            collector = get_global_metrics_collector()
+            
+            # 获取真实训练数据
+            real_data = collector.get_current_training_data_for_ai()
+            
+            if "error" in real_data:
+                # 如果没有真实数据，显示提示信息
+                error_msg = real_data["error"]
+                self.status_display.setText(f"⚠️ 无法获取训练数据\n📝 原因: {error_msg}\n💡 请确保训练正在进行中")
+                self.performance_display.setText("📊 性能数据不可用\n🔄 请启动训练后再次刷新")
+                self.diagnosis_display.setText("🔍 诊断功能需要训练数据\n⏳ 等待训练开始...")
+                self.suggestions_display.setText("💭 优化建议需要基于真实数据\n🚀 开始训练后将提供个性化建议")
+                self.status_updated.emit(f"数据获取失败: {error_msg}")
+                return
+            
+            # 解析真实数据
+            current_metrics = real_data.get("current_metrics", {})
+            training_trends = real_data.get("training_trends", {})
+            training_status = real_data.get("training_status", "unknown")
+            session_id = real_data.get("session_id", "unknown")
+            total_points = real_data.get("total_data_points", 0)
+            duration = real_data.get("collection_duration", 0)
+            
+            # 1. 训练状态分析
+            self._update_training_status_display(current_metrics, training_trends, training_status, session_id)
+            
+            # 2. 性能分析
+            self._update_performance_display(current_metrics, training_trends, total_points, duration)
+            
+            # 3. 问题诊断
+            self._update_diagnosis_display(current_metrics, training_trends)
+            
+            # 4. 优化建议
+            self._update_suggestions_display(current_metrics, training_trends)
+            
+            self.status_updated.emit(f"分析结果已更新 (基于{total_points}个真实数据点)")
+            
+        except ImportError:
+            # 如果无法导入采集器，显示模块不可用信息
+            self.status_display.setText("❌ 实时数据采集模块不可用\n📦 请检查training_components模块")
+            self.performance_display.setText("⚠️ 性能监控功能未启用")
+            self.diagnosis_display.setText("🔧 诊断功能需要数据采集支持")
+            self.suggestions_display.setText("💡 建议功能需要真实训练数据")
+            self.status_updated.emit("数据采集模块不可用")
+            
+        except Exception as e:
+            # 其他异常处理
+            error_msg = str(e)
+            self.status_display.setText(f"❌ 数据获取异常\n📝 错误: {error_msg}")
+            self.performance_display.setText("⚠️ 性能数据获取失败")
+            self.diagnosis_display.setText("🔧 诊断功能暂时不可用")
+            self.suggestions_display.setText("💡 优化建议暂时不可用")
+            self.status_updated.emit(f"分析异常: {error_msg}")
+    
+    def _update_training_status_display(self, current_metrics, training_trends, training_status, session_id):
+        """更新训练状态显示"""
+        try:
+            status_text = f"📊 训练会话: {session_id}\n"
+            status_text += f"🔄 状态: {training_status}\n"
+            
+            # 当前指标
+            if current_metrics:
+                epoch = current_metrics.get('epoch', 'N/A')
+                phase = current_metrics.get('phase', 'N/A')
+                loss = current_metrics.get('loss', 'N/A')
+                accuracy = current_metrics.get('accuracy', 'N/A')
+                
+                status_text += f"📈 当前Epoch: {epoch}\n"
+                status_text += f"🎯 训练阶段: {phase}\n"
+                
+                if isinstance(loss, (int, float)):
+                    status_text += f"📉 损失值: {loss:.4f}\n"
+                else:
+                    status_text += f"📉 损失值: {loss}\n"
+                    
+                if isinstance(accuracy, (int, float)):
+                    status_text += f"🎯 准确率: {accuracy:.1%}\n"
+                else:
+                    status_text += f"🎯 准确率: {accuracy}\n"
+            
+            # 趋势分析
+            train_losses = training_trends.get('train_losses', [])
+            val_losses = training_trends.get('val_losses', [])
+            train_accs = training_trends.get('train_accuracies', [])
+            val_accs = training_trends.get('val_accuracies', [])
+            
+            if train_losses and len(train_losses) >= 2:
+                loss_trend = "📈 上升" if train_losses[-1] > train_losses[-2] else "📉 下降"
+                status_text += f"📊 训练损失趋势: {loss_trend}\n"
+                
+            if val_losses and len(val_losses) >= 2:
+                val_trend = "📈 上升" if val_losses[-1] > val_losses[-2] else "📉 下降"
+                status_text += f"📊 验证损失趋势: {val_trend}\n"
+                
+            # 收敛状态判断
+            if train_losses and val_losses and len(train_losses) >= 3:
+                recent_train = train_losses[-3:]
+                recent_val = val_losses[-3:]
+                
+                train_stable = max(recent_train) - min(recent_train) < 0.01
+                val_stable = max(recent_val) - min(recent_val) < 0.01
+                
+                if train_stable and val_stable:
+                    status_text += "✅ 收敛状态: 稳定\n"
+                elif train_stable:
+                    status_text += "⚠️ 收敛状态: 训练稳定，验证波动\n"
+                else:
+                    status_text += "🔄 收敛状态: 持续学习中\n"
+            
+            self.status_display.setText(status_text.strip())
+            
+        except Exception as e:
+            self.status_display.setText(f"❌ 训练状态分析失败: {str(e)}")
+    
+    def _update_performance_display(self, current_metrics, training_trends, total_points, duration):
+        """更新性能分析显示"""
+        try:
+            perf_text = f"📊 数据采集点数: {total_points}\n"
+            perf_text += f"⏱️ 采集持续时间: {duration:.1f}秒\n"
+            
+            # 计算数据采集频率
+            if duration > 0:
+                frequency = total_points / duration
+                perf_text += f"📈 数据采集频率: {frequency:.2f} 点/秒\n"
+            
+            # 训练速度分析
+            train_losses = training_trends.get('train_losses', [])
+            val_losses = training_trends.get('val_losses', [])
+            epochs = training_trends.get('epochs', [])
+            
+            if epochs and len(epochs) >= 2:
+                epoch_span = max(epochs) - min(epochs) + 1
+                if duration > 0:
+                    epoch_speed = epoch_span / (duration / 3600)  # epoch/小时
+                    perf_text += f"🚀 训练速度: {epoch_speed:.2f} epoch/小时\n"
+            
+            # 损失变化率
+            if train_losses and len(train_losses) >= 2:
+                loss_change = abs(train_losses[-1] - train_losses[0])
+                improvement_rate = loss_change / len(train_losses)
+                perf_text += f"📉 训练损失改善率: {improvement_rate:.4f}/step\n"
+            
+            if val_losses and len(val_losses) >= 2:
+                val_change = abs(val_losses[-1] - val_losses[0])
+                val_improvement = val_change / len(val_losses)
+                perf_text += f"📊 验证损失变化率: {val_improvement:.4f}/step\n"
+            
+            # 数据质量评估
+            if train_losses and val_losses:
+                data_quality = "🟢 优秀" if len(train_losses) > 10 and len(val_losses) > 5 else "🟡 一般"
+                perf_text += f"🎯 数据质量: {data_quality}\n"
+            
+            self.performance_display.setText(perf_text.strip())
+            
+        except Exception as e:
+            self.performance_display.setText(f"❌ 性能分析失败: {str(e)}")
+    
+    def _update_diagnosis_display(self, current_metrics, training_trends):
+        """更新问题诊断显示"""
+        try:
+            diagnosis_text = ""
+            issues_found = []
+            
+            train_losses = training_trends.get('train_losses', [])
+            val_losses = training_trends.get('val_losses', [])
+            train_accs = training_trends.get('train_accuracies', [])
+            val_accs = training_trends.get('val_accuracies', [])
+            
+            # 过拟合检测
+            if train_losses and val_losses and len(train_losses) >= 3 and len(val_losses) >= 3:
+                avg_train_loss = sum(train_losses[-3:]) / 3
+                avg_val_loss = sum(val_losses[-3:]) / 3
+                
+                if avg_val_loss > avg_train_loss * 1.5:
+                    issues_found.append("⚠️ 检测到过拟合趋势")
+                    issues_found.append("💡 建议: 增加正则化或减少模型复杂度")
+                elif avg_val_loss < avg_train_loss * 0.8:
+                    issues_found.append("⚠️ 可能存在欠拟合")
+                    issues_found.append("💡 建议: 增加模型复杂度或减少正则化")
+            
+            # 学习停滞检测
+            if train_losses and len(train_losses) >= 5:
+                recent_losses = train_losses[-5:]
+                loss_variance = max(recent_losses) - min(recent_losses)
+                if loss_variance < 0.001:
+                    issues_found.append("⚠️ 训练可能已停滞")
+                    issues_found.append("💡 建议: 调整学习率或使用学习率调度器")
+            
+            # 梯度爆炸/消失检测（通过损失变化判断）
+            if train_losses and len(train_losses) >= 2:
+                loss_change = abs(train_losses[-1] - train_losses[-2])
+                if loss_change > 1.0:
+                    issues_found.append("⚠️ 可能存在梯度爆炸")
+                    issues_found.append("💡 建议: 降低学习率或使用梯度裁剪")
+                elif loss_change < 1e-6:
+                    issues_found.append("⚠️ 可能存在梯度消失")
+                    issues_found.append("💡 建议: 检查网络结构或使用残差连接")
+            
+            # 准确率异常检测
+            if train_accs and val_accs and len(train_accs) >= 2 and len(val_accs) >= 2:
+                train_acc_trend = train_accs[-1] - train_accs[-2]
+                val_acc_trend = val_accs[-1] - val_accs[-2]
+                
+                if train_acc_trend > 0.1 and val_acc_trend < -0.05:
+                    issues_found.append("⚠️ 训练准确率上升但验证准确率下降")
+                    issues_found.append("💡 建议: 检查数据分布或增加数据增强")
+            
+            if not issues_found:
+                diagnosis_text = "✅ 未发现明显训练问题\n📈 训练进展正常\n🎯 继续当前训练策略"
+            else:
+                diagnosis_text = "\n".join(issues_found)
+            
+            self.diagnosis_display.setText(diagnosis_text)
+            
+        except Exception as e:
+            self.diagnosis_display.setText(f"❌ 问题诊断失败: {str(e)}")
+    
+    def _update_suggestions_display(self, current_metrics, training_trends):
+        """更新优化建议显示"""
+        try:
+            suggestions = []
+            
+            train_losses = training_trends.get('train_losses', [])
+            val_losses = training_trends.get('val_losses', [])
+            train_accs = training_trends.get('train_accuracies', [])
+            val_accs = training_trends.get('val_accuracies', [])
+            
+            # 基于损失趋势的建议
+            if train_losses and len(train_losses) >= 3:
+                recent_trend = sum(train_losses[-3:]) / 3 - sum(train_losses[-6:-3]) / 3 if len(train_losses) >= 6 else 0
+                
+                if recent_trend > 0.01:
+                    suggestions.append("📉 训练损失上升，建议降低学习率")
+                elif recent_trend < -0.05:
+                    suggestions.append("🚀 训练进展良好，可考虑适当提高学习率")
+                else:
+                    suggestions.append("⚖️ 训练损失稳定，保持当前学习率")
+            
+            # 基于过拟合风险的建议
+            if train_losses and val_losses and len(train_losses) >= 2 and len(val_losses) >= 2:
+                train_val_gap = val_losses[-1] - train_losses[-1]
+                
+                if train_val_gap > 0.2:
+                    suggestions.append("🛡️ 过拟合风险较高，建议增加Dropout或正则化")
+                elif train_val_gap < 0.05:
+                    suggestions.append("🎯 泛化能力良好，可考虑增加模型复杂度")
+            
+            # 基于准确率的建议
+            if val_accs and len(val_accs) >= 1:
+                current_val_acc = val_accs[-1]
+                
+                if current_val_acc < 0.7:
+                    suggestions.append("📊 验证准确率较低，建议检查数据质量或模型架构")
+                elif current_val_acc > 0.9:
+                    suggestions.append("🎉 验证准确率优秀，可考虑进行模型压缩或部署")
+            
+            # 训练时间建议
+            current_epoch = current_metrics.get('epoch', 0)
+            if isinstance(current_epoch, (int, float)) and current_epoch > 0:
+                if current_epoch < 10:
+                    suggestions.append("⏰ 训练初期，建议密切观察损失变化")
+                elif current_epoch > 50:
+                    suggestions.append("⏳ 训练时间较长，建议评估是否需要早停")
+            
+            # 数据增强建议
+            if train_losses and val_losses and len(train_losses) >= 5:
+                train_stability = max(train_losses[-5:]) - min(train_losses[-5:])
+                if train_stability < 0.01:
+                    suggestions.append("🔄 训练稳定，可考虑增加数据增强多样性")
+            
+            if not suggestions:
+                suggestions.append("📋 基于当前数据暂无特定建议")
+                suggestions.append("💡 继续监控训练进展")
+            
+            suggestions_text = "\n".join(f"{i+1}. {suggestion}" for i, suggestion in enumerate(suggestions))
+            self.suggestions_display.setText(suggestions_text)
+            
+        except Exception as e:
+            self.suggestions_display.setText(f"❌ 优化建议生成失败: {str(e)}")
 
 
 class ModelFactoryTab(BaseTab):
