@@ -157,6 +157,154 @@ class LLMFramework:
             self._trigger_callback('real_metrics_analysis_failed', error_result)
             return error_result
     
+    def get_real_hyperparameter_suggestions(self) -> Dict[str, Any]:
+        """获取基于真实数据的超参数优化建议"""
+        if not self.is_active:
+            return {'error': 'LLM框架未启动'}
+        
+        start_time = time.time()
+        
+        try:
+            self.stats['total_requests'] += 1
+            
+            # 获取真实训练数据进行分析
+            real_analysis = self.analysis_engine.analyze_real_training_progress()
+            
+            if 'error' in real_analysis:
+                # 如果无法获取真实数据，返回错误
+                return {
+                    'error': f'无法获取真实训练数据进行建议生成: {real_analysis["error"]}',
+                    'framework_info': {
+                        'adapter_type': self.adapter_type,
+                        'processing_time': time.time() - start_time,
+                        'timestamp': time.time(),
+                        'data_source': 'real_time_collector'
+                    }
+                }
+            
+            # 从真实分析结果中提取指标和参数
+            metrics = real_analysis.get('metrics', {})
+            current_params = {
+                'epoch': metrics.get('epoch', 0),
+                'batch_size': 32,  # 默认值，实际应从配置中获取
+                'learning_rate': 0.001  # 默认值，实际应从配置中获取
+            }
+            
+            # 使用分析引擎生成建议
+            result = self.analysis_engine.suggest_hyperparameter_tuning(metrics, current_params)
+            
+            # 添加真实数据上下文
+            result['real_data_context'] = {
+                'session_id': real_analysis.get('session_id', 'unknown'),
+                'data_points': real_analysis.get('raw_data_summary', {}).get('total_data_points', 0),
+                'training_duration': real_analysis.get('raw_data_summary', {}).get('collection_duration', 0),
+                'training_status': real_analysis.get('raw_data_summary', {}).get('training_status', 'unknown')
+            }
+            
+            # 添加框架元信息
+            result['framework_info'] = {
+                'adapter_type': self.adapter_type,
+                'processing_time': time.time() - start_time,
+                'timestamp': time.time(),
+                'data_source': 'real_time_collector'
+            }
+            
+            self.stats['successful_requests'] += 1
+            self._update_response_time(time.time() - start_time)
+            
+            # 触发回调
+            self._trigger_callback('real_suggestions_generated', result)
+            
+            return result
+            
+        except Exception as e:
+            self.stats['failed_requests'] += 1
+            error_result = {
+                'error': f'真实数据建议生成失败: {str(e)}',
+                'framework_info': {
+                    'adapter_type': self.adapter_type,
+                    'processing_time': time.time() - start_time,
+                    'timestamp': time.time(),
+                    'data_source': 'real_time_collector'
+                }
+            }
+            self._trigger_callback('real_suggestions_failed', error_result)
+            return error_result
+    
+    def diagnose_real_training_problems(self) -> Dict[str, Any]:
+        """基于真实数据诊断训练问题"""
+        if not self.is_active:
+            return {'error': 'LLM框架未启动'}
+        
+        start_time = time.time()
+        
+        try:
+            self.stats['total_requests'] += 1
+            
+            # 获取真实训练数据进行分析
+            real_analysis = self.analysis_engine.analyze_real_training_progress()
+            
+            if 'error' in real_analysis:
+                # 如果无法获取真实数据，返回错误
+                return {
+                    'error': f'无法获取真实训练数据进行问题诊断: {real_analysis["error"]}',
+                    'framework_info': {
+                        'adapter_type': self.adapter_type,
+                        'processing_time': time.time() - start_time,
+                        'timestamp': time.time(),
+                        'data_source': 'real_time_collector'
+                    }
+                }
+            
+            # 从真实分析结果中提取指标
+            metrics = real_analysis.get('metrics', {})
+            trends = real_analysis.get('trends', {})
+            
+            # 检查是否存在问题指标
+            problem_indicators = self._detect_training_problems(metrics, trends)
+            
+            # 使用分析引擎进行问题诊断
+            result = self.analysis_engine.diagnose_training_issues(metrics, problem_indicators)
+            
+            # 添加真实数据上下文
+            result['real_data_context'] = {
+                'session_id': real_analysis.get('session_id', 'unknown'),
+                'data_points': real_analysis.get('raw_data_summary', {}).get('total_data_points', 0),
+                'training_duration': real_analysis.get('raw_data_summary', {}).get('collection_duration', 0),
+                'training_status': real_analysis.get('raw_data_summary', {}).get('training_status', 'unknown'),
+                'detected_problems': problem_indicators
+            }
+            
+            # 添加框架元信息
+            result['framework_info'] = {
+                'adapter_type': self.adapter_type,
+                'processing_time': time.time() - start_time,
+                'timestamp': time.time(),
+                'data_source': 'real_time_collector'
+            }
+            
+            self.stats['successful_requests'] += 1
+            self._update_response_time(time.time() - start_time)
+            
+            # 触发回调
+            self._trigger_callback('real_diagnosis_completed', result)
+            
+            return result
+            
+        except Exception as e:
+            self.stats['failed_requests'] += 1
+            error_result = {
+                'error': f'真实数据问题诊断失败: {str(e)}',
+                'framework_info': {
+                    'adapter_type': self.adapter_type,
+                    'processing_time': time.time() - start_time,
+                    'timestamp': time.time(),
+                    'data_source': 'real_time_collector'
+                }
+            }
+            self._trigger_callback('real_diagnosis_failed', error_result)
+            return error_result
+    
     def get_hyperparameter_suggestions(self, 
                                      current_metrics: Dict,
                                      current_params: Dict = None) -> Dict[str, Any]:
@@ -324,6 +472,39 @@ class LLMFramework:
                     callback(data)
                 except Exception as e:
                     print(f"回调函数执行失败: {str(e)}")
+    
+    def _detect_training_problems(self, metrics: Dict, trends: Dict) -> str:
+        """检测训练问题指标"""
+        problems = []
+        
+        # 检查过拟合
+        train_loss = metrics.get('train_loss', 0)
+        val_loss = metrics.get('val_loss', 0)
+        if val_loss > train_loss * 1.5:
+            problems.append("过拟合: 验证损失明显高于训练损失")
+        
+        # 检查欠拟合
+        train_acc = metrics.get('train_accuracy', 0)
+        val_acc = metrics.get('val_accuracy', 0)
+        if train_acc < 0.6 and val_acc < 0.6:
+            problems.append("欠拟合: 训练和验证准确率都较低")
+        
+        # 检查收敛问题
+        train_losses = trends.get('train_losses', [])
+        if len(train_losses) >= 3:
+            recent_losses = train_losses[-3:]
+            if all(recent_losses[i] >= recent_losses[i-1] for i in range(1, len(recent_losses))):
+                problems.append("收敛问题: 训练损失持续上升")
+        
+        # 检查梯度问题（基于损失变化）
+        if len(train_losses) >= 2:
+            loss_change = abs(train_losses[-1] - train_losses[-2])
+            if loss_change < 1e-6:
+                problems.append("可能的梯度消失: 损失变化极小")
+            elif loss_change > 1.0:
+                problems.append("可能的梯度爆炸: 损失变化过大")
+        
+        return "; ".join(problems) if problems else "未检测到明显问题"
     
     def _update_response_time(self, response_time: float):
         """更新平均响应时间"""

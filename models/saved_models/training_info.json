@@ -1,9 +1,9 @@
 {
-    "model_name": "MobileNetV2",
+    "model_name": "MobileNetV3",
     "num_epochs": 20,
     "batch_size": 32,
     "learning_rate": 0.001,
-    "best_accuracy": 0.21666666666666667,
+    "best_accuracy": 0.2125,
     "class_names": [
         "Missing_hole",
         "Mouse_bite",
@@ -12,6 +12,6 @@
         "Spur",
         "Spurious_copper"
     ],
-    "model_path": "F:/Qsync/00.AI_PROJECT/\u56fe\u7247\u5206\u7c7b\u6a21\u578b\u8bad\u7ec3/C1/models/saved_models\\MobileNetV2_20250705-084930__final.pth",
-    "timestamp": "20250705-084930"
+    "model_path": "F:/Qsync/00.AI_PROJECT/\u56fe\u7247\u5206\u7c7b\u6a21\u578b\u8bad\u7ec3/C1/models/saved_models\\MobileNetV3_20250724-233351__final.pth",
+    "timestamp": "20250724-233351"
 }
