@@ -756,7 +756,8 @@ class SettingsTab(BaseTab):
                                 'model_name': ollama_config.get('model', 'llama2'),
                                 'base_url': ollama_config.get('base_url', 'http://localhost:11434'),
                                 'temperature': ollama_config.get('temperature', 0.7),
-                                'num_predict': ollama_config.get('num_predict', 1000)
+                                'num_predict': ollama_config.get('num_predict', 1000),
+                                'timeout': ollama_config.get('timeout', 120)
                             }
                             chat_widget.llm_framework.switch_adapter('local', adapter_config)
                         else:

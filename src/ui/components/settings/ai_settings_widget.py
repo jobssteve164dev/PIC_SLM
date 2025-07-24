@@ -340,6 +340,19 @@ class AISettingsWidget(QWidget):
         self.ollama_num_predict.setValue(1000)
         model_layout.addRow("预测令牌数:", self.ollama_num_predict)
         
+        # 添加超时设置
+        self.ollama_timeout = QSpinBox()
+        self.ollama_timeout.setRange(30, 600)  # 30秒到10分钟
+        self.ollama_timeout.setValue(120)  # 默认2分钟
+        self.ollama_timeout.setSuffix(" 秒")
+        model_layout.addRow("请求超时:", self.ollama_timeout)
+        
+        # 添加超时说明
+        timeout_info = QLabel("💡 提示：大模型响应可能需要较长时间，建议设置2-5分钟超时")
+        timeout_info.setStyleSheet("color: #6c757d; font-size: 12px;")
+        timeout_info.setWordWrap(True)
+        model_layout.addRow("", timeout_info)
+        
         model_group.setLayout(model_layout)
         layout.addWidget(model_group)
         
@@ -569,6 +582,7 @@ class AISettingsWidget(QWidget):
         self.ollama_models.setCurrentText(ollama_config.get('model', 'llama2'))
         self.ollama_temperature.setValue(ollama_config.get('temperature', 0.7))
         self.ollama_num_predict.setValue(ollama_config.get('num_predict', 1000))
+        self.ollama_timeout.setValue(ollama_config.get('timeout', 120))
         
         # 通用设置
         general_config = config.get('general', {})
@@ -615,6 +629,7 @@ class AISettingsWidget(QWidget):
         self.ollama_models.setCurrentText('llama2')
         self.ollama_temperature.setValue(0.7)
         self.ollama_num_predict.setValue(1000)
+        self.ollama_timeout.setValue(120)
         
         self.default_adapter.setCurrentText('模拟适配器')
         self.request_timeout.setValue(60)
@@ -646,6 +661,7 @@ class AISettingsWidget(QWidget):
         self.ollama_models.currentTextChanged.connect(self.update_settings_preview)
         self.ollama_temperature.valueChanged.connect(self.update_settings_preview)
         self.ollama_num_predict.valueChanged.connect(self.update_settings_preview)
+        self.ollama_timeout.valueChanged.connect(self.update_settings_preview)
         
         # 通用设置信号
         self.default_adapter.currentTextChanged.connect(self.update_settings_preview)
@@ -677,7 +693,8 @@ class AISettingsWidget(QWidget):
                 'base_url': self.ollama_base_url.text().strip() or 'http://localhost:11434',
                 'model': self.ollama_models.currentText(),
                 'temperature': self.ollama_temperature.value(),
-                'num_predict': self.ollama_num_predict.value()
+                'num_predict': self.ollama_num_predict.value(),
+                'timeout': self.ollama_timeout.value()
             },
             'general': {
                 'default_adapter': default_adapter,

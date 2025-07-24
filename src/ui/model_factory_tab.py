@@ -20,6 +20,224 @@ except ImportError as e:
     LLM_AVAILABLE = False
 
 
+class LLMChatThread(QThread):
+    """LLM聊天处理线程"""
+    
+    # 定义信号
+    chat_finished = pyqtSignal(str)  # 聊天完成，返回AI回复
+    chat_error = pyqtSignal(str)     # 聊天出错
+    analysis_finished = pyqtSignal(str)  # 分析完成
+    analysis_error = pyqtSignal(str)     # 分析出错
+    
+    def __init__(self, llm_framework, parent=None):
+        super().__init__(parent)
+        self.llm_framework = llm_framework
+        self.task_type = ""
+        self.user_message = ""
+        self.training_context = {}
+        self.task_params = {}
+        
+    def set_chat_task(self, user_message, training_context=None):
+        """设置聊天任务"""
+        self.task_type = "chat"
+        self.user_message = user_message
+        self.training_context = training_context or {}
+        
+    def set_analysis_task(self, task_type, params=None):
+        """设置分析任务"""
+        self.task_type = task_type
+        self.task_params = params or {}
+        
+    def run(self):
+        """执行任务"""
+        try:
+            if not self.llm_framework:
+                self.chat_error.emit("LLM框架未初始化")
+                return
+                
+            if self.task_type == "chat":
+                self._handle_chat()
+            elif self.task_type == "analyze_training":
+                self._handle_training_analysis()
+            elif self.task_type == "get_suggestions":
+                self._handle_suggestions()
+            elif self.task_type == "diagnose_issues":
+                self._handle_diagnosis()
+            elif self.task_type == "compare_models":
+                self._handle_model_comparison()
+            else:
+                self.chat_error.emit(f"未知的任务类型: {self.task_type}")
+                
+        except Exception as e:
+            if self.task_type == "chat":
+                self.chat_error.emit(f"处理聊天请求时出错: {str(e)}")
+            else:
+                self.analysis_error.emit(f"处理分析请求时出错: {str(e)}")
+    
+    def _handle_chat(self):
+        """处理聊天请求"""
+        # 先更新训练上下文到LLM框架（如果有的话）
+        if hasattr(self.llm_framework, 'analysis_engine') and self.training_context:
+            self.llm_framework.analysis_engine.prompt_builder.add_context({
+                'type': 'training_context',
+                'data': self.training_context
+            })
+        
+        # 调用LLM框架进行对话
+        result = self.llm_framework.chat_with_training_context(self.user_message)
+        
+        # 处理返回结果
+        if isinstance(result, dict):
+            if 'error' in result:
+                self.chat_error.emit(result['error'])
+            else:
+                response_text = result.get('response', '抱歉，没有收到有效回复')
+                self.chat_finished.emit(response_text)
+        else:
+            self.chat_finished.emit(str(result))
+    
+    def _handle_training_analysis(self):
+        """处理训练分析请求"""
+        # 模拟当前训练指标
+        current_metrics = {
+            'epoch': 15,
+            'train_loss': 0.234,
+            'val_loss': 0.287,
+            'train_accuracy': 0.894,
+            'val_accuracy': 0.856,
+            'learning_rate': 0.001,
+            'gpu_memory_used': 6.2,
+            'gpu_memory_total': 8.0
+        }
+        
+        result = self.llm_framework.analyze_training_metrics(current_metrics)
+        
+        # 处理返回结果
+        if isinstance(result, dict):
+            if 'error' in result:
+                self.analysis_error.emit(result['error'])
+            else:
+                # 尝试获取分析内容
+                combined_insights = result.get('combined_insights', '')
+                llm_analysis = result.get('llm_analysis', '')
+                response_text = combined_insights or llm_analysis or '分析完成，但未获得有效结果'
+                
+                # 如果有建议，也显示出来
+                recommendations = result.get('recommendations')
+                if recommendations:
+                    response_text += f"\n\n建议: {recommendations}"
+                
+                self.analysis_finished.emit(response_text)
+        else:
+            self.analysis_finished.emit(str(result))
+    
+    def _handle_suggestions(self):
+        """处理建议请求"""
+        # 模拟训练历史
+        current_metrics = {'train_loss': 0.234, 'val_loss': 0.287, 'accuracy': 0.856}
+        current_params = {'batch_size': 32, 'learning_rate': 0.001}
+        
+        result = self.llm_framework.get_hyperparameter_suggestions(
+            current_metrics, current_params
+        )
+        
+        # 处理返回结果
+        if isinstance(result, dict):
+            if 'error' in result:
+                self.analysis_error.emit(result['error'])
+            else:
+                # 尝试获取建议内容
+                llm_suggestions = result.get('llm_suggestions', '')
+                rule_suggestions = result.get('rule_suggestions', [])
+                response_text = llm_suggestions or '已生成优化建议'
+                
+                if rule_suggestions:
+                    response_text += f"\n\n规则建议: {rule_suggestions}"
+                
+                self.analysis_finished.emit(response_text)
+        else:
+            self.analysis_finished.emit(str(result))
+    
+    def _handle_diagnosis(self):
+        """处理诊断请求"""
+        # 模拟问题指标
+        problem_metrics = {
+            'train_loss': 0.1,
+            'val_loss': 0.8,  # 明显的过拟合
+            'gradient_norm': 1e-8,  # 梯度消失
+            'epoch': 20
+        }
+        
+        result = self.llm_framework.diagnose_training_problems(problem_metrics)
+        
+        # 处理返回结果
+        if isinstance(result, dict):
+            if 'error' in result:
+                self.analysis_error.emit(result['error'])
+            else:
+                # 尝试获取诊断内容
+                llm_diagnosis = result.get('llm_diagnosis', '')
+                rule_diagnosis = result.get('rule_diagnosis', '')
+                response_text = llm_diagnosis or rule_diagnosis or '诊断完成，但未发现明显问题'
+                
+                # 添加推荐行动
+                recommended_actions = result.get('recommended_actions')
+                if recommended_actions:
+                    response_text += f"\n\n推荐行动: {recommended_actions}"
+                
+                self.analysis_finished.emit(response_text)
+        else:
+            self.analysis_finished.emit(str(result))
+    
+    def _handle_model_comparison(self):
+        """处理模型对比请求"""
+        # 模拟多个模型结果
+        model_results = [
+            {
+                'model_name': 'ResNet50',
+                'accuracy': 0.892,
+                'val_loss': 0.234,
+                'params': 25557032,
+                'inference_time': 0.05
+            },
+            {
+                'model_name': 'EfficientNet-B0',
+                'accuracy': 0.900,
+                'val_loss': 0.198,
+                'params': 5288548,
+                'inference_time': 0.03
+            },
+            {
+                'model_name': 'MobileNetV2',
+                'accuracy': 0.875,
+                'val_loss': 0.267,
+                'params': 3504872,
+                'inference_time': 0.02
+            }
+        ]
+        
+        result = self.llm_framework.analysis_engine.compare_models(model_results)
+        
+        # 处理返回结果
+        if isinstance(result, dict):
+            if 'error' in result:
+                self.analysis_error.emit(result['error'])
+            else:
+                # 尝试获取对比分析内容
+                llm_comparison = result.get('llm_comparison', '')
+                rule_comparison = result.get('rule_comparison', '')
+                response_text = llm_comparison or rule_comparison or '模型对比完成'
+                
+                # 添加最佳模型推荐
+                best_model = result.get('best_model')
+                if best_model:
+                    response_text += f"\n\n推荐模型: {best_model}"
+                
+                self.analysis_finished.emit(response_text)
+        else:
+            self.analysis_finished.emit(str(result))
+
+
 class LLMChatWidget(QWidget):
     """LLM聊天界面组件"""
     
@@ -32,6 +250,7 @@ class LLMChatWidget(QWidget):
         self.llm_framework = None
         self.chat_history = []
         self.training_context = {}
+        self.chat_thread = None  # 聊天线程
         self.init_ui()
         self.init_llm_framework()
     
@@ -215,7 +434,8 @@ class LLMChatWidget(QWidget):
                     'model_name': ollama_config.get('model', 'llama2'),
                     'base_url': ollama_config.get('base_url', 'http://localhost:11434'),
                     'temperature': ollama_config.get('temperature', 0.7),
-                    'num_predict': ollama_config.get('num_predict', 1000)
+                    'num_predict': ollama_config.get('num_predict', 1000),
+                    'timeout': ollama_config.get('timeout', 120)
                 }
             else:
                 return
@@ -265,8 +485,9 @@ class LLMChatWidget(QWidget):
         """添加用户消息"""
         timestamp = datetime.now().strftime("%H:%M:%S")
         formatted_message = f"""
-        <div style='margin: 10px 0; padding: 8px; background-color: #007bff; color: white; border-radius: 10px; text-align: right;'>
-            <strong>您 [{timestamp}]:</strong><br>{message}
+        <div style='margin: 10px 0; padding: 8px; background-color: #e3f2fd; color: #000000; border: 1px solid #2196f3; border-radius: 10px; text-align: right;'>
+            <span style='color: #6c757d; font-size: 11px; font-weight: normal;'>您 [{timestamp}]:</span><br>
+            <span style='color: #000000; font-style: italic;'>{message}</span>
         </div>
         """
         self.chat_display.append(formatted_message)
@@ -275,8 +496,9 @@ class LLMChatWidget(QWidget):
         """添加AI响应消息"""
         timestamp = datetime.now().strftime("%H:%M:%S")
         formatted_message = f"""
-        <div style='margin: 10px 0; padding: 8px; background-color: #28a745; color: white; border-radius: 10px;'>
-            <strong>AI助手 [{timestamp}]:</strong><br>{message}
+        <div style='margin: 10px 0; padding: 8px; background-color: #f8f9fa; color: #000000; border: 1px solid #dee2e6; border-radius: 10px;'>
+            <span style='color: #6c757d; font-size: 11px; font-weight: normal;'>AI助手 [{timestamp}]:</span><br>
+            <span style='color: #000000; font-weight: bold;'>{message}</span>
         </div>
         """
         self.chat_display.append(formatted_message)
@@ -292,8 +514,16 @@ class LLMChatWidget(QWidget):
         if not message or not self.llm_framework:
             return
             
+        # 检查是否有线程正在运行
+        if self.chat_thread and self.chat_thread.isRunning():
+            QMessageBox.information(self, "提示", "AI正在处理中，请稍等...")
+            return
+            
         self.message_input.clear()
         self.add_user_message(message)
+        
+        # 保存用户消息用于聊天历史
+        self._last_user_message = message
         
         # 显示进度
         self.progress_bar.setVisible(True)
@@ -301,155 +531,177 @@ class LLMChatWidget(QWidget):
         self.status_label.setText("AI正在思考...")
         self.status_label.setStyleSheet("color: #ffc107; font-weight: bold;")
         
-        try:
-            # 调用LLM框架进行对话
-            response = self.llm_framework.chat_with_training_context(
-                message, self.training_context
-            )
-            self.add_ai_message(response)
-            
-            # 更新聊天历史
-            self.chat_history.append({
-                'user': message,
-                'ai': response,
-                'timestamp': datetime.now().isoformat()
-            })
-            
-        except Exception as e:
-            self.add_ai_message(f"抱歉，处理您的问题时出现错误: {str(e)}")
-        finally:
-            self.progress_bar.setVisible(False)
-            self.status_label.setText("AI助手已就绪")
-            self.status_label.setStyleSheet("color: #28a745; font-weight: bold;")
+        # 禁用UI控件
+        self.set_ui_enabled(False)
+        
+        # 创建并启动聊天线程
+        self.chat_thread = LLMChatThread(self.llm_framework)
+        self.chat_thread.set_chat_task(message, self.training_context)
+        
+        # 连接信号
+        self.chat_thread.chat_finished.connect(self.on_chat_finished)
+        self.chat_thread.chat_error.connect(self.on_chat_error)
+        
+        # 启动线程
+        self.chat_thread.start()
     
     def analyze_training(self):
         """分析当前训练状态"""
         if not self.llm_framework:
             return
             
-        # 模拟当前训练指标
-        current_metrics = {
-            'epoch': 15,
-            'train_loss': 0.234,
-            'val_loss': 0.287,
-            'train_accuracy': 0.894,
-            'val_accuracy': 0.856,
-            'learning_rate': 0.001,
-            'gpu_memory_used': 6.2,
-            'gpu_memory_total': 8.0
-        }
+        # 检查是否有线程正在运行
+        if self.chat_thread and self.chat_thread.isRunning():
+            QMessageBox.information(self, "提示", "AI正在处理中，请稍等...")
+            return
         
         self.add_user_message("请分析当前训练状态")
         self.progress_bar.setVisible(True)
         self.progress_bar.setRange(0, 0)
+        self.status_label.setText("正在分析训练状态...")
+        self.status_label.setStyleSheet("color: #ffc107; font-weight: bold;")
         
-        try:
-            analysis = self.llm_framework.analyze_training_metrics(current_metrics)
-            self.add_ai_message(analysis['combined_insights'])
-            
-            # 如果有建议，也显示出来
-            if analysis.get('recommendations'):
-                self.add_ai_message(f"建议: {analysis['recommendations']}")
-                
-        except Exception as e:
-            self.add_ai_message(f"分析训练状态时出错: {str(e)}")
-        finally:
-            self.progress_bar.setVisible(False)
+        # 禁用UI控件
+        self.set_ui_enabled(False)
+        
+        # 创建并启动分析线程
+        self.chat_thread = LLMChatThread(self.llm_framework)
+        self.chat_thread.set_analysis_task("analyze_training")
+        
+        # 连接信号
+        self.chat_thread.analysis_finished.connect(self.on_analysis_finished)
+        self.chat_thread.analysis_error.connect(self.on_analysis_error)
+        
+        # 启动线程
+        self.chat_thread.start()
     
     def get_suggestions(self):
         """获取优化建议"""
         if not self.llm_framework:
             return
             
-        # 模拟训练历史
-        current_metrics = {'train_loss': 0.234, 'val_loss': 0.287, 'accuracy': 0.856}
-        history = [
-            {'epoch': i, 'train_loss': 0.5 - i*0.02, 'val_loss': 0.52 - i*0.018}
-            for i in range(10)
-        ]
+        # 检查是否有线程正在运行
+        if self.chat_thread and self.chat_thread.isRunning():
+            QMessageBox.information(self, "提示", "AI正在处理中，请稍等...")
+            return
         
         self.add_user_message("请给出超参数优化建议")
         self.progress_bar.setVisible(True)
         self.progress_bar.setRange(0, 0)
+        self.status_label.setText("正在生成优化建议...")
+        self.status_label.setStyleSheet("color: #ffc107; font-weight: bold;")
         
-        try:
-            suggestions = self.llm_framework.get_hyperparameter_suggestions(
-                current_metrics, history
-            )
-            self.add_ai_message(suggestions)
-        except Exception as e:
-            self.add_ai_message(f"获取建议时出错: {str(e)}")
-        finally:
-            self.progress_bar.setVisible(False)
+        # 禁用UI控件
+        self.set_ui_enabled(False)
+        
+        # 创建并启动分析线程
+        self.chat_thread = LLMChatThread(self.llm_framework)
+        self.chat_thread.set_analysis_task("get_suggestions")
+        
+        # 连接信号
+        self.chat_thread.analysis_finished.connect(self.on_analysis_finished)
+        self.chat_thread.analysis_error.connect(self.on_analysis_error)
+        
+        # 启动线程
+        self.chat_thread.start()
     
     def diagnose_issues(self):
         """诊断训练问题"""
         if not self.llm_framework:
             return
             
-        # 模拟问题指标
-        problem_metrics = {
-            'train_loss': 0.1,
-            'val_loss': 0.8,  # 明显的过拟合
-            'gradient_norm': 1e-8,  # 梯度消失
-            'epoch': 20
-        }
+        # 检查是否有线程正在运行
+        if self.chat_thread and self.chat_thread.isRunning():
+            QMessageBox.information(self, "提示", "AI正在处理中，请稍等...")
+            return
         
         self.add_user_message("请诊断训练中的问题")
         self.progress_bar.setVisible(True)
         self.progress_bar.setRange(0, 0)
+        self.status_label.setText("正在诊断问题...")
+        self.status_label.setStyleSheet("color: #ffc107; font-weight: bold;")
         
-        try:
-            diagnosis = self.llm_framework.diagnose_training_problems(problem_metrics)
-            self.add_ai_message(diagnosis)
-        except Exception as e:
-            self.add_ai_message(f"诊断问题时出错: {str(e)}")
-        finally:
-            self.progress_bar.setVisible(False)
+        # 禁用UI控件
+        self.set_ui_enabled(False)
+        
+        # 创建并启动分析线程
+        self.chat_thread = LLMChatThread(self.llm_framework)
+        self.chat_thread.set_analysis_task("diagnose_issues")
+        
+        # 连接信号
+        self.chat_thread.analysis_finished.connect(self.on_analysis_finished)
+        self.chat_thread.analysis_error.connect(self.on_analysis_error)
+        
+        # 启动线程
+        self.chat_thread.start()
     
     def compare_models(self):
         """模型对比分析"""
         if not self.llm_framework:
             return
             
-        # 模拟多个模型结果
-        model_results = [
-            {
-                'model_name': 'ResNet50',
-                'accuracy': 0.892,
-                'val_loss': 0.234,
-                'params': 25557032,
-                'inference_time': 0.05
-            },
-            {
-                'model_name': 'EfficientNet-B0',
-                'accuracy': 0.900,
-                'val_loss': 0.198,
-                'params': 5288548,
-                'inference_time': 0.03
-            },
-            {
-                'model_name': 'MobileNetV2',
-                'accuracy': 0.875,
-                'val_loss': 0.267,
-                'params': 3504872,
-                'inference_time': 0.02
-            }
-        ]
+        # 检查是否有线程正在运行
+        if self.chat_thread and self.chat_thread.isRunning():
+            QMessageBox.information(self, "提示", "AI正在处理中，请稍等...")
+            return
         
         self.add_user_message("请对比分析这些模型")
         self.progress_bar.setVisible(True)
         self.progress_bar.setRange(0, 0)
+        self.status_label.setText("正在对比模型...")
+        self.status_label.setStyleSheet("color: #ffc107; font-weight: bold;")
         
-        try:
-            comparison = self.llm_framework.compare_model_results(model_results)
-            self.add_ai_message(comparison['analysis'])
-            if comparison.get('recommendation'):
-                self.add_ai_message(f"推荐: {comparison['recommendation']}")
-        except Exception as e:
-            self.add_ai_message(f"模型对比时出错: {str(e)}")
-        finally:
-            self.progress_bar.setVisible(False)
+        # 禁用UI控件
+        self.set_ui_enabled(False)
+        
+        # 创建并启动分析线程
+        self.chat_thread = LLMChatThread(self.llm_framework)
+        self.chat_thread.set_analysis_task("compare_models")
+        
+        # 连接信号
+        self.chat_thread.analysis_finished.connect(self.on_analysis_finished)
+        self.chat_thread.analysis_error.connect(self.on_analysis_error)
+        
+        # 启动线程
+        self.chat_thread.start()
+    
+    def on_chat_finished(self, response_text):
+        """聊天完成处理"""
+        self.add_ai_message(response_text)
+        
+        # 更新聊天历史
+        if hasattr(self, '_last_user_message'):
+            self.chat_history.append({
+                'user': self._last_user_message,
+                'ai': response_text,
+                'timestamp': datetime.now().isoformat()
+            })
+        
+        self._reset_ui_state()
+    
+    def on_chat_error(self, error_message):
+        """聊天错误处理"""
+        self.add_ai_message(f"抱歉，处理您的问题时出现错误: {error_message}")
+        self._reset_ui_state()
+    
+    def on_analysis_finished(self, response_text):
+        """分析完成处理"""
+        self.add_ai_message(response_text)
+        self._reset_ui_state()
+    
+    def on_analysis_error(self, error_message):
+        """分析错误处理"""
+        self.add_ai_message(f"分析时出现错误: {error_message}")
+        self._reset_ui_state()
+    
+    def _reset_ui_state(self):
+        """重置UI状态"""
+        self.progress_bar.setVisible(False)
+        self.status_label.setText("AI助手已就绪")
+        self.status_label.setStyleSheet("color: #28a745; font-weight: bold;")
+        
+        # 重新启用UI控件
+        self.set_ui_enabled(True)
     
     def update_training_context(self, context):
         """更新训练上下文"""

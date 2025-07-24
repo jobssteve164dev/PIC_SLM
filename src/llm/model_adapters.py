@@ -160,9 +160,11 @@ class OpenAIAdapter(LLMAdapter):
 class LocalLLMAdapter(LLMAdapter):
     """本地LLM适配器 (支持Ollama等)"""
     
-    def __init__(self, model_name: str = 'llama2', base_url: str = 'http://localhost:11434'):
+    def __init__(self, model_name: str = 'llama2', base_url: str = 'http://localhost:11434', 
+                 timeout: int = 120):
         super().__init__(model_name)
         self.base_url = base_url
+        self.timeout = timeout  # 默认2分钟超时
         self.available = self._check_availability()
     
     def _check_availability(self) -> bool:
@@ -176,7 +178,7 @@ class LocalLLMAdapter(LLMAdapter):
     def generate_response(self, prompt: str, context: Optional[Dict] = None) -> str:
         """生成响应"""
         if not self.available:
-            return "本地LLM服务不可用，请检查Ollama是否运行"
+            return "本地LLM服务不可用，请检查Ollama是否运行在 " + self.base_url
         
         try:
             self.request_count += 1
@@ -194,15 +196,19 @@ class LocalLLMAdapter(LLMAdapter):
                         'num_predict': 1000
                     }
                 },
-                timeout=60
+                timeout=self.timeout
             )
             
             if response.status_code == 200:
                 result = response.json()
                 return result.get('response', '无响应')
             else:
-                return f"本地LLM调用失败: {response.status_code}"
+                return f"本地LLM调用失败: HTTP {response.status_code}"
                 
+        except requests.exceptions.Timeout:
+            return f"本地LLM响应超时（{self.timeout}秒），请检查模型是否过大或服务器负载过高。建议：\n1. 尝试使用更小的模型\n2. 增加超时时间\n3. 检查服务器资源使用情况"
+        except requests.exceptions.ConnectionError:
+            return f"无法连接到本地LLM服务 ({self.base_url})，请确保Ollama服务正在运行"
         except Exception as e:
             return f"本地LLM调用异常: {str(e)}"
     
@@ -330,7 +336,8 @@ def create_llm_adapter(adapter_type: str, **kwargs) -> LLMAdapter:
     elif adapter_type.lower() == 'local':
         return LocalLLMAdapter(
             model_name=kwargs.get('model_name', 'llama2'),
-            base_url=kwargs.get('base_url', 'http://localhost:11434')
+            base_url=kwargs.get('base_url', 'http://localhost:11434'),
+            timeout=kwargs.get('timeout', 120)
         )
     
     elif adapter_type.lower() == 'mock':

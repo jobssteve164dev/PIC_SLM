@@ -10,11 +10,12 @@
     "base_url": "http://localhost:11434",
     "model": "deepseek-r1:8b",
     "temperature": 0.7,
-    "num_predict": 1000
+    "num_predict": 1000,
+    "timeout": 120
   },
   "general": {
     "default_adapter": "local",
-    "request_timeout": 60,
+    "request_timeout": 180,
     "max_retries": 3,
     "enable_cache": true,
     "enable_streaming": true
