@@ -157,6 +157,121 @@ class OpenAIAdapter(LLMAdapter):
             return f"HTTP请求失败: {str(e)}"
 
 
+class DeepSeekAdapter(LLMAdapter):
+    """DeepSeek模型适配器"""
+    
+    def __init__(self, api_key: str, model: str = 'deepseek-chat', base_url: Optional[str] = None):
+        super().__init__(model)
+        self.api_key = api_key
+        self.model = model
+        self.base_url = base_url or "https://api.deepseek.com/v1"
+        
+        # 尝试导入OpenAI库（DeepSeek使用兼容OpenAI的API格式）
+        try:
+            import openai
+            self.client = openai.OpenAI(api_key=api_key, base_url=self.base_url)
+            self.available = True
+        except ImportError:
+            print("警告: OpenAI库未安装，将使用HTTP请求方式")
+            self.client = None
+            self.available = False
+    
+    def generate_response(self, prompt: str, context: Optional[Dict] = None) -> str:
+        """生成响应"""
+        try:
+            self.request_count += 1
+            
+            messages = [
+                {"role": "system", "content": self._get_system_prompt()},
+                {"role": "user", "content": prompt}
+            ]
+            
+            if context:
+                context_msg = f"上下文信息: {json.dumps(context, ensure_ascii=False)}"
+                messages.insert(1, {"role": "assistant", "content": context_msg})
+            
+            if self.client:
+                response = self.client.chat.completions.create(
+                    model=self.model,
+                    messages=messages,
+                    temperature=0.7,
+                    max_tokens=1000
+                )
+                content = response.choices[0].message.content
+                self.total_tokens += response.usage.total_tokens
+                return content
+            else:
+                # 使用HTTP请求方式
+                return self._http_request(messages)
+                
+        except Exception as e:
+            return f"DeepSeek API调用失败: {str(e)}"
+    
+    def analyze_metrics(self, metrics_data: Dict) -> str:
+        """分析训练指标"""
+        prompt = f"""
+请分析以下CV模型训练指标并提供专业建议:
+
+训练指标:
+{json.dumps(metrics_data, ensure_ascii=False, indent=2)}
+
+请分析:
+1. 当前训练状态 (收敛情况、过拟合/欠拟合)
+2. 关键指标趋势
+3. 具体的优化建议
+4. 潜在问题诊断
+
+请用中文回答，并保持专业性。
+"""
+        return self.generate_response(prompt)
+    
+    def _get_system_prompt(self) -> str:
+        """获取系统提示词"""
+        return """
+你是一个专业的深度学习训练分析师。你的任务是:
+1. 分析训练指标数据，识别训练状态
+2. 提供具体的优化建议
+3. 诊断常见的训练问题
+4. 使用专业但易懂的语言解释
+
+请始终基于提供的数据进行分析，避免过度推测。
+回答要简洁明了，重点突出，用中文回答。
+"""
+    
+    def _http_request(self, messages: List[Dict]) -> str:
+        """使用HTTP请求方式调用API"""
+        try:
+            headers = {
+                "Authorization": f"Bearer {self.api_key}",
+                "Content-Type": "application/json"
+            }
+            
+            data = {
+                "model": self.model,
+                "messages": messages,
+                "temperature": 0.7,
+                "max_tokens": 1000
+            }
+            
+            response = requests.post(
+                f"{self.base_url}/chat/completions",
+                headers=headers,
+                json=data,
+                timeout=30
+            )
+            
+            if response.status_code == 200:
+                result = response.json()
+                content = result['choices'][0]['message']['content']
+                self.total_tokens += result.get('usage', {}).get('total_tokens', 0)
+                return content
+            else:
+                return f"API请求失败: {response.status_code} - {response.text}"
+                
+        except Exception as e:
+            return f"HTTP请求失败: {str(e)}"
+
+
 class LocalLLMAdapter(LLMAdapter):
     """本地LLM适配器 (支持Ollama等)"""
     
@@ -330,6 +445,16 @@ def create_llm_adapter(adapter_type: str, **kwargs) -> LLMAdapter:
         return OpenAIAdapter(
             api_key=api_key,
             model=kwargs.get('model', 'gpt-4'),
+            base_url=kwargs.get('base_url')
+        )
+    
+    elif adapter_type.lower() == 'deepseek':
+        api_key = kwargs.get('api_key')
+        if not api_key:
+            raise ValueError("DeepSeek适配器需要提供api_key")
+        return DeepSeekAdapter(
+            api_key=api_key,
+            model=kwargs.get('model', 'deepseek-chat'),
             base_url=kwargs.get('base_url')
         )
     

@@ -6,6 +6,13 @@
     "temperature": 0.7,
     "max_tokens": 1003
   },
+  "deepseek": {
+    "api_key": "sk-63363d60338d444f9ad3709736609cd2",
+    "base_url": "https://api.deepseek.com/v1",
+    "model": "deepseek-chat",
+    "temperature": 0.7,
+    "max_tokens": 3000
+  },
   "ollama": {
     "base_url": "http://localhost:11434",
     "model": "deepseek-r1:8b",
@@ -14,7 +21,7 @@
     "timeout": 120
   },
   "general": {
-    "default_adapter": "local",
+    "default_adapter": "deepseek",
     "request_timeout": 180,
     "max_retries": 3,
     "enable_cache": true,

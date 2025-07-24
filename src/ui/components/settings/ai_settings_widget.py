@@ -132,6 +132,77 @@ class OpenAITestThread(QThread):
             return []
 
 
+class DeepSeekTestThread(QThread):
+    """DeepSeek API测试线程"""
+    
+    test_completed = pyqtSignal(bool, str, list)  # 成功状态, 消息, 可用模型列表
+    
+    def __init__(self, api_key, base_url=None):
+        super().__init__()
+        self.api_key = api_key
+        self.base_url = base_url or "https://api.deepseek.com/v1"
+    
+    def run(self):
+        try:
+            if not LLM_AVAILABLE:
+                self.test_completed.emit(False, "LLM模块不可用", [])
+                return
+            
+            # 首先尝试获取可用模型列表
+            models = self._fetch_available_models()
+            
+            if models:
+                # 如果成功获取模型列表，再测试一个简单请求来验证API密钥
+                adapter = create_llm_adapter('deepseek', 
+                                           api_key=self.api_key, 
+                                           base_url=self.base_url if self.base_url != "https://api.deepseek.com/v1" else None)
+                
+                # 测试简单请求
+                response = adapter.generate_response("Hello", context={'type': 'test'})
+                
+                if response and not response.startswith("API调用失败"):
+                    self.test_completed.emit(True, f"API密钥验证成功，发现 {len(models)} 个可用模型", models)
+                else:
+                    # API密钥无效，但可能是网络问题，仍返回获取到的模型列表
+                    self.test_completed.emit(False, "API密钥验证失败，但已获取模型列表", models)
+            else:
+                # 无法获取模型列表，使用预定义列表
+                fallback_models = ["deepseek-chat", "deepseek-coder"]
+                self.test_completed.emit(False, "无法获取模型列表，使用默认模型", fallback_models)
+                
+        except Exception as e:
+            self.test_completed.emit(False, f"测试失败: {str(e)}", [])
+    
+    def _fetch_available_models(self):
+        """获取可用模型列表"""
+        try:
+            headers = {
+                "Authorization": f"Bearer {self.api_key}",
+                "Content-Type": "application/json"
+            }
+            
+            response = requests.get(
+                f"{self.base_url}/models",
+                headers=headers,
+                timeout=10
+            )
+            
+            if response.status_code == 200:
+                data = response.json()
+                models = []
+                for model in data.get('data', []):
+                    model_id = model.get('id', '')
+                    # 获取所有可用模型
+                    models.append(model_id)
+                return sorted(models)
+            else:
+                return []
+                
+        except Exception as e:
+            print(f"获取DeepSeek模型列表失败: {str(e)}")
+            return []
+
+
 class AISettingsWidget(QWidget):
     """AI设置主组件"""
     
@@ -143,6 +214,7 @@ class AISettingsWidget(QWidget):
         self.current_config = {}
         self.ollama_test_thread = None
         self.openai_test_thread = None
+        self.deepseek_test_thread = None
         
         self.init_ui()
         self.load_config()
@@ -160,6 +232,10 @@ class AISettingsWidget(QWidget):
         # OpenAI设置标签页
         self.openai_tab = self.create_openai_tab()
         self.tabs.addTab(self.openai_tab, "OpenAI设置")
+        
+        # DeepSeek设置标签页
+        self.deepseek_tab = self.create_deepseek_tab()
+        self.tabs.addTab(self.deepseek_tab, "DeepSeek设置")
         
         # Ollama设置标签页
         self.ollama_tab = self.create_ollama_tab()
@@ -275,6 +351,89 @@ class AISettingsWidget(QWidget):
         # layout.addStretch() # 移除此行以消除空白
         return widget
     
+    def create_deepseek_tab(self):
+        """创建DeepSeek设置标签页"""
+        widget = QWidget()
+        layout = QVBoxLayout(widget)
+        
+        # API配置组
+        api_group = QGroupBox("API配置")
+        api_layout = QFormLayout()
+        
+        # API密钥（带显示/隐藏按钮）
+        key_layout = QHBoxLayout()
+        self.deepseek_api_key = QLineEdit()
+        self.deepseek_api_key.setEchoMode(QLineEdit.Password)
+        self.deepseek_api_key.setPlaceholderText("输入您的DeepSeek API密钥")
+        key_layout.addWidget(self.deepseek_api_key)
+        
+        self.show_deepseek_key_btn = QPushButton("👁")
+        self.show_deepseek_key_btn.setMaximumWidth(30)
+        self.show_deepseek_key_btn.clicked.connect(self.toggle_deepseek_key_visibility)
+        key_layout.addWidget(self.show_deepseek_key_btn)
+        api_layout.addRow("API密钥:", key_layout)
+        
+        # 自定义API基础URL
+        self.deepseek_base_url = QLineEdit()
+        self.deepseek_base_url.setPlaceholderText("https://api.deepseek.com/v1 (默认)")
+        api_layout.addRow("基础URL:", self.deepseek_base_url)
+        
+        # 连接测试
+        test_layout = QHBoxLayout()
+        self.deepseek_test_btn = QPushButton("🔍 测试连接")
+        self.deepseek_test_btn.clicked.connect(self.test_deepseek_connection)
+        test_layout.addWidget(self.deepseek_test_btn)
+        
+        self.deepseek_test_progress = QProgressBar()
+        self.deepseek_test_progress.setVisible(False)
+        test_layout.addWidget(self.deepseek_test_progress)
+        
+        test_layout.addStretch()
+        api_layout.addRow("连接测试:", test_layout)
+        
+        # 测试结果
+        self.deepseek_test_result = QLabel("尚未测试")
+        self.deepseek_test_result.setStyleSheet("color: #6c757d;")
+        api_layout.addRow("测试结果:", self.deepseek_test_result)
+        
+        api_group.setLayout(api_layout)
+        layout.addWidget(api_group)
+        
+        # 模型配置组
+        model_group = QGroupBox("模型配置")
+        model_layout = QFormLayout()
+        
+        # 模型选择（带刷新按钮）
+        refresh_layout = QHBoxLayout()
+        self.deepseek_models = QComboBox()
+        self.deepseek_models.addItems(["deepseek-chat", "deepseek-coder"])
+        self.deepseek_models.setEditable(True)
+        refresh_layout.addWidget(self.deepseek_models)
+        
+        self.refresh_deepseek_models_btn = QPushButton("🔄")
+        self.refresh_deepseek_models_btn.setMaximumWidth(30)
+        self.refresh_deepseek_models_btn.clicked.connect(self.refresh_deepseek_models)
+        refresh_layout.addWidget(self.refresh_deepseek_models_btn)
+        model_layout.addRow("选择模型:", refresh_layout)
+        
+        # 参数设置
+        self.deepseek_temperature = QDoubleSpinBox()
+        self.deepseek_temperature.setRange(0.0, 2.0)
+        self.deepseek_temperature.setSingleStep(0.1)
+        self.deepseek_temperature.setValue(0.7)
+        model_layout.addRow("温度 (Temperature):", self.deepseek_temperature)
+        
+        self.deepseek_max_tokens = QSpinBox()
+        self.deepseek_max_tokens.setRange(1, 8192)
+        self.deepseek_max_tokens.setValue(1000)
+        model_layout.addRow("最大令牌数:", self.deepseek_max_tokens)
+        
+        model_group.setLayout(model_layout)
+        layout.addWidget(model_group)
+        
+        # layout.addStretch() # 移除此行以消除空白
+        return widget
+    
     def create_ollama_tab(self):
         """创建Ollama设置标签页"""
         widget = QWidget()
@@ -369,7 +528,7 @@ class AISettingsWidget(QWidget):
         adapter_layout = QFormLayout()
         
         self.default_adapter = QComboBox()
-        self.default_adapter.addItems(["模拟适配器", "OpenAI", "Ollama"])
+        self.default_adapter.addItems(["模拟适配器", "OpenAI", "DeepSeek", "Ollama"])
         adapter_layout.addRow("默认使用:", self.default_adapter)
         
         adapter_group.setLayout(adapter_layout)
@@ -460,6 +619,15 @@ class AISettingsWidget(QWidget):
             self.openai_api_key.setEchoMode(QLineEdit.Password)
             self.show_key_btn.setText("👁")
     
+    def toggle_deepseek_key_visibility(self):
+        """切换DeepSeek API密钥显示/隐藏"""
+        if self.deepseek_api_key.echoMode() == QLineEdit.Password:
+            self.deepseek_api_key.setEchoMode(QLineEdit.Normal)
+            self.show_deepseek_key_btn.setText("🙈")
+        else:
+            self.deepseek_api_key.setEchoMode(QLineEdit.Password)
+            self.show_deepseek_key_btn.setText("👁")
+    
     def test_openai_connection(self):
         """测试OpenAI连接"""
         api_key = self.openai_api_key.text().strip()
@@ -486,22 +654,23 @@ class AISettingsWidget(QWidget):
         if success:
             self.openai_test_result.setText(f"✅ {message}")
             self.openai_test_result.setStyleSheet("color: #28a745;")
+            
+            # 更新模型列表
+            if models:
+                current_model = self.openai_model.currentText()
+                self.openai_model.clear()
+                self.openai_model.addItems(models)
+                if current_model in models:
+                    self.openai_model.setCurrentText(current_model)
+                elif models:
+                    self.openai_model.setCurrentText(models[0])
         else:
             self.openai_test_result.setText(f"❌ {message}")
             self.openai_test_result.setStyleSheet("color: #dc3545;")
-        
-        # 更新模型列表（无论测试成功与否，只要有模型列表就更新）
-        if models:
-            current_model = self.openai_model.currentText()
-            self.openai_model.clear()
-            self.openai_model.addItems(models)
-            
-            # 恢复之前选中的模型（如果存在）
-            if current_model and current_model in models:
-                self.openai_model.setCurrentText(current_model)
-            elif models:
-                # 如果之前的模型不存在，选择第一个
-                self.openai_model.setCurrentText(models[0])
+    
+    def refresh_model_list(self):
+        """刷新OpenAI模型列表"""
+        self.test_openai_connection()
     
     def test_ollama_connection(self):
         """测试Ollama连接"""
@@ -539,9 +708,51 @@ class AISettingsWidget(QWidget):
             self.ollama_test_result.setText(f"❌ {message}")
             self.ollama_test_result.setStyleSheet("color: #dc3545;")
     
+    def test_deepseek_connection(self):
+        """测试DeepSeek连接"""
+        api_key = self.deepseek_api_key.text().strip()
+        if not api_key:
+            QMessageBox.warning(self, "警告", "请先输入API密钥")
+            return
+        
+        self.deepseek_test_btn.setEnabled(False)
+        self.deepseek_test_progress.setVisible(True)
+        self.deepseek_test_progress.setRange(0, 0)
+        self.deepseek_test_result.setText("正在测试...")
+        self.deepseek_test_result.setStyleSheet("color: #ffc107;")
+        
+        base_url = self.deepseek_base_url.text().strip() or None
+        self.deepseek_test_thread = DeepSeekTestThread(api_key, base_url)
+        self.deepseek_test_thread.test_completed.connect(self.on_deepseek_test_completed)
+        self.deepseek_test_thread.start()
+    
+    def on_deepseek_test_completed(self, success, message, models):
+        """DeepSeek测试完成回调"""
+        self.deepseek_test_btn.setEnabled(True)
+        self.deepseek_test_progress.setVisible(False)
+        
+        if success:
+            self.deepseek_test_result.setText(f"✅ {message}")
+            self.deepseek_test_result.setStyleSheet("color: #28a745;")
+            
+            # 更新模型列表
+            if models:
+                current_model = self.deepseek_models.currentText()
+                self.deepseek_models.clear()
+                self.deepseek_models.addItems(models)
+                if current_model in models:
+                    self.deepseek_models.setCurrentText(current_model)
+        else:
+            self.deepseek_test_result.setText(f"❌ {message}")
+            self.deepseek_test_result.setStyleSheet("color: #dc3545;")
+    
     def refresh_ollama_models(self):
         """刷新Ollama模型列表"""
         self.test_ollama_connection()
+    
+    def refresh_deepseek_models(self):
+        """刷新DeepSeek模型列表"""
+        self.test_deepseek_connection()
     
     def load_config(self):
         """加载配置"""
@@ -576,6 +787,14 @@ class AISettingsWidget(QWidget):
         self.openai_temperature.setValue(openai_config.get('temperature', 0.7))
         self.openai_max_tokens.setValue(openai_config.get('max_tokens', 1000))
         
+        # DeepSeek设置
+        deepseek_config = config.get('deepseek', {})
+        self.deepseek_api_key.setText(deepseek_config.get('api_key', ''))
+        self.deepseek_base_url.setText(deepseek_config.get('base_url', 'https://api.deepseek.com/v1'))
+        self.deepseek_models.setCurrentText(deepseek_config.get('model', 'deepseek-chat'))
+        self.deepseek_temperature.setValue(deepseek_config.get('temperature', 0.7))
+        self.deepseek_max_tokens.setValue(deepseek_config.get('max_tokens', 1000))
+        
         # Ollama设置
         ollama_config = config.get('ollama', {})
         self.ollama_base_url.setText(ollama_config.get('base_url', 'http://localhost:11434'))
@@ -591,6 +810,8 @@ class AISettingsWidget(QWidget):
             default_adapter = 'OpenAI'
         elif default_adapter == 'local':
             default_adapter = 'Ollama'
+        elif default_adapter == 'deepseek':
+            default_adapter = 'DeepSeek'
         self.default_adapter.setCurrentText(default_adapter)
         self.request_timeout.setValue(general_config.get('request_timeout', 60))
         self.max_retries.setValue(general_config.get('max_retries', 3))
@@ -625,6 +846,12 @@ class AISettingsWidget(QWidget):
         self.openai_temperature.setValue(0.7)
         self.openai_max_tokens.setValue(1000)
         
+        self.deepseek_api_key.clear()
+        self.deepseek_base_url.clear()
+        self.deepseek_models.setCurrentText('deepseek-chat')
+        self.deepseek_temperature.setValue(0.7)
+        self.deepseek_max_tokens.setValue(1000)
+        
         self.ollama_base_url.setText('http://localhost:11434')
         self.ollama_models.setCurrentText('llama2')
         self.ollama_temperature.setValue(0.7)
@@ -640,6 +867,8 @@ class AISettingsWidget(QWidget):
         # 重置测试结果
         self.openai_test_result.setText("尚未测试")
         self.openai_test_result.setStyleSheet("color: #6c757d;")
+        self.deepseek_test_result.setText("尚未测试")
+        self.deepseek_test_result.setStyleSheet("color: #6c757d;")
         self.ollama_test_result.setText("尚未测试")
         self.ollama_test_result.setStyleSheet("color: #6c757d;")
     
@@ -655,6 +884,13 @@ class AISettingsWidget(QWidget):
         self.openai_model.currentTextChanged.connect(self.update_settings_preview)
         self.openai_temperature.valueChanged.connect(self.update_settings_preview)
         self.openai_max_tokens.valueChanged.connect(self.update_settings_preview)
+        
+        # DeepSeek设置信号
+        self.deepseek_api_key.textChanged.connect(self.update_settings_preview)
+        self.deepseek_base_url.textChanged.connect(self.update_settings_preview)
+        self.deepseek_models.currentTextChanged.connect(self.update_settings_preview)
+        self.deepseek_temperature.valueChanged.connect(self.update_settings_preview)
+        self.deepseek_max_tokens.valueChanged.connect(self.update_settings_preview)
         
         # Ollama设置信号
         self.ollama_base_url.textChanged.connect(self.update_settings_preview)
@@ -676,6 +912,8 @@ class AISettingsWidget(QWidget):
         default_adapter_text = self.default_adapter.currentText()
         if default_adapter_text == 'OpenAI':
             default_adapter = 'openai'
+        elif default_adapter_text == 'DeepSeek':
+            default_adapter = 'deepseek'
         elif default_adapter_text == 'Ollama':
             default_adapter = 'local'
         else:
@@ -688,6 +926,13 @@ class AISettingsWidget(QWidget):
                 'model': self.openai_model.currentText(),
                 'temperature': self.openai_temperature.value(),
                 'max_tokens': self.openai_max_tokens.value()
+            },
+            'deepseek': {
+                'api_key': self.deepseek_api_key.text().strip(),
+                'base_url': self.deepseek_base_url.text().strip(),
+                'model': self.deepseek_models.currentText(),
+                'temperature': self.deepseek_temperature.value(),
+                'max_tokens': self.deepseek_max_tokens.value()
             },
             'ollama': {
                 'base_url': self.ollama_base_url.text().strip() or 'http://localhost:11434',

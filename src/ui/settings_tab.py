@@ -733,6 +733,8 @@ class SettingsTab(BaseTab):
                     # 更新适配器选择下拉框
                     if default_adapter == 'openai':
                         chat_widget.adapter_combo.setCurrentText("OpenAI GPT-4")
+                    elif default_adapter == 'deepseek':
+                        chat_widget.adapter_combo.setCurrentText("DeepSeek")
                     elif default_adapter == 'local':
                         chat_widget.adapter_combo.setCurrentText("本地Ollama")
                     else:
@@ -750,6 +752,16 @@ class SettingsTab(BaseTab):
                                 'max_tokens': openai_config.get('max_tokens', 1000)
                             }
                             chat_widget.llm_framework.switch_adapter('openai', adapter_config)
+                        elif default_adapter == 'deepseek':
+                            deepseek_config = ai_config.get('deepseek', {})
+                            adapter_config = {
+                                'api_key': deepseek_config.get('api_key', ''),
+                                'model': deepseek_config.get('model', 'deepseek-chat'),
+                                'base_url': deepseek_config.get('base_url', '') or None,
+                                'temperature': deepseek_config.get('temperature', 0.7),
+                                'max_tokens': deepseek_config.get('max_tokens', 1000)
+                            }
+                            chat_widget.llm_framework.switch_adapter('deepseek', adapter_config)
                         elif default_adapter == 'local':
                             ollama_config = ai_config.get('ollama', {})
                             adapter_config = {

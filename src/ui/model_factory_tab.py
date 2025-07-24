@@ -270,7 +270,7 @@ class LLMChatWidget(QWidget):
         adapter_layout = QHBoxLayout()
         adapter_layout.addWidget(QLabel("AI模型:"))
         self.adapter_combo = QComboBox()
-        self.adapter_combo.addItems(["模拟适配器", "OpenAI GPT-4", "本地Ollama"])
+        self.adapter_combo.addItems(["模拟适配器", "OpenAI GPT-4", "DeepSeek", "本地Ollama"])
         self.adapter_combo.currentTextChanged.connect(self.switch_adapter)
         adapter_layout.addWidget(self.adapter_combo)
         adapter_layout.addStretch()
@@ -364,6 +364,18 @@ class LLMChatWidget(QWidget):
                     self.llm_framework = LLMFramework('mock')
                     self.adapter_combo.setCurrentText("模拟适配器")
                     self.add_system_message("⚠️ 未配置OpenAI API密钥，使用模拟适配器")
+            elif default_adapter == 'deepseek':
+                deepseek_config = ai_config.get('deepseek', {})
+                api_key = deepseek_config.get('api_key', '')
+                if api_key:
+                    self.llm_framework = LLMFramework('deepseek', deepseek_config)
+                    self.adapter_combo.setCurrentText("DeepSeek")
+                    self.add_system_message("✅ AI助手已启动，使用DeepSeek")
+                else:
+                    # 没有API密钥，回退到模拟适配器
+                    self.llm_framework = LLMFramework('mock')
+                    self.adapter_combo.setCurrentText("模拟适配器")
+                    self.add_system_message("⚠️ 未配置DeepSeek API密钥，使用模拟适配器")
             elif default_adapter == 'local':
                 ollama_config = ai_config.get('ollama', {})
                 self.llm_framework = LLMFramework('local', ollama_config)
@@ -427,6 +439,22 @@ class LLMChatWidget(QWidget):
                     self.status_label.setStyleSheet("color: #dc3545; font-weight: bold;")
                     return
                     
+            elif adapter_name == "DeepSeek":
+                adapter_type = 'deepseek'
+                deepseek_config = ai_config.get('deepseek', {})
+                adapter_config = {
+                    'api_key': deepseek_config.get('api_key', ''),
+                    'model': deepseek_config.get('model', 'deepseek-coder'),
+                    'base_url': deepseek_config.get('base_url', '') or None,
+                    'temperature': deepseek_config.get('temperature', 0.7),
+                    'max_tokens': deepseek_config.get('max_tokens', 1000)
+                }
+                if not adapter_config['api_key']:
+                    self.add_system_message("❌ 未配置DeepSeek API密钥，请在设置中配置")
+                    self.status_label.setText("配置缺失")
+                    self.status_label.setStyleSheet("color: #dc3545; font-weight: bold;")
+                    return
+                    
             elif adapter_name == "本地Ollama":
                 adapter_type = 'local'
                 ollama_config = ai_config.get('ollama', {})
@@ -447,6 +475,9 @@ class LLMChatWidget(QWidget):
                 self.add_system_message(f"✅ 已切换到: {adapter_name}")
                 if adapter_name == "OpenAI GPT-4":
                     model_name = adapter_config.get('model', 'gpt-4')
+                    self.add_system_message(f"   使用模型: {model_name}")
+                elif adapter_name == "DeepSeek":
+                    model_name = adapter_config.get('model', 'deepseek-coder')
                     self.add_system_message(f"   使用模型: {model_name}")
                 elif adapter_name == "本地Ollama":
                     model_name = adapter_config.get('model_name', 'llama2')
@@ -726,6 +757,13 @@ class LLMChatWidget(QWidget):
                 'model': 'llama2',
                 'temperature': 0.7,
                 'num_predict': 1000
+            },
+            'deepseek': {
+                'api_key': '',
+                'base_url': '',
+                'model': 'deepseek-coder',
+                'temperature': 0.7,
+                'max_tokens': 1000
             },
             'general': {
                 'default_adapter': 'mock',
@@ -1085,6 +1123,8 @@ class ModelFactoryTab(BaseTab):
                     self.chat_widget.adapter_combo.setCurrentText("OpenAI GPT-4")
                 elif default_adapter == 'local':
                     self.chat_widget.adapter_combo.setCurrentText("本地Ollama")
+                elif default_adapter == 'deepseek':
+                    self.chat_widget.adapter_combo.setCurrentText("DeepSeek")
                 else:
                     self.chat_widget.adapter_combo.setCurrentText("模拟适配器")
                 
