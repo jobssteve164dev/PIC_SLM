@@ -63,24 +63,73 @@ class OpenAITestThread(QThread):
             if not LLM_AVAILABLE:
                 self.test_completed.emit(False, "LLM模块不可用", [])
                 return
+            
+            # 首先尝试获取可用模型列表
+            models = self._fetch_available_models()
+            
+            if models:
+                # 如果成功获取模型列表，再测试一个简单请求来验证API密钥
+                adapter = create_llm_adapter('openai', 
+                                           api_key=self.api_key, 
+                                           base_url=self.base_url if self.base_url != "https://api.openai.com/v1" else None)
                 
-            # 创建测试适配器
-            adapter = create_llm_adapter('openai', 
-                                       api_key=self.api_key, 
-                                       base_url=self.base_url if self.base_url != "https://api.openai.com/v1" else None)
-            
-            # 测试简单请求
-            response = adapter.generate_response("Hello", context={'type': 'test'})
-            
-            if response and not response.startswith("API调用失败"):
-                # 预定义的OpenAI模型列表
-                models = ["gpt-4", "gpt-4-turbo", "gpt-3.5-turbo", "gpt-3.5-turbo-16k"]
-                self.test_completed.emit(True, "API密钥验证成功", models)
+                # 测试简单请求
+                response = adapter.generate_response("Hello", context={'type': 'test'})
+                
+                if response and not response.startswith("API调用失败"):
+                    self.test_completed.emit(True, f"API密钥验证成功，发现 {len(models)} 个可用模型", models)
+                else:
+                    # API密钥无效，但可能是网络问题，仍返回获取到的模型列表
+                    self.test_completed.emit(False, "API密钥验证失败，但已获取模型列表", models)
             else:
-                self.test_completed.emit(False, "API密钥验证失败", [])
+                # 无法获取模型列表，使用预定义列表
+                fallback_models = ["gpt-4", "gpt-4-turbo", "gpt-3.5-turbo", "gpt-3.5-turbo-16k"]
+                self.test_completed.emit(False, "无法获取模型列表，使用默认模型", fallback_models)
                 
         except Exception as e:
-            self.test_completed.emit(False, f"测试失败: {str(e)}", [])
+            # 发生异常时使用预定义列表
+            fallback_models = ["gpt-4", "gpt-4-turbo", "gpt-3.5-turbo", "gpt-3.5-turbo-16k"]
+            self.test_completed.emit(False, f"测试失败: {str(e)}", fallback_models)
+    
+    def _fetch_available_models(self):
+        """获取可用模型列表"""
+        try:
+            headers = {
+                "Authorization": f"Bearer {self.api_key}",
+                "Content-Type": "application/json"
+            }
+            
+            # 调用OpenAI的models API端点
+            response = requests.get(f"{self.base_url}/models", headers=headers, timeout=10)
+            
+            if response.status_code == 200:
+                data = response.json()
+                models = []
+                
+                # 解析模型数据，只保留聊天模型
+                for model in data.get('data', []):
+                    model_id = model.get('id', '')
+                    # 过滤出常用的聊天模型
+                    if any(keyword in model_id.lower() for keyword in ['gpt-4', 'gpt-3.5', 'chatgpt']):
+                        models.append(model_id)
+                
+                # 按模型名称排序
+                models.sort(key=lambda x: (
+                    0 if 'gpt-4' in x else 1 if 'gpt-3.5' in x else 2,  # 优先级排序
+                    x  # 字母排序
+                ))
+                
+                return models
+            else:
+                print(f"获取模型列表失败: HTTP {response.status_code}")
+                return []
+                
+        except requests.exceptions.Timeout:
+            print("获取模型列表超时")
+            return []
+        except Exception as e:
+            print(f"获取模型列表异常: {str(e)}")
+            return []
 
 
 class AISettingsWidget(QWidget):
@@ -102,8 +151,8 @@ class AISettingsWidget(QWidget):
     def init_ui(self):
         """初始化用户界面"""
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(5, 5, 5, 5)  # 减少边距
-        layout.setSpacing(8)  # 减少间距
+        layout.setContentsMargins(10, 10, 10, 10)
+        layout.setSpacing(10)
         
         # 创建标签页
         self.tabs = QTabWidget()
@@ -120,44 +169,35 @@ class AISettingsWidget(QWidget):
         self.general_tab = self.create_general_tab()
         self.tabs.addTab(self.general_tab, "通用设置")
         
-        # 设置标签页的最大高度以减少空白
-        self.tabs.setMaximumHeight(400)
         layout.addWidget(self.tabs)
         
-        # 添加重置按钮（保持重置功能，但移除保存按钮）
+        # 添加重置按钮，并使其在左侧
         button_layout = QHBoxLayout()
-        button_layout.setContentsMargins(0, 5, 0, 0)  # 减少按钮区域的上边距
-        
         self.reset_btn = QPushButton("🔄 重置默认")
         self.reset_btn.clicked.connect(self.reset_to_defaults)
         button_layout.addWidget(self.reset_btn)
-        
-        button_layout.addStretch()
+        button_layout.addStretch() # 将按钮推到左侧
         layout.addLayout(button_layout)
-        
-        # 添加一个小的stretch以填充剩余空间，但不会太大
-        layout.addStretch(1)
+
+        # 在主布局底部添加一个弹性空间，将所有内容向上推
+        layout.addStretch()
     
     def create_openai_tab(self):
         """创建OpenAI设置标签页"""
         widget = QWidget()
         layout = QVBoxLayout(widget)
-        layout.setContentsMargins(5, 5, 5, 5)  # 减少边距
-        layout.setSpacing(8)  # 减少间距
         
         # API配置组
         api_group = QGroupBox("API配置")
         api_layout = QFormLayout()
         
-        # API密钥
+        # API密钥（带显示/隐藏按钮）
+        key_layout = QHBoxLayout()
         self.openai_api_key = QLineEdit()
         self.openai_api_key.setEchoMode(QLineEdit.Password)
         self.openai_api_key.setPlaceholderText("输入您的OpenAI API密钥")
-        api_layout.addRow("API密钥:", self.openai_api_key)
-        
-        # 显示/隐藏密钥按钮
-        key_layout = QHBoxLayout()
         key_layout.addWidget(self.openai_api_key)
+        
         self.show_key_btn = QPushButton("👁")
         self.show_key_btn.setMaximumWidth(30)
         self.show_key_btn.clicked.connect(self.toggle_api_key_visibility)
@@ -194,11 +234,28 @@ class AISettingsWidget(QWidget):
         model_group = QGroupBox("模型配置")
         model_layout = QFormLayout()
         
-        # 默认模型
+        # 模型选择（可编辑下拉框）
+        model_select_layout = QHBoxLayout()
         self.openai_model = QComboBox()
-        self.openai_model.addItems(["gpt-4", "gpt-4-turbo", "gpt-3.5-turbo", "gpt-3.5-turbo-16k"])
-        self.openai_model.setEditable(True)
-        model_layout.addRow("默认模型:", self.openai_model)
+        self.openai_model.setEditable(True)  # 允许用户输入自定义模型名称
+        self.openai_model.setPlaceholderText("请先测试连接以获取可用模型，或手动输入模型名称")
+        # 初始为空，通过测试连接获取模型列表
+        model_select_layout.addWidget(self.openai_model)
+        
+        # 刷新模型列表按钮
+        self.refresh_models_btn = QPushButton("🔄")
+        self.refresh_models_btn.setMaximumWidth(30)
+        self.refresh_models_btn.setToolTip("刷新可用模型列表")
+        self.refresh_models_btn.clicked.connect(self.refresh_model_list)
+        model_select_layout.addWidget(self.refresh_models_btn)
+        
+        model_layout.addRow("模型名称:", model_select_layout)
+        
+        # 添加模型说明
+        model_info = QLabel("💡 提示：测试连接成功后将自动获取可用模型列表，您也可以手动输入自定义模型名称")
+        model_info.setStyleSheet("color: #6c757d; font-size: 12px;")
+        model_info.setWordWrap(True)
+        model_layout.addRow("", model_info)
         
         # 参数设置
         self.openai_temperature = QDoubleSpinBox()
@@ -215,15 +272,13 @@ class AISettingsWidget(QWidget):
         model_group.setLayout(model_layout)
         layout.addWidget(model_group)
         
-        # 移除addStretch()以减少空白空间
+        # layout.addStretch() # 移除此行以消除空白
         return widget
     
     def create_ollama_tab(self):
         """创建Ollama设置标签页"""
         widget = QWidget()
         layout = QVBoxLayout(widget)
-        layout.setContentsMargins(5, 5, 5, 5)  # 减少边距
-        layout.setSpacing(8)  # 减少间距
         
         # 服务器配置组
         server_group = QGroupBox("服务器配置")
@@ -260,15 +315,13 @@ class AISettingsWidget(QWidget):
         model_group = QGroupBox("模型配置")
         model_layout = QFormLayout()
         
-        # 可用模型列表
+        # 模型选择（带刷新按钮）
+        refresh_layout = QHBoxLayout()
         self.ollama_models = QComboBox()
         self.ollama_models.addItems(["llama2", "llama2:13b", "codellama", "mistral"])
         self.ollama_models.setEditable(True)
-        model_layout.addRow("选择模型:", self.ollama_models)
-        
-        # 刷新模型列表按钮
-        refresh_layout = QHBoxLayout()
         refresh_layout.addWidget(self.ollama_models)
+        
         self.refresh_models_btn = QPushButton("🔄")
         self.refresh_models_btn.setMaximumWidth(30)
         self.refresh_models_btn.clicked.connect(self.refresh_ollama_models)
@@ -290,15 +343,13 @@ class AISettingsWidget(QWidget):
         model_group.setLayout(model_layout)
         layout.addWidget(model_group)
         
-        # 移除addStretch()以减少空白空间
+        # layout.addStretch() # 移除此行以消除空白
         return widget
     
     def create_general_tab(self):
         """创建通用设置标签页"""
         widget = QWidget()
         layout = QVBoxLayout(widget)
-        layout.setContentsMargins(5, 5, 5, 5)  # 减少边距
-        layout.setSpacing(8)  # 减少间距
         
         # 默认适配器组
         adapter_group = QGroupBox("默认适配器")
@@ -341,9 +392,52 @@ class AISettingsWidget(QWidget):
         advanced_group.setLayout(advanced_layout)
         layout.addWidget(advanced_group)
         
-        # 移除addStretch()以减少空白空间
+        # layout.addStretch() # 移除此行以消除空白
         return widget
     
+    def refresh_model_list(self):
+        """刷新OpenAI模型列表"""
+        api_key = self.openai_api_key.text().strip()
+        if not api_key:
+            QMessageBox.warning(self, "警告", "请先输入API密钥")
+            return
+        
+        # 禁用刷新按钮，显示加载状态
+        self.refresh_models_btn.setEnabled(False)
+        self.refresh_models_btn.setText("⏳")
+        
+        base_url = self.openai_base_url.text().strip() or None
+        self.model_refresh_thread = OpenAITestThread(api_key, base_url)
+        self.model_refresh_thread.test_completed.connect(self.on_model_refresh_completed)
+        self.model_refresh_thread.start()
+    
+    def on_model_refresh_completed(self, success, message, models):
+        """模型列表刷新完成回调"""
+        self.refresh_models_btn.setEnabled(True)
+        self.refresh_models_btn.setText("🔄")
+        
+        if models:
+            # 保存当前选中的模型
+            current_model = self.openai_model.currentText()
+            
+            # 更新模型列表
+            self.openai_model.clear()
+            self.openai_model.addItems(models)
+            
+            # 恢复之前选中的模型（如果存在）
+            if current_model and current_model in models:
+                self.openai_model.setCurrentText(current_model)
+            elif models:
+                # 如果之前的模型不存在，选择第一个
+                self.openai_model.setCurrentText(models[0])
+            
+            if success:
+                QMessageBox.information(self, "成功", f"已获取 {len(models)} 个可用模型")
+            else:
+                QMessageBox.warning(self, "部分成功", f"{message}\n已更新模型列表")
+        else:
+            QMessageBox.warning(self, "失败", f"无法获取模型列表: {message}")
+
     def toggle_api_key_visibility(self):
         """切换API密钥显示/隐藏"""
         if self.openai_api_key.echoMode() == QLineEdit.Password:
@@ -379,16 +473,22 @@ class AISettingsWidget(QWidget):
         if success:
             self.openai_test_result.setText(f"✅ {message}")
             self.openai_test_result.setStyleSheet("color: #28a745;")
-            
-            # 更新模型列表
-            current_model = self.openai_model.currentText()
-            self.openai_model.clear()
-            self.openai_model.addItems(models)
-            if current_model in models:
-                self.openai_model.setCurrentText(current_model)
         else:
             self.openai_test_result.setText(f"❌ {message}")
             self.openai_test_result.setStyleSheet("color: #dc3545;")
+        
+        # 更新模型列表（无论测试成功与否，只要有模型列表就更新）
+        if models:
+            current_model = self.openai_model.currentText()
+            self.openai_model.clear()
+            self.openai_model.addItems(models)
+            
+            # 恢复之前选中的模型（如果存在）
+            if current_model and current_model in models:
+                self.openai_model.setCurrentText(current_model)
+            elif models:
+                # 如果之前的模型不存在，选择第一个
+                self.openai_model.setCurrentText(models[0])
     
     def test_ollama_connection(self):
         """测试Ollama连接"""
@@ -451,7 +551,15 @@ class AISettingsWidget(QWidget):
         openai_config = config.get('openai', {})
         self.openai_api_key.setText(openai_config.get('api_key', ''))
         self.openai_base_url.setText(openai_config.get('base_url', ''))
-        self.openai_model.setCurrentText(openai_config.get('model', 'gpt-4'))
+        
+        # 处理模型配置 - 如果有配置的模型，设置到下拉框中
+        configured_model = openai_config.get('model', '')
+        if configured_model:
+            # 如果下拉框中没有这个模型，先添加它
+            if self.openai_model.findText(configured_model) == -1:
+                self.openai_model.addItem(configured_model)
+            self.openai_model.setCurrentText(configured_model)
+        
         self.openai_temperature.setValue(openai_config.get('temperature', 0.7))
         self.openai_max_tokens.setValue(openai_config.get('max_tokens', 1000))
         
@@ -499,7 +607,7 @@ class AISettingsWidget(QWidget):
         # 重置UI到默认值
         self.openai_api_key.clear()
         self.openai_base_url.clear()
-        self.openai_model.setCurrentText('gpt-4')
+        self.openai_model.clear()  # 清空模型选择，不设置默认值
         self.openai_temperature.setValue(0.7)
         self.openai_max_tokens.setValue(1000)
         

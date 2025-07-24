@@ -1,21 +1,22 @@
 {
   "openai": {
     "api_key": "sk-test12345",
-    "model": "gpt-4",
+    "base_url": "",
+    "model": "gpt-3.5-turbo",
     "temperature": 0.7,
-    "max_tokens": 1000
+    "max_tokens": 1003
   },
   "ollama": {
     "base_url": "http://localhost:11434",
-    "model": "llama2",
+    "model": "deepseek-r1:8b",
     "temperature": 0.7,
     "num_predict": 1000
   },
   "general": {
-    "default_adapter": "openai",
+    "default_adapter": "local",
     "request_timeout": 60,
     "max_retries": 3,
     "enable_cache": true,
-    "enable_streaming": false
+    "enable_streaming": true
   }
 }
