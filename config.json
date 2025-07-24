@@ -41,5 +41,13 @@
         "alert_method": "弹窗提醒",
         "auto_cleanup_enabled": true,
         "enforce_limits_enabled": false
-    }
+    },
+    "proxy_settings": {
+        "enabled": false,
+        "type": 0,
+        "url": "",
+        "trusted_host_enabled": false,
+        "trusted_hosts": ""
+    },
+    "custom_mirror": {}
 }
