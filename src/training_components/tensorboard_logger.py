@@ -27,6 +27,7 @@ from torchvision import transforms
 from PIL import Image
 from PyQt5.QtCore import QObject, pyqtSignal
 import psutil  # 用于系统资源监控
+from .real_time_metrics_collector import get_global_metrics_collector
 
 
 class TensorBoardLogger(QObject):
@@ -48,6 +49,9 @@ class TensorBoardLogger(QObject):
         self.stream_server = None
         self.enable_streaming = False
         self.current_metrics = {}
+        
+        # 实时指标采集器
+        self.metrics_collector = get_global_metrics_collector()
     
     def initialize(self, config, model_name):
         """
@@ -77,6 +81,10 @@ class TensorBoardLogger(QObject):
         self.writer = SummaryWriter(self.log_dir)
         self.start_time = time.time()
         self.last_log_time = self.start_time
+        
+        # 启动实时指标采集
+        training_session_id = f"{model_name}_{time.strftime('%Y%m%d_%H%M%S')}"
+        self.metrics_collector.start_collection(training_session_id)
         
         return self.log_dir
     
@@ -376,13 +384,22 @@ class TensorBoardLogger(QObject):
         self.writer.add_scalar(f'Loss/{phase}', loss, epoch)
         self.writer.add_scalar(f'Accuracy/{phase}', accuracy, epoch)
         
-        # 更新当前指标并发送到数据流
-        self._update_current_metrics({
+        # 构建指标数据
+        metrics_data = {
             'epoch': epoch,
             'phase': phase,
             'loss': float(loss) if hasattr(loss, 'item') else float(loss),
             'accuracy': float(accuracy) if hasattr(accuracy, 'item') else float(accuracy),
             'timestamp': time.time()
+        }
+        
+        # 更新当前指标并发送到数据流
+        self._update_current_metrics(metrics_data)
+        
+        # 非侵入式地复制数据到实时采集器
+        self.metrics_collector.collect_tensorboard_metrics(epoch, phase, {
+            'loss': metrics_data['loss'],
+            'accuracy': metrics_data['accuracy']
         })
     
     def log_sample_images(self, dataloader, epoch, max_images=8):
@@ -489,6 +506,9 @@ class TensorBoardLogger(QObject):
             self.writer.flush()
             self.writer.close()
             self.writer = None
+            
+        # 停止实时指标采集
+        self.metrics_collector.stop_collection()
     
     def _create_class_info_chart(self, class_names, class_distribution, class_weights, epoch):
         """创建类别信息图表"""

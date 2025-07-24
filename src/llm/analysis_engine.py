@@ -22,6 +22,99 @@ class TrainingAnalysisEngine:
         self.analysis_history = []
         self.metrics_buffer = []
         
+        # 实时指标采集器 - 延迟导入避免循环依赖
+        self.metrics_collector = None
+        
+    def analyze_real_training_progress(self) -> Dict[str, Any]:
+        """分析真实的训练进度（使用实时采集的数据）"""
+        try:
+            # 延迟导入并获取指标采集器
+            if self.metrics_collector is None:
+                try:
+                    import sys
+                    import os
+                    sys.path.append(os.path.dirname(os.path.dirname(__file__)))
+                    from training_components.real_time_metrics_collector import get_global_metrics_collector
+                    self.metrics_collector = get_global_metrics_collector()
+                except ImportError:
+                    # 如果导入失败，直接读取文件
+                    return self._analyze_from_file()
+            
+            # 获取真实的训练数据
+            real_data = self.metrics_collector.get_current_training_data_for_ai()
+            
+            if "error" in real_data:
+                return {
+                    'error': f"无法获取真实训练数据: {real_data['error']}",
+                    'timestamp': time.time(),
+                    'data_source': 'real_time_collector'
+                }
+            
+            # 从真实数据中提取关键指标
+            current_metrics = real_data.get('current_metrics', {})
+            trends = real_data.get('training_trends', {})
+            
+            # 构建分析用的指标数据
+            if current_metrics:
+                metrics_data = {
+                    'epoch': current_metrics.get('epoch', 0),
+                    'train_loss': trends.get('train_losses', [])[-1] if trends.get('train_losses') else current_metrics.get('loss', 0),
+                    'val_loss': trends.get('val_losses', [])[-1] if trends.get('val_losses') else current_metrics.get('loss', 0),
+                    'train_accuracy': trends.get('train_accuracies', [])[-1] if trends.get('train_accuracies') else current_metrics.get('accuracy', 0),
+                    'val_accuracy': trends.get('val_accuracies', [])[-1] if trends.get('val_accuracies') else current_metrics.get('accuracy', 0),
+                    'training_duration': real_data.get('collection_duration', 0),
+                    'data_points': real_data.get('total_data_points', 0),
+                    'training_status': real_data.get('training_status', 'unknown')
+                }
+            else:
+                return {
+                    'error': '当前没有可用的训练指标数据',
+                    'timestamp': time.time(),
+                    'data_source': 'real_time_collector'
+                }
+            
+            # 构建分析提示词，包含真实数据上下文
+            prompt = self._build_real_data_analysis_prompt(metrics_data, trends, real_data)
+            
+            # 获取LLM分析
+            llm_analysis = self.llm.analyze_metrics(metrics_data)
+            
+            # 结合规则分析
+            rule_analysis = self._rule_based_analysis(metrics_data)
+            
+            # 生成综合分析结果
+            analysis_result = {
+                'timestamp': time.time(),
+                'data_source': 'real_time_collector',
+                'session_id': real_data.get('session_id', 'unknown'),
+                'metrics': metrics_data,
+                'trends': trends,
+                'raw_data_summary': {
+                    'total_data_points': real_data.get('total_data_points', 0),
+                    'collection_duration': real_data.get('collection_duration', 0),
+                    'training_status': real_data.get('training_status', 'unknown')
+                },
+                'llm_analysis': llm_analysis,
+                'rule_analysis': rule_analysis,
+                'combined_insights': self._combine_real_data_analyses(llm_analysis, rule_analysis, real_data),
+                'recommendations': self._generate_recommendations(metrics_data, llm_analysis, rule_analysis),
+                'alerts': self._check_alerts(metrics_data)
+            }
+            
+            # 添加到分析历史
+            self.analysis_history.append(analysis_result)
+            if len(self.analysis_history) > 50:
+                self.analysis_history.pop(0)
+            
+            return analysis_result
+            
+        except Exception as e:
+            return {
+                'error': f"真实数据分析过程中出现错误: {str(e)}",
+                'timestamp': time.time(),
+                'data_source': 'real_time_collector'
+            }
+        
     def analyze_training_progress(self, metrics_data: Dict[str, Any]) -> Dict[str, Any]:
         """分析训练进度"""
         try:
@@ -368,6 +461,187 @@ class TrainingAnalysisEngine:
 建议关注{rule_analysis.get('convergence_status', '收敛')}情况。
 """
         return combined
+    
+    def _build_real_data_analysis_prompt(self, metrics_data: Dict, trends: Dict, real_data: Dict) -> str:
+        """构建基于真实数据的分析提示词"""
+        return f"""
+请基于以下真实训练数据进行专业分析：
+
+## 训练会话信息
+- 会话ID: {real_data.get('session_id', 'Unknown')}
+- 训练时长: {real_data.get('collection_duration', 0):.1f}秒
+- 数据点数量: {real_data.get('total_data_points', 0)}个
+- 训练状态: {real_data.get('training_status', 'unknown')}
+
+## 当前训练指标
+- 当前Epoch: {metrics_data.get('epoch', 'N/A')}
+- 训练损失: {metrics_data.get('train_loss', 'N/A')}
+- 验证损失: {metrics_data.get('val_loss', 'N/A')}
+- 训练准确率: {metrics_data.get('train_accuracy', 'N/A')}
+- 验证准确率: {metrics_data.get('val_accuracy', 'N/A')}
+
+## 训练趋势分析
+- 训练损失趋势: {trends.get('train_losses', [])}
+- 验证损失趋势: {trends.get('val_losses', [])}
+- 训练准确率趋势: {trends.get('train_accuracies', [])}
+- 验证准确率趋势: {trends.get('val_accuracies', [])}
+
+请分析：
+1. 当前训练状态（收敛情况、过拟合/欠拟合风险）
+2. 基于趋势数据的训练进展评估
+3. 具体的优化建议
+4. 需要关注的潜在问题
+
+请用中文回答，保持专业性和实用性。
+"""
+
+    def _combine_real_data_analyses(self, llm_analysis: str, rule_analysis: Dict, real_data: Dict) -> str:
+        """结合LLM和规则分析（针对真实数据）"""
+        combined = f"""
+## 综合分析结果（基于真实训练数据）
+
+### 数据来源信息
+- 训练会话: {real_data.get('session_id', 'Unknown')}
+- 数据采集时长: {real_data.get('collection_duration', 0):.1f}秒
+- 总数据点: {real_data.get('total_data_points', 0)}个
+- 训练状态: {real_data.get('training_status', 'unknown')}
+
+### 规则分析摘要
+- 训练状态: {rule_analysis.get('training_state', '未知')}
+- 收敛状态: {rule_analysis.get('convergence_status', '未知')}
+- 过拟合风险: {rule_analysis.get('overfitting_risk', '未知')}
+- 性能评估: {rule_analysis.get('performance_assessment', '未知')}
+
+### AI分析洞察
+{llm_analysis}
+
+### 结论
+基于真实训练数据的综合判断，当前训练状态为{rule_analysis.get('training_state', '未知')}，
+建议关注{rule_analysis.get('convergence_status', '收敛')}情况。
+
+**注意**: 此分析基于实时采集的真实训练数据，具有较高的准确性和时效性。
+"""
+        return combined
+    
+    def _analyze_from_file(self) -> Dict[str, Any]:
+        """直接从文件读取数据进行分析（备用方案）"""
+        try:
+            import glob
+            import os
+            
+            # 查找最新的训练数据文件
+            data_dir = "logs/real_time_metrics"
+            if not os.path.exists(data_dir):
+                return {'error': '训练数据目录不存在'}
+                
+            pattern = os.path.join(data_dir, "*_metrics.json")
+            files = glob.glob(pattern)
+            
+            if not files:
+                return {'error': '没有找到训练数据文件'}
+                
+            # 获取最新文件
+            latest_file = max(files, key=os.path.getmtime)
+            
+            # 读取文件内容
+            with open(latest_file, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+                
+            # 提取最新的关键指标
+            metrics_history = data.get("metrics_history", [])
+            if not metrics_history:
+                return {"error": "训练数据为空"}
+                
+            # 获取最新的训练指标
+            current_metrics = data.get('current_metrics', {})
+            
+            # 计算训练趋势
+            train_losses = []
+            val_losses = []
+            train_accs = []
+            val_accs = []
+            epochs = []
+            
+            for metric in metrics_history[-10:]:  # 最近10个数据点
+                if metric.get("phase") == "train":
+                    if "loss" in metric:
+                        train_losses.append(metric["loss"])
+                    if "accuracy" in metric:
+                        train_accs.append(metric["accuracy"])
+                elif metric.get("phase") == "val":
+                    if "loss" in metric:
+                        val_losses.append(metric["loss"])
+                    if "accuracy" in metric:
+                        val_accs.append(metric["accuracy"])
+                        
+                if "epoch" in metric:
+                    epochs.append(metric["epoch"])
+            
+            # 构建AI分析用的数据结构
+            real_data = {
+                "session_id": data.get('session_id', 'unknown'),
+                "current_metrics": current_metrics,
+                "training_trends": {
+                    "train_losses": train_losses,
+                    "val_losses": val_losses,
+                    "train_accuracies": train_accs,
+                    "val_accuracies": val_accs,
+                    "epochs": list(set(epochs))[-10:] if epochs else []
+                },
+                "training_status": data.get("training_status", "unknown"),
+                "total_data_points": len(metrics_history),
+                "collection_duration": time.time() - data.get("start_time", time.time())
+            }
+            
+            # 构建分析用的指标数据
+            if current_metrics:
+                metrics_data = {
+                    'epoch': current_metrics.get('epoch', 0),
+                    'train_loss': train_losses[-1] if train_losses else current_metrics.get('loss', 0),
+                    'val_loss': val_losses[-1] if val_losses else current_metrics.get('loss', 0),
+                    'train_accuracy': train_accs[-1] if train_accs else current_metrics.get('accuracy', 0),
+                    'val_accuracy': val_accs[-1] if val_accs else current_metrics.get('accuracy', 0),
+                    'training_duration': real_data.get('collection_duration', 0),
+                    'data_points': real_data.get('total_data_points', 0),
+                    'training_status': real_data.get('training_status', 'unknown')
+                }
+            else:
+                return {'error': '当前没有可用的训练指标数据'}
+            
+            # 获取LLM分析
+            llm_analysis = self.llm.analyze_metrics(metrics_data)
+            
+            # 结合规则分析
+            rule_analysis = self._rule_based_analysis(metrics_data)
+            
+            # 生成综合分析结果
+            analysis_result = {
+                'timestamp': time.time(),
+                'data_source': 'file_direct_read',
+                'session_id': real_data.get('session_id', 'unknown'),
+                'metrics': metrics_data,
+                'trends': real_data.get('training_trends', {}),
+                'raw_data_summary': {
+                    'total_data_points': real_data.get('total_data_points', 0),
+                    'collection_duration': real_data.get('collection_duration', 0),
+                    'training_status': real_data.get('training_status', 'unknown'),
+                    'data_file': latest_file
+                },
+                'llm_analysis': llm_analysis,
+                'rule_analysis': rule_analysis,
+                'combined_insights': self._combine_real_data_analyses(llm_analysis, rule_analysis, real_data),
+                'recommendations': self._generate_recommendations(metrics_data, llm_analysis, rule_analysis),
+                'alerts': self._check_alerts(metrics_data)
+            }
+            
+            return analysis_result
+            
+        except Exception as e:
+            return {
+                'error': f"直接文件读取分析失败: {str(e)}",
+                'timestamp': time.time(),
+                'data_source': 'file_direct_read'
+            }
     
     def _generate_recommendations(self, metrics: Dict, llm_analysis: str, rule_analysis: Dict) -> List[str]:
         """生成建议"""

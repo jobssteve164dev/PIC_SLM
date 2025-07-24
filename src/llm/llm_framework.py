@@ -114,6 +114,49 @@ class LLMFramework:
             self._trigger_callback('analysis_error', error_result)
             return error_result
     
+    def analyze_real_training_metrics(self) -> Dict[str, Any]:
+        """分析真实的训练指标（使用实时采集的数据）"""
+        if not self.is_active:
+            return {'error': 'LLM框架未启动'}
+        
+        start_time = time.time()
+        
+        try:
+            self.stats['total_requests'] += 1
+            
+            # 使用分析引擎进行真实数据分析
+            result = self.analysis_engine.analyze_real_training_progress()
+            
+            # 添加框架元信息
+            result['framework_info'] = {
+                'adapter_type': self.adapter_type,
+                'processing_time': time.time() - start_time,
+                'timestamp': time.time(),
+                'data_source': 'real_time_collector'
+            }
+            
+            self.stats['successful_requests'] += 1
+            self._update_response_time(time.time() - start_time)
+            
+            # 触发回调
+            self._trigger_callback('real_metrics_analyzed', result)
+            
+            return result
+            
+        except Exception as e:
+            self.stats['failed_requests'] += 1
+            error_result = {
+                'error': f'真实数据分析失败: {str(e)}',
+                'framework_info': {
+                    'adapter_type': self.adapter_type,
+                    'processing_time': time.time() - start_time,
+                    'timestamp': time.time(),
+                    'data_source': 'real_time_collector'
+                }
+            }
+            self._trigger_callback('real_metrics_analysis_failed', error_result)
+            return error_result
+    
     def get_hyperparameter_suggestions(self, 
                                      current_metrics: Dict,
                                      current_params: Dict = None) -> Dict[str, Any]:
