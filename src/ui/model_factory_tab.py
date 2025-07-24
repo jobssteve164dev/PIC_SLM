@@ -717,10 +717,10 @@ class LLMChatWidget(QWidget):
             # 获取主窗口的标签页控件
             tab_widget = main_window.tabs
             
-            # 查找模型评估标签页的索引
+            # 查找模型评估与可视化标签页的索引
             for i in range(tab_widget.count()):
                 tab_text = tab_widget.tabText(i)
-                if "评估" in tab_text or "Evaluation" in tab_text:
+                if "模型评估与可视化" in tab_text:
                     tab_widget.setCurrentIndex(i)
                     break
         else:

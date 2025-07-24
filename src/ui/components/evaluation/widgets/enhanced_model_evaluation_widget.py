@@ -1082,20 +1082,20 @@ class EnhancedModelEvaluationWidget(QWidget):
                     widget = widget.parent()
                 main_window = widget
             
-            if not main_window or not hasattr(main_window, 'tab_widget'):
+            if not main_window or not hasattr(main_window, 'tabs'):
                 QMessageBox.warning(self, "错误", "无法找到主窗口，无法启动AI分析")
                 return
             
             # 查找模型工厂标签页
             model_factory_tab = None
-            tab_widget = main_window.tab_widget
+            tab_widget = main_window.tabs
             
             for i in range(tab_widget.count()):
-                tab_text = tab_widget.tabText(i)
-                widget = tab_widget.widget(i)
-                if "工厂" in tab_text or "Factory" in tab_text:
-                    model_factory_tab = widget
-                    break
+                 tab_text = tab_widget.tabText(i)
+                 widget = tab_widget.widget(i)
+                 if "工厂" in tab_text or "Factory" in tab_text:
+                     model_factory_tab = widget
+                     break
             
             if not model_factory_tab:
                 QMessageBox.warning(self, "错误", "无法找到模型工厂标签页")
