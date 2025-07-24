@@ -411,6 +411,9 @@ class SettingsTab(BaseTab):
             config = self._collect_current_config()
             print(f"SettingsTab.save_settings: 收集到的配置 = {config}")
             
+            # 保存AI设置配置
+            self._save_ai_settings()
+            
             # 验证配置
             warnings = self.config_manager.validate_config(config)
             if warnings:
@@ -764,3 +767,16 @@ class SettingsTab(BaseTab):
         
         # 保存AI配置到主配置文件
         self.update_status("AI设置已更新")
+    
+    def _save_ai_settings(self):
+        """保存AI设置到文件"""
+        try:
+            # 调用AI设置组件的保存方法
+            success = self.ai_settings_widget._save_config_to_file()
+            if success:
+                print("AI配置已保存")
+            else:
+                print("AI配置保存失败")
+                
+        except Exception as e:
+            print(f"保存AI设置时出错: {str(e)}")

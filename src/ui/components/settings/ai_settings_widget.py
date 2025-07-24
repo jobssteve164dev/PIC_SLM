@@ -97,6 +97,7 @@ class AISettingsWidget(QWidget):
         
         self.init_ui()
         self.load_config()
+        self._connect_signals()
     
     def init_ui(self):
         """初始化用户界面"""
@@ -121,12 +122,8 @@ class AISettingsWidget(QWidget):
         
         layout.addWidget(self.tabs)
         
-        # 保存和重置按钮
+        # 添加重置按钮（保持重置功能，但移除保存按钮）
         button_layout = QHBoxLayout()
-        
-        self.save_btn = QPushButton("💾 保存设置")
-        self.save_btn.clicked.connect(self.save_config)
-        button_layout.addWidget(self.save_btn)
         
         self.reset_btn = QPushButton("🔄 重置默认")
         self.reset_btn.clicked.connect(self.reset_to_defaults)
@@ -466,55 +463,24 @@ class AISettingsWidget(QWidget):
         self.enable_cache.setChecked(general_config.get('enable_cache', True))
         self.enable_streaming.setChecked(general_config.get('enable_streaming', False))
     
-    def save_config(self):
-        """保存配置"""
+    def _save_config_to_file(self):
+        """保存配置到文件（内部方法，由设置Tab调用）"""
         try:
             # 确保目录存在
             os.makedirs(os.path.dirname(self.config_file), exist_ok=True)
             
-            # 构建配置
-            default_adapter_text = self.default_adapter.currentText()
-            if default_adapter_text == 'OpenAI':
-                default_adapter = 'openai'
-            elif default_adapter_text == 'Ollama':
-                default_adapter = 'local'
-            else:
-                default_adapter = 'mock'
-            
-            config = {
-                'openai': {
-                    'api_key': self.openai_api_key.text().strip(),
-                    'base_url': self.openai_base_url.text().strip(),
-                    'model': self.openai_model.currentText(),
-                    'temperature': self.openai_temperature.value(),
-                    'max_tokens': self.openai_max_tokens.value()
-                },
-                'ollama': {
-                    'base_url': self.ollama_base_url.text().strip() or 'http://localhost:11434',
-                    'model': self.ollama_models.currentText(),
-                    'temperature': self.ollama_temperature.value(),
-                    'num_predict': self.ollama_num_predict.value()
-                },
-                'general': {
-                    'default_adapter': default_adapter,
-                    'request_timeout': self.request_timeout.value(),
-                    'max_retries': self.max_retries.value(),
-                    'enable_cache': self.enable_cache.isChecked(),
-                    'enable_streaming': self.enable_streaming.isChecked()
-                }
-            }
+            # 使用当前配置（已通过update_settings_preview更新）
+            config = self.current_config
             
             # 保存到文件
             with open(self.config_file, 'w', encoding='utf-8') as f:
                 json.dump(config, f, indent=2, ensure_ascii=False)
             
-            self.current_config = config
-            self.settings_changed.emit(config)
-            
-            QMessageBox.information(self, "成功", "AI设置已保存")
+            return True
             
         except Exception as e:
-            QMessageBox.critical(self, "错误", f"保存AI设置失败: {str(e)}")
+            print(f"保存AI配置文件失败: {str(e)}")
+            return False
     
     def reset_to_defaults(self):
         """重置为默认设置"""
@@ -544,4 +510,66 @@ class AISettingsWidget(QWidget):
     
     def get_config(self):
         """获取当前配置"""
-        return self.current_config.copy() 
+        return self.current_config.copy()
+    
+    def _connect_signals(self):
+        """连接所有控件的信号"""
+        # OpenAI设置信号
+        self.openai_api_key.textChanged.connect(self.update_settings_preview)
+        self.openai_base_url.textChanged.connect(self.update_settings_preview)
+        self.openai_model.currentTextChanged.connect(self.update_settings_preview)
+        self.openai_temperature.valueChanged.connect(self.update_settings_preview)
+        self.openai_max_tokens.valueChanged.connect(self.update_settings_preview)
+        
+        # Ollama设置信号
+        self.ollama_base_url.textChanged.connect(self.update_settings_preview)
+        self.ollama_models.currentTextChanged.connect(self.update_settings_preview)
+        self.ollama_temperature.valueChanged.connect(self.update_settings_preview)
+        self.ollama_num_predict.valueChanged.connect(self.update_settings_preview)
+        
+        # 通用设置信号
+        self.default_adapter.currentTextChanged.connect(self.update_settings_preview)
+        self.request_timeout.valueChanged.connect(self.update_settings_preview)
+        self.max_retries.valueChanged.connect(self.update_settings_preview)
+        self.enable_cache.toggled.connect(self.update_settings_preview)
+        self.enable_streaming.toggled.connect(self.update_settings_preview)
+    
+    def update_settings_preview(self):
+        """更新设置预览（当任何设置改变时调用）"""
+        # 构建当前配置
+        default_adapter_text = self.default_adapter.currentText()
+        if default_adapter_text == 'OpenAI':
+            default_adapter = 'openai'
+        elif default_adapter_text == 'Ollama':
+            default_adapter = 'local'
+        else:
+            default_adapter = 'mock'
+        
+        config = {
+            'openai': {
+                'api_key': self.openai_api_key.text().strip(),
+                'base_url': self.openai_base_url.text().strip(),
+                'model': self.openai_model.currentText(),
+                'temperature': self.openai_temperature.value(),
+                'max_tokens': self.openai_max_tokens.value()
+            },
+            'ollama': {
+                'base_url': self.ollama_base_url.text().strip() or 'http://localhost:11434',
+                'model': self.ollama_models.currentText(),
+                'temperature': self.ollama_temperature.value(),
+                'num_predict': self.ollama_num_predict.value()
+            },
+            'general': {
+                'default_adapter': default_adapter,
+                'request_timeout': self.request_timeout.value(),
+                'max_retries': self.max_retries.value(),
+                'enable_cache': self.enable_cache.isChecked(),
+                'enable_streaming': self.enable_streaming.isChecked()
+            }
+        }
+        
+        # 更新当前配置
+        self.current_config = config
+        
+        # 发出设置变更信号
+        self.settings_changed.emit(config) 
