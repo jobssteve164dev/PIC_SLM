@@ -554,9 +554,13 @@ class LLMFramework:
             health['recommendations'].append('检查LLM服务连接或API密钥')
         
         # 检查框架状态
+        last_request_time = self.stats.get('last_request_time')
+        current_time = time.time()
+        uptime = current_time - last_request_time if last_request_time is not None else 0
+        
         health['components']['framework'] = {
             'status': 'healthy' if self.is_active else 'inactive',
-            'uptime': time.time() - self.stats.get('last_request_time', time.time())
+            'uptime': uptime
         }
         
         # 检查错误率

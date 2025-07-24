@@ -179,7 +179,7 @@ class RealTimeMetricsCollector(QObject):
                 },
                 "training_status": data.get("training_status", "unknown"),
                 "total_data_points": len(metrics_history),
-                "collection_duration": time.time() - data.get("start_time", time.time())
+                "collection_duration": time.time() - (data.get("start_time") or time.time())
             }
             
             return ai_data
