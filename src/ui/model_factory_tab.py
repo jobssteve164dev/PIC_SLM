@@ -709,13 +709,13 @@ class LLMChatWidget(QWidget):
         # 通过parent链查找主窗口
         main_window = None
         widget = self.parent()
-        while widget and not hasattr(widget, 'tab_widget'):
+        while widget and not hasattr(widget, 'tabs'):
             widget = widget.parent()
         main_window = widget
         
-        if main_window and hasattr(main_window, 'tab_widget'):
+        if main_window and hasattr(main_window, 'tabs'):
             # 获取主窗口的标签页控件
-            tab_widget = main_window.tab_widget
+            tab_widget = main_window.tabs
             
             # 查找模型评估标签页的索引
             for i in range(tab_widget.count()):
