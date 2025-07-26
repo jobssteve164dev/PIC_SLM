@@ -203,6 +203,136 @@ class DeepSeekTestThread(QThread):
             return []
 
 
+class CustomAPITestThread(QThread):
+    """自定义API测试线程"""
+    
+    test_completed = pyqtSignal(bool, str, list)  # 成功状态, 消息, 可用模型列表
+    
+    def __init__(self, api_key, base_url, provider_type="openai"):
+        super().__init__()
+        self.api_key = api_key
+        self.base_url = base_url
+        self.provider_type = provider_type
+    
+    def run(self):
+        try:
+            # 首先尝试获取可用模型列表
+            models = self._fetch_available_models()
+            
+            if models:
+                # 测试简单的API调用
+                test_success = self._test_api_call()
+                if test_success:
+                    self.test_completed.emit(True, f"API连接成功，发现 {len(models)} 个可用模型", models)
+                else:
+                    self.test_completed.emit(False, "API密钥验证失败，但已获取模型列表", models)
+            else:
+                # 无法获取模型列表，尝试基本连接测试
+                if self._test_basic_connection():
+                    fallback_models = ["自定义模型"]
+                    self.test_completed.emit(True, "基本连接成功，但无法获取模型列表", fallback_models)
+                else:
+                    self.test_completed.emit(False, "连接失败，请检查API地址和密钥", [])
+                
+        except Exception as e:
+            self.test_completed.emit(False, f"测试失败: {str(e)}", [])
+    
+    def _fetch_available_models(self):
+        """获取可用模型列表"""
+        try:
+            headers = {
+                "Authorization": f"Bearer {self.api_key}",
+                "Content-Type": "application/json"
+            }
+            
+            # 尝试标准的 /models 端点
+            response = requests.get(f"{self.base_url}/models", headers=headers, timeout=10)
+            
+            if response.status_code == 200:
+                data = response.json()
+                models = []
+                
+                # 处理不同的响应格式
+                if isinstance(data, dict):
+                    if 'data' in data:
+                        # OpenAI格式
+                        for model in data.get('data', []):
+                            if isinstance(model, dict):
+                                model_id = model.get('id', model.get('name', ''))
+                                if model_id:
+                                    models.append(model_id)
+                            elif isinstance(model, str):
+                                models.append(model)
+                    elif 'models' in data:
+                        # 其他格式
+                        for model in data.get('models', []):
+                            if isinstance(model, dict):
+                                model_id = model.get('id', model.get('name', ''))
+                                if model_id:
+                                    models.append(model_id)
+                            elif isinstance(model, str):
+                                models.append(model)
+                elif isinstance(data, list):
+                    # 直接是模型列表
+                    for model in data:
+                        if isinstance(model, dict):
+                            model_id = model.get('id', model.get('name', ''))
+                            if model_id:
+                                models.append(model_id)
+                        elif isinstance(model, str):
+                            models.append(model)
+                
+                return sorted(models) if models else []
+            else:
+                return []
+                
+        except Exception as e:
+            print(f"获取自定义API模型列表失败: {str(e)}")
+            return []
+    
+    def _test_basic_connection(self):
+        """测试基本连接"""
+        try:
+            headers = {
+                "Authorization": f"Bearer {self.api_key}",
+                "Content-Type": "application/json"
+            }
+            
+            # 尝试GET请求到根路径
+            response = requests.get(self.base_url, headers=headers, timeout=5)
+            return response.status_code < 500  # 4xx错误也算连接成功
+            
+        except Exception:
+            return False
+    
+    def _test_api_call(self):
+        """测试API调用"""
+        try:
+            headers = {
+                "Authorization": f"Bearer {self.api_key}",
+                "Content-Type": "application/json"
+            }
+            
+            # 尝试简单的聊天请求
+            data = {
+                "model": "test",
+                "messages": [{"role": "user", "content": "Hello"}],
+                "max_tokens": 10
+            }
+            
+            response = requests.post(
+                f"{self.base_url}/chat/completions",
+                headers=headers,
+                json=data,
+                timeout=10
+            )
+            
+            return response.status_code == 200
+            
+        except Exception:
+            return False
+
+
 class AISettingsWidget(QWidget):
     """AI设置主组件"""
     
@@ -215,6 +345,7 @@ class AISettingsWidget(QWidget):
         self.ollama_test_thread = None
         self.openai_test_thread = None
         self.deepseek_test_thread = None
+        self.custom_test_thread = None
         
         self.init_ui()
         self.load_config()
@@ -240,6 +371,10 @@ class AISettingsWidget(QWidget):
         # Ollama设置标签页
         self.ollama_tab = self.create_ollama_tab()
         self.tabs.addTab(self.ollama_tab, "Ollama设置")
+        
+        # 自定义API设置标签页
+        self.custom_tab = self.create_custom_api_tab()
+        self.tabs.addTab(self.custom_tab, "自定义API")
         
         # 通用设置标签页
         self.general_tab = self.create_general_tab()
@@ -518,6 +653,108 @@ class AISettingsWidget(QWidget):
         # layout.addStretch() # 移除此行以消除空白
         return widget
     
+    def create_custom_api_tab(self):
+        """创建自定义API设置标签页"""
+        widget = QWidget()
+        layout = QVBoxLayout(widget)
+        
+        # API配置组
+        api_group = QGroupBox("自定义API配置")
+        api_layout = QFormLayout()
+        
+        # API名称
+        self.custom_api_name = QLineEdit()
+        self.custom_api_name.setPlaceholderText("为您的自定义API命名，如：Claude API、本地LLM等")
+        api_layout.addRow("API名称:", self.custom_api_name)
+        
+        # API基础URL
+        self.custom_base_url = QLineEdit()
+        self.custom_base_url.setPlaceholderText("输入API基础URL，如：https://api.example.com/v1")
+        api_layout.addRow("基础URL:", self.custom_base_url)
+        
+        # API密钥（带显示/隐藏按钮）
+        key_layout = QHBoxLayout()
+        self.custom_api_key = QLineEdit()
+        self.custom_api_key.setEchoMode(QLineEdit.Password)
+        self.custom_api_key.setPlaceholderText("输入您的API密钥")
+        key_layout.addWidget(self.custom_api_key)
+        
+        self.show_custom_key_btn = QPushButton("👁")
+        self.show_custom_key_btn.setMaximumWidth(30)
+        self.show_custom_key_btn.clicked.connect(self.toggle_custom_key_visibility)
+        key_layout.addWidget(self.show_custom_key_btn)
+        api_layout.addRow("API密钥:", key_layout)
+        
+        # 提供商类型
+        self.custom_provider_type = QComboBox()
+        self.custom_provider_type.addItems(["OpenAI兼容", "自定义格式"])
+        self.custom_provider_type.setCurrentText("OpenAI兼容")
+        api_layout.addRow("API类型:", self.custom_provider_type)
+        
+        # 连接测试
+        test_layout = QHBoxLayout()
+        self.custom_test_btn = QPushButton("🔍 测试连接")
+        self.custom_test_btn.clicked.connect(self.test_custom_connection)
+        test_layout.addWidget(self.custom_test_btn)
+        
+        self.custom_test_progress = QProgressBar()
+        self.custom_test_progress.setVisible(False)
+        test_layout.addWidget(self.custom_test_progress)
+        
+        test_layout.addStretch()
+        api_layout.addRow("连接测试:", test_layout)
+        
+        # 测试结果
+        self.custom_test_result = QLabel("尚未测试")
+        self.custom_test_result.setStyleSheet("color: #6c757d;")
+        api_layout.addRow("测试结果:", self.custom_test_result)
+        
+        api_group.setLayout(api_layout)
+        layout.addWidget(api_group)
+        
+        # 模型配置组
+        model_group = QGroupBox("模型配置")
+        model_layout = QFormLayout()
+        
+        # 模型选择（可编辑下拉框）
+        model_select_layout = QHBoxLayout()
+        self.custom_model = QComboBox()
+        self.custom_model.setEditable(True)  # 允许用户输入自定义模型名称
+        self.custom_model.setPlaceholderText("请先测试连接以获取可用模型，或手动输入模型名称")
+        model_select_layout.addWidget(self.custom_model)
+        
+        # 刷新模型列表按钮
+        self.refresh_custom_models_btn = QPushButton("🔄")
+        self.refresh_custom_models_btn.setMaximumWidth(30)
+        self.refresh_custom_models_btn.setToolTip("刷新可用模型列表")
+        self.refresh_custom_models_btn.clicked.connect(self.refresh_custom_model_list)
+        model_select_layout.addWidget(self.refresh_custom_models_btn)
+        
+        model_layout.addRow("模型名称:", model_select_layout)
+        
+        # 添加模型说明
+        model_info = QLabel("💡 提示：测试连接成功后将自动获取可用模型列表，您也可以手动输入自定义模型名称")
+        model_info.setStyleSheet("color: #6c757d; font-size: 12px;")
+        model_info.setWordWrap(True)
+        model_layout.addRow("", model_info)
+        
+        # 参数设置
+        self.custom_temperature = QDoubleSpinBox()
+        self.custom_temperature.setRange(0.0, 2.0)
+        self.custom_temperature.setSingleStep(0.1)
+        self.custom_temperature.setValue(0.7)
+        model_layout.addRow("温度 (Temperature):", self.custom_temperature)
+        
+        self.custom_max_tokens = QSpinBox()
+        self.custom_max_tokens.setRange(1, 32768)
+        self.custom_max_tokens.setValue(1000)
+        model_layout.addRow("最大令牌数:", self.custom_max_tokens)
+        
+        model_group.setLayout(model_layout)
+        layout.addWidget(model_group)
+        
+        return widget
+    
     def create_general_tab(self):
         """创建通用设置标签页"""
         widget = QWidget()
@@ -528,7 +765,7 @@ class AISettingsWidget(QWidget):
         adapter_layout = QFormLayout()
         
         self.default_adapter = QComboBox()
-        self.default_adapter.addItems(["模拟适配器", "OpenAI", "DeepSeek", "Ollama"])
+        self.default_adapter.addItems(["模拟适配器", "OpenAI", "DeepSeek", "Ollama", "自定义API"])
         adapter_layout.addRow("默认使用:", self.default_adapter)
         
         adapter_group.setLayout(adapter_layout)
@@ -627,6 +864,15 @@ class AISettingsWidget(QWidget):
         else:
             self.deepseek_api_key.setEchoMode(QLineEdit.Password)
             self.show_deepseek_key_btn.setText("👁")
+    
+    def toggle_custom_key_visibility(self):
+        """切换自定义API密钥显示/隐藏"""
+        if self.custom_api_key.echoMode() == QLineEdit.Password:
+            self.custom_api_key.setEchoMode(QLineEdit.Normal)
+            self.show_custom_key_btn.setText("🙈")
+        else:
+            self.custom_api_key.setEchoMode(QLineEdit.Password)
+            self.show_custom_key_btn.setText("👁")
     
     def test_openai_connection(self):
         """测试OpenAI连接"""
@@ -754,6 +1000,96 @@ class AISettingsWidget(QWidget):
         """刷新DeepSeek模型列表"""
         self.test_deepseek_connection()
     
+    def test_custom_connection(self):
+        """测试自定义API连接"""
+        api_key = self.custom_api_key.text().strip()
+        if not api_key:
+            QMessageBox.warning(self, "警告", "请先输入API密钥")
+            return
+        
+        base_url = self.custom_base_url.text().strip()
+        if not base_url:
+            QMessageBox.warning(self, "警告", "请先输入API基础URL")
+            return
+        
+        self.custom_test_btn.setEnabled(False)
+        self.custom_test_progress.setVisible(True)
+        self.custom_test_progress.setRange(0, 0)
+        self.custom_test_result.setText("正在测试...")
+        self.custom_test_result.setStyleSheet("color: #ffc107;")
+        
+        provider_type = self.custom_provider_type.currentText()
+        self.custom_test_thread = CustomAPITestThread(api_key, base_url, provider_type)
+        self.custom_test_thread.test_completed.connect(self.on_custom_test_completed)
+        self.custom_test_thread.start()
+    
+    def refresh_custom_model_list(self):
+        """刷新自定义API模型列表"""
+        api_key = self.custom_api_key.text().strip()
+        if not api_key:
+            QMessageBox.warning(self, "警告", "请先输入API密钥")
+            return
+        
+        base_url = self.custom_base_url.text().strip()
+        if not base_url:
+            QMessageBox.warning(self, "警告", "请先输入API基础URL")
+            return
+        
+        self.refresh_custom_models_btn.setEnabled(False)
+        self.refresh_custom_models_btn.setText("⏳")
+        
+        provider_type = self.custom_provider_type.currentText()
+        self.custom_refresh_thread = CustomAPITestThread(api_key, base_url, provider_type)
+        self.custom_refresh_thread.test_completed.connect(self.on_custom_refresh_completed)
+        self.custom_refresh_thread.start()
+    
+    def on_custom_test_completed(self, success, message, models):
+        """自定义API测试完成回调"""
+        self.custom_test_btn.setEnabled(True)
+        self.custom_test_progress.setVisible(False)
+        
+        if success:
+            self.custom_test_result.setText(f"✅ {message}")
+            self.custom_test_result.setStyleSheet("color: #28a745;")
+            
+            # 更新模型列表
+            if models:
+                current_model = self.custom_model.currentText()
+                self.custom_model.clear()
+                self.custom_model.addItems(models)
+                if current_model in models:
+                    self.custom_model.setCurrentText(current_model)
+        else:
+            self.custom_test_result.setText(f"❌ {message}")
+            self.custom_test_result.setStyleSheet("color: #dc3545;")
+    
+    def on_custom_refresh_completed(self, success, message, models):
+        """自定义API模型列表刷新完成回调"""
+        self.refresh_custom_models_btn.setEnabled(True)
+        self.refresh_custom_models_btn.setText("🔄")
+        
+        if models:
+            # 保存当前选中的模型
+            current_model = self.custom_model.currentText()
+            
+            # 更新模型列表
+            self.custom_model.clear()
+            self.custom_model.addItems(models)
+            
+            # 恢复之前选中的模型（如果存在）
+            if current_model and current_model in models:
+                self.custom_model.setCurrentText(current_model)
+            elif models:
+                # 如果之前的模型不存在，选择第一个
+                self.custom_model.setCurrentText(models[0])
+            
+            if success:
+                QMessageBox.information(self, "成功", f"已获取 {len(models)} 个可用模型")
+            else:
+                QMessageBox.warning(self, "部分成功", f"{message}\n已更新模型列表")
+        else:
+            QMessageBox.warning(self, "失败", f"无法获取模型列表: {message}")
+    
     def load_config(self):
         """加载配置"""
         try:
@@ -803,6 +1139,23 @@ class AISettingsWidget(QWidget):
         self.ollama_num_predict.setValue(ollama_config.get('num_predict', 1000))
         self.ollama_timeout.setValue(ollama_config.get('timeout', 120))
         
+        # 自定义API设置
+        custom_config = config.get('custom_api', {})
+        self.custom_api_name.setText(custom_config.get('name', ''))
+        self.custom_base_url.setText(custom_config.get('base_url', ''))
+        self.custom_api_key.setText(custom_config.get('api_key', ''))
+        self.custom_provider_type.setCurrentText(custom_config.get('provider_type', 'OpenAI兼容'))
+        
+        # 处理模型配置
+        configured_model = custom_config.get('model', '')
+        self.custom_model.clear()
+        if configured_model:
+            self.custom_model.addItem(configured_model)
+            self.custom_model.setCurrentText(configured_model)
+        
+        self.custom_temperature.setValue(custom_config.get('temperature', 0.7))
+        self.custom_max_tokens.setValue(custom_config.get('max_tokens', 1000))
+        
         # 通用设置
         general_config = config.get('general', {})
         default_adapter = general_config.get('default_adapter', '模拟适配器')
@@ -812,6 +1165,8 @@ class AISettingsWidget(QWidget):
             default_adapter = 'Ollama'
         elif default_adapter == 'deepseek':
             default_adapter = 'DeepSeek'
+        elif default_adapter == 'custom':
+            default_adapter = '自定义API'
         self.default_adapter.setCurrentText(default_adapter)
         self.request_timeout.setValue(general_config.get('request_timeout', 60))
         self.max_retries.setValue(general_config.get('max_retries', 3))
@@ -858,6 +1213,14 @@ class AISettingsWidget(QWidget):
         self.ollama_num_predict.setValue(1000)
         self.ollama_timeout.setValue(120)
         
+        self.custom_api_name.clear()
+        self.custom_base_url.clear()
+        self.custom_api_key.clear()
+        self.custom_provider_type.setCurrentText("OpenAI兼容")
+        self.custom_model.clear()
+        self.custom_temperature.setValue(0.7)
+        self.custom_max_tokens.setValue(1000)
+        
         self.default_adapter.setCurrentText('模拟适配器')
         self.request_timeout.setValue(60)
         self.max_retries.setValue(3)
@@ -871,6 +1234,8 @@ class AISettingsWidget(QWidget):
         self.deepseek_test_result.setStyleSheet("color: #6c757d;")
         self.ollama_test_result.setText("尚未测试")
         self.ollama_test_result.setStyleSheet("color: #6c757d;")
+        self.custom_test_result.setText("尚未测试")
+        self.custom_test_result.setStyleSheet("color: #6c757d;")
     
     def get_config(self):
         """获取当前配置"""
@@ -899,6 +1264,15 @@ class AISettingsWidget(QWidget):
         self.ollama_num_predict.valueChanged.connect(self.update_settings_preview)
         self.ollama_timeout.valueChanged.connect(self.update_settings_preview)
         
+        # 自定义API设置信号
+        self.custom_api_name.textChanged.connect(self.update_settings_preview)
+        self.custom_base_url.textChanged.connect(self.update_settings_preview)
+        self.custom_api_key.textChanged.connect(self.update_settings_preview)
+        self.custom_provider_type.currentTextChanged.connect(self.update_settings_preview)
+        self.custom_model.currentTextChanged.connect(self.update_settings_preview)
+        self.custom_temperature.valueChanged.connect(self.update_settings_preview)
+        self.custom_max_tokens.valueChanged.connect(self.update_settings_preview)
+        
         # 通用设置信号
         self.default_adapter.currentTextChanged.connect(self.update_settings_preview)
         self.request_timeout.valueChanged.connect(self.update_settings_preview)
@@ -916,6 +1290,8 @@ class AISettingsWidget(QWidget):
             default_adapter = 'deepseek'
         elif default_adapter_text == 'Ollama':
             default_adapter = 'local'
+        elif default_adapter_text == '自定义API':
+            default_adapter = 'custom'
         else:
             default_adapter = 'mock'
         
@@ -940,6 +1316,15 @@ class AISettingsWidget(QWidget):
                 'temperature': self.ollama_temperature.value(),
                 'num_predict': self.ollama_num_predict.value(),
                 'timeout': self.ollama_timeout.value()
+            },
+            'custom_api': {
+                'name': self.custom_api_name.text().strip(),
+                'base_url': self.custom_base_url.text().strip(),
+                'api_key': self.custom_api_key.text().strip(),
+                'provider_type': self.custom_provider_type.currentText(),
+                'model': self.custom_model.currentText(),
+                'temperature': self.custom_temperature.value(),
+                'max_tokens': self.custom_max_tokens.value()
             },
             'general': {
                 'default_adapter': default_adapter,
