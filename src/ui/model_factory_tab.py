@@ -11,6 +11,9 @@ import time
 from datetime import datetime
 from .base_tab import BaseTab
 
+# 导入Markdown渲染器
+from .components.chat.markdown_renderer import render_markdown
+
 # 导入LLM框架
 try:
     from src.llm.llm_framework import LLMFramework
@@ -654,7 +657,16 @@ class LLMChatWidget(QWidget):
     def add_system_message(self, message):
         """添加系统消息"""
         timestamp = datetime.now().strftime("%H:%M:%S")
-        formatted_message = f"<div style='color: #6c757d; font-size: 9pt; margin: 5px 0;'>[{timestamp}] {message}</div>"
+        
+        # 使用Markdown渲染器处理消息内容
+        try:
+            rendered_content = render_markdown(message)
+        except Exception as e:
+            # 如果Markdown渲染失败，使用原始文本
+            print(f"Markdown渲染失败: {e}")
+            rendered_content = message
+        
+        formatted_message = f"<div style='color: #6c757d; font-size: 9pt; margin: 5px 0;'>[{timestamp}] {rendered_content}</div>"
         self.chat_display.append(formatted_message)
     
     def add_user_message(self, message):
@@ -671,10 +683,19 @@ class LLMChatWidget(QWidget):
     def add_ai_message(self, message):
         """添加AI响应消息"""
         timestamp = datetime.now().strftime("%H:%M:%S")
+        
+        # 使用Markdown渲染器处理消息内容
+        try:
+            rendered_content = render_markdown(message)
+        except Exception as e:
+            # 如果Markdown渲染失败，使用原始文本
+            print(f"Markdown渲染失败: {e}")
+            rendered_content = message
+        
         formatted_message = f"""
-        <div style='margin: 10px 0; padding: 8px; background-color: #f8f9fa; color: #000000; border: 1px solid #dee2e6; border-radius: 10px;'>
+        <div style='margin: 10px 0; padding: 12px; background-color: #f8f9fa; color: #000000; border: 1px solid #dee2e6; border-radius: 10px;'>
             <span style='color: #6c757d; font-size: 11px; font-weight: normal;'>AI助手 [{timestamp}]:</span><br>
-            <span style='color: #000000; font-weight: bold;'>{message}</span>
+            <div style='color: #000000; margin-top: 8px; line-height: 1.6;'>{rendered_content}</div>
         </div>
         """
         self.chat_display.append(formatted_message)
