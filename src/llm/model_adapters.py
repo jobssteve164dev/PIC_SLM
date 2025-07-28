@@ -128,36 +128,61 @@ class OpenAIAdapter(LLMAdapter):
     
     def _http_request(self, messages: List[Dict]) -> str:
         """使用HTTP请求方式调用API"""
-        try:
-            headers = {
-                "Authorization": f"Bearer {self.api_key}",
-                "Content-Type": "application/json"
-            }
-            
-            data = {
-                "model": self.model,
-                "messages": messages,
-                "temperature": 0.7,
-                "max_tokens": 1000
-            }
-            
-            response = requests.post(
-                f"{self.base_url}/chat/completions",
-                headers=headers,
-                json=data,
-                timeout=30
-            )
-            
-            if response.status_code == 200:
-                result = response.json()
-                content = result['choices'][0]['message']['content']
-                self.total_tokens += result.get('usage', {}).get('total_tokens', 0)
-                return content
-            else:
-                return f"API请求失败: {response.status_code} - {response.text}"
+        max_retries = 3
+        base_timeout = 300  # 增加超时时间到5分钟
+        
+        for attempt in range(max_retries):
+            try:
+                headers = {
+                    "Authorization": f"Bearer {self.api_key}",
+                    "Content-Type": "application/json"
+                }
                 
-        except Exception as e:
-            return f"HTTP请求失败: {str(e)}"
+                data = {
+                    "model": self.model,
+                    "messages": messages,
+                    "temperature": 0.7,
+                    "max_tokens": 1000
+                }
+                
+                # 使用指数退避策略增加超时时间
+                timeout = base_timeout * (2 ** attempt)
+                
+                response = requests.post(
+                    f"{self.base_url}/chat/completions",
+                    headers=headers,
+                    json=data,
+                    timeout=timeout
+                )
+                
+                if response.status_code == 200:
+                    result = response.json()
+                    content = result['choices'][0]['message']['content']
+                    self.total_tokens += result.get('usage', {}).get('total_tokens', 0)
+                    return content
+                else:
+                    error_msg = f"API请求失败: {response.status_code} - {response.text}"
+                    if attempt < max_retries - 1:
+                        print(f"第{attempt + 1}次尝试失败，准备重试: {error_msg}")
+                        time.sleep(2 ** attempt)  # 指数退避等待
+                        continue
+                    else:
+                        return error_msg
+                        
+            except requests.exceptions.Timeout as e:
+                if attempt < max_retries - 1:
+                    print(f"第{attempt + 1}次请求超时（{timeout}秒），准备重试...")
+                    time.sleep(2 ** attempt)
+                    continue
+                else:
+                    return f"OpenAI API请求超时（已重试{max_retries}次）: {str(e)}"
+            except Exception as e:
+                if attempt < max_retries - 1:
+                    print(f"第{attempt + 1}次请求失败，准备重试: {str(e)}")
+                    time.sleep(2 ** attempt)
+                    continue
+                else:
+                    return f"OpenAI API请求失败（已重试{max_retries}次）: {str(e)}"
 
 
 class DeepSeekAdapter(LLMAdapter):
@@ -252,43 +277,68 @@ class DeepSeekAdapter(LLMAdapter):
     
     def _http_request(self, messages: List[Dict]) -> str:
         """使用HTTP请求方式调用API"""
-        try:
-            headers = {
-                "Authorization": f"Bearer {self.api_key}",
-                "Content-Type": "application/json"
-            }
-            
-            data = {
-                "model": self.model,
-                "messages": messages,
-                "temperature": 0.7,
-                "max_tokens": 1000
-            }
-            
-            response = requests.post(
-                f"{self.base_url}/chat/completions",
-                headers=headers,
-                json=data,
-                timeout=30
-            )
-            
-            if response.status_code == 200:
-                result = response.json()
-                content = result['choices'][0]['message']['content']
-                self.total_tokens += result.get('usage', {}).get('total_tokens', 0)
-                return content
-            else:
-                return f"API请求失败: {response.status_code} - {response.text}"
+        max_retries = 3
+        base_timeout = 300  # 增加超时时间到5分钟
+        
+        for attempt in range(max_retries):
+            try:
+                headers = {
+                    "Authorization": f"Bearer {self.api_key}",
+                    "Content-Type": "application/json"
+                }
                 
-        except Exception as e:
-            return f"HTTP请求失败: {str(e)}"
+                data = {
+                    "model": self.model,
+                    "messages": messages,
+                    "temperature": 0.7,
+                    "max_tokens": 1000
+                }
+                
+                # 使用指数退避策略增加超时时间
+                timeout = base_timeout * (2 ** attempt)
+                
+                response = requests.post(
+                    f"{self.base_url}/chat/completions",
+                    headers=headers,
+                    json=data,
+                    timeout=timeout
+                )
+                
+                if response.status_code == 200:
+                    result = response.json()
+                    content = result['choices'][0]['message']['content']
+                    self.total_tokens += result.get('usage', {}).get('total_tokens', 0)
+                    return content
+                else:
+                    error_msg = f"API请求失败: {response.status_code} - {response.text}"
+                    if attempt < max_retries - 1:
+                        print(f"第{attempt + 1}次尝试失败，准备重试: {error_msg}")
+                        time.sleep(2 ** attempt)  # 指数退避等待
+                        continue
+                    else:
+                        return error_msg
+                        
+            except requests.exceptions.Timeout as e:
+                if attempt < max_retries - 1:
+                    print(f"第{attempt + 1}次请求超时（{timeout}秒），准备重试...")
+                    time.sleep(2 ** attempt)
+                    continue
+                else:
+                    return f"DeepSeek API请求超时（已重试{max_retries}次）: {str(e)}"
+            except Exception as e:
+                if attempt < max_retries - 1:
+                    print(f"第{attempt + 1}次请求失败，准备重试: {str(e)}")
+                    time.sleep(2 ** attempt)
+                    continue
+                else:
+                    return f"DeepSeek API请求失败（已重试{max_retries}次）: {str(e)}"
 
 
 class LocalLLMAdapter(LLMAdapter):
     """本地LLM适配器 (支持Ollama等)"""
     
     def __init__(self, model_name: str = 'llama2', base_url: str = 'http://localhost:11434', 
-                 timeout: int = 120):
+                 timeout: int = 300):
         super().__init__(model_name)
         self.base_url = base_url
         self.timeout = timeout  # 默认2分钟超时
@@ -448,7 +498,7 @@ class CustomAPIAdapter(LLMAdapter):
                 f"{self.base_url}/chat/completions",
                 headers=headers,
                 json=data,
-                timeout=60
+                timeout=300  # 增加超时时间到5分钟
             )
             
             if response.status_code == 200:
