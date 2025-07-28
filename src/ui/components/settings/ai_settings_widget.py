@@ -207,12 +207,14 @@ class CustomAPITestThread(QThread):
     """自定义API测试线程"""
     
     test_completed = pyqtSignal(bool, str, list)  # 成功状态, 消息, 可用模型列表
+    model_selection_needed = pyqtSignal(list)  # 需要用户选择模型时发出信号
     
-    def __init__(self, api_key, base_url, provider_type="openai"):
+    def __init__(self, api_key, base_url, provider_type="openai", selected_model=None):
         super().__init__()
         self.api_key = api_key
         self.base_url = base_url
         self.provider_type = provider_type
+        self.selected_model = selected_model
     
     def run(self):
         try:
@@ -220,12 +222,17 @@ class CustomAPITestThread(QThread):
             models = self._fetch_available_models()
             
             if models:
-                # 测试简单的API调用
-                test_success = self._test_api_call()
+                # 如果没有预选模型，发出信号让用户选择
+                if not self.selected_model:
+                    self.model_selection_needed.emit(models)
+                    return
+                
+                # 使用选定的模型测试API调用
+                test_success = self._test_api_call(self.selected_model)
                 if test_success:
-                    self.test_completed.emit(True, f"API连接成功，发现 {len(models)} 个可用模型", models)
+                    self.test_completed.emit(True, f"API连接成功，使用模型: {self.selected_model}", models)
                 else:
-                    self.test_completed.emit(False, "API密钥验证失败，但已获取模型列表", models)
+                    self.test_completed.emit(False, f"API密钥验证失败，模型 {self.selected_model} 不可用", models)
             else:
                 # 无法获取模型列表，尝试基本连接测试
                 if self._test_basic_connection():
@@ -236,6 +243,16 @@ class CustomAPITestThread(QThread):
                 
         except Exception as e:
             self.test_completed.emit(False, f"测试失败: {str(e)}", [])
+    
+    def set_selected_model(self, model, models_list=None):
+        """设置用户选择的模型"""
+        self.selected_model = model
+        # 使用选定的模型测试API调用
+        test_success = self._test_api_call(self.selected_model)
+        if test_success:
+            self.test_completed.emit(True, f"API连接成功，使用模型: {self.selected_model}", models_list or [])
+        else:
+            self.test_completed.emit(False, f"API密钥验证失败，模型 {self.selected_model} 不可用", models_list or [])
     
     def _fetch_available_models(self):
         """获取可用模型列表"""
@@ -305,7 +322,7 @@ class CustomAPITestThread(QThread):
         except Exception:
             return False
     
-    def _test_api_call(self):
+    def _test_api_call(self, model_name):
         """测试API调用"""
         try:
             headers = {
@@ -315,7 +332,7 @@ class CustomAPITestThread(QThread):
             
             # 尝试简单的聊天请求
             data = {
-                "model": "test",
+                "model": model_name,
                 "messages": [{"role": "user", "content": "Hello"}],
                 "max_tokens": 10
             }
@@ -1015,12 +1032,13 @@ class AISettingsWidget(QWidget):
         self.custom_test_btn.setEnabled(False)
         self.custom_test_progress.setVisible(True)
         self.custom_test_progress.setRange(0, 0)
-        self.custom_test_result.setText("正在测试...")
+        self.custom_test_result.setText("正在获取模型列表...")
         self.custom_test_result.setStyleSheet("color: #ffc107;")
         
         provider_type = self.custom_provider_type.currentText()
         self.custom_test_thread = CustomAPITestThread(api_key, base_url, provider_type)
         self.custom_test_thread.test_completed.connect(self.on_custom_test_completed)
+        self.custom_test_thread.model_selection_needed.connect(self.on_custom_model_selection_needed)
         self.custom_test_thread.start()
     
     def refresh_custom_model_list(self):
@@ -1042,6 +1060,68 @@ class AISettingsWidget(QWidget):
         self.custom_refresh_thread = CustomAPITestThread(api_key, base_url, provider_type)
         self.custom_refresh_thread.test_completed.connect(self.on_custom_refresh_completed)
         self.custom_refresh_thread.start()
+    
+    def on_custom_model_selection_needed(self, models):
+        """自定义API需要用户选择模型"""
+        from PyQt5.QtWidgets import QDialog, QVBoxLayout, QHBoxLayout, QLabel, QComboBox, QPushButton
+        
+        # 创建模型选择对话框
+        dialog = QDialog(self)
+        dialog.setWindowTitle("选择测试模型")
+        dialog.setModal(True)
+        dialog.setFixedSize(400, 150)
+        
+        layout = QVBoxLayout(dialog)
+        
+        # 说明文字
+        info_label = QLabel(f"已获取到 {len(models)} 个可用模型，请选择一个进行连接测试：")
+        info_label.setWordWrap(True)
+        layout.addWidget(info_label)
+        
+        # 模型选择下拉框
+        model_combo = QComboBox()
+        model_combo.addItems(models)
+        layout.addWidget(model_combo)
+        
+        # 按钮布局
+        button_layout = QHBoxLayout()
+        
+        # 取消按钮
+        cancel_btn = QPushButton("取消")
+        cancel_btn.clicked.connect(dialog.reject)
+        button_layout.addWidget(cancel_btn)
+        
+        # 测试按钮
+        test_btn = QPushButton("开始测试")
+        test_btn.setDefault(True)
+        button_layout.addWidget(test_btn)
+        
+        layout.addLayout(button_layout)
+        
+        # 连接测试按钮信号
+        def start_test():
+            selected_model = model_combo.currentText()
+            dialog.accept()
+            # 设置选定的模型并继续测试
+            self.custom_test_thread.set_selected_model(selected_model, models)
+            self.custom_test_result.setText("正在测试连接...")
+            # 更新模型列表
+            self.custom_model.clear()
+            self.custom_model.addItems(models)
+            self.custom_model.setCurrentText(selected_model)
+        
+        test_btn.clicked.connect(start_test)
+        
+        # 显示对话框
+        if dialog.exec_() == QDialog.Accepted:
+            # 对话框被接受，测试已经在start_test中开始
+            pass
+        else:
+            # 用户取消，停止测试
+            self.custom_test_btn.setEnabled(True)
+            self.custom_test_progress.setVisible(False)
+            self.custom_test_result.setText("测试已取消")
+            self.custom_test_result.setStyleSheet("color: #6c757d;")
     
     def on_custom_test_completed(self, success, message, models):
         """自定义API测试完成回调"""

@@ -367,8 +367,145 @@ class LocalLLMAdapter(LLMAdapter):
         return full_prompt
 
 
+class CustomAPIAdapter(LLMAdapter):
+    """自定义API适配器 - 支持OpenAI兼容的API"""
+    
+    def __init__(self, api_key: str, model: str = 'custom-model', base_url: str = None, 
+                 provider_type: str = "OpenAI兼容", temperature: float = 0.7, 
+                 max_tokens: int = 1000):
+        super().__init__(model)
+        self.api_key = api_key
+        self.model = model
+        self.base_url = base_url
+        self.provider_type = provider_type
+        self.temperature = temperature
+        self.max_tokens = max_tokens
+        
+        # 检查基本配置
+        if not api_key or not base_url:
+            self.available = False
+            print("警告: 自定义API需要提供api_key和base_url")
+        else:
+            self.available = True
+    
+    def generate_response(self, prompt: str, context: Optional[Dict] = None) -> str:
+        """生成响应"""
+        if not self.available:
+            return "自定义API不可用，请检查配置"
+        
+        try:
+            self.request_count += 1
+            
+            headers = {
+                "Authorization": f"Bearer {self.api_key}",
+                "Content-Type": "application/json"
+            }
+            
+            # 构建消息
+            messages = []
+            
+            # 添加系统消息
+            system_message = self._get_system_prompt()
+            if system_message:
+                messages.append({"role": "system", "content": system_message})
+            
+            # 添加上下文（如果有）
+            if context:
+                context_str = self._format_context(context)
+                if context_str:
+                    messages.append({"role": "assistant", "content": context_str})
+            
+            # 添加用户消息
+            messages.append({"role": "user", "content": prompt})
+            
+            # 构建请求数据
+            data = {
+                "model": self.model,
+                "messages": messages,
+                "temperature": self.temperature,
+                "max_tokens": self.max_tokens
+            }
+            
+            # 发送请求
+            response = requests.post(
+                f"{self.base_url}/chat/completions",
+                headers=headers,
+                json=data,
+                timeout=60
+            )
+            
+            if response.status_code == 200:
+                result = response.json()
+                content = result['choices'][0]['message']['content']
+                
+                # 更新统计信息
+                if 'usage' in result:
+                    self.total_tokens += result['usage'].get('total_tokens', 0)
+                
+                return content
+            else:
+                error_msg = f"API调用失败: HTTP {response.status_code}"
+                try:
+                    error_data = response.json()
+                    if 'error' in error_data:
+                        error_msg += f" - {error_data['error'].get('message', '')}"
+                except:
+                    pass
+                return f"API调用失败: {error_msg}"
+                
+        except requests.exceptions.Timeout:
+            return "API调用超时，请检查网络连接"
+        except requests.exceptions.ConnectionError:
+            return "无法连接到API服务器，请检查API地址"
+        except Exception as e:
+            return f"API调用出错: {str(e)}"
+    
+    def analyze_metrics(self, metrics_data: Dict) -> str:
+        """分析训练指标"""
+        prompt = self._build_metrics_analysis_prompt(metrics_data)
+        return self.generate_response(prompt, context={'type': 'metrics_analysis'})
+    
+    def _get_system_prompt(self) -> str:
+        """获取系统提示词"""
+        return """你是一个专业的深度学习训练助手，专门帮助用户分析和优化计算机视觉模型的训练过程。请提供专业、准确、实用的建议。"""
+    
+    def _format_context(self, context: Dict) -> str:
+        """格式化上下文信息"""
+        if not context:
+            return ""
+        
+        context_type = context.get('type', 'general')
+        
+        if context_type == 'metrics_analysis':
+            return "这是训练指标分析任务，请基于提供的指标数据进行分析。"
+        elif context_type == 'training_context':
+            return f"当前训练状态: {json.dumps(context.get('data', {}), ensure_ascii=False)}"
+        else:
+            return json.dumps(context, ensure_ascii=False)
+    
+    def _build_metrics_analysis_prompt(self, metrics_data: Dict) -> str:
+        """构建指标分析提示词"""
+        metrics_str = json.dumps(metrics_data, ensure_ascii=False, indent=2)
+        
+        prompt = f"""
+请分析以下深度学习训练指标，并提供专业的见解和建议：
+
+训练指标数据：
+{metrics_str}
+
+请从以下几个方面进行分析：
+1. 训练趋势分析
+2. 潜在问题识别
+3. 优化建议
+4. 下一步行动建议
+
+请用中文回答，保持专业性和实用性。
+"""
+        return prompt
+
+
 class MockLLMAdapter(LLMAdapter):
-    """模拟LLM适配器 (用于测试和演示)"""
+    """模拟LLM适配器 - 用于测试和开发"""
     
     def __init__(self):
         super().__init__("mock-llm")
@@ -469,6 +606,20 @@ def create_llm_adapter(adapter_type: str, **kwargs) -> LLMAdapter:
             model_name=kwargs.get('model_name', 'llama2'),
             base_url=kwargs.get('base_url', 'http://localhost:11434'),
             timeout=kwargs.get('timeout', 120)
+        )
+    
+    elif adapter_type.lower() == 'custom':
+        api_key = kwargs.get('api_key')
+        base_url = kwargs.get('base_url')
+        if not api_key or not base_url:
+            raise ValueError("自定义API适配器需要提供api_key和base_url")
+        return CustomAPIAdapter(
+            api_key=api_key,
+            model=kwargs.get('model', 'custom-model'),
+            base_url=base_url,
+            provider_type=kwargs.get('provider_type', 'OpenAI兼容'),
+            temperature=kwargs.get('temperature', 0.7),
+            max_tokens=kwargs.get('max_tokens', 1000)
         )
     
     elif adapter_type.lower() == 'mock':

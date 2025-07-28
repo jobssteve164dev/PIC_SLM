@@ -20,6 +20,15 @@
     "num_predict": 1000,
     "timeout": 120
   },
+  "custom_api": {
+    "name": "openrouter",
+    "base_url": "https://openrouter.ai/api/v1",
+    "api_key": "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",
+    "provider_type": "OpenAI兼容",
+    "model": "01-ai/yi-large",
+    "temperature": 0.7,
+    "max_tokens": 1000
+  },
   "general": {
     "default_adapter": "deepseek",
     "request_timeout": 180,

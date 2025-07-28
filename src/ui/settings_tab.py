@@ -762,6 +762,17 @@ class SettingsTab(BaseTab):
                                 'max_tokens': deepseek_config.get('max_tokens', 1000)
                             }
                             chat_widget.llm_framework.switch_adapter('deepseek', adapter_config)
+                        elif default_adapter == 'custom':
+                            custom_config = ai_config.get('custom_api', {})
+                            adapter_config = {
+                                'api_key': custom_config.get('api_key', ''),
+                                'model': custom_config.get('model', 'custom-model'),
+                                'base_url': custom_config.get('base_url', ''),
+                                'provider_type': custom_config.get('provider_type', 'OpenAI兼容'),
+                                'temperature': custom_config.get('temperature', 0.7),
+                                'max_tokens': custom_config.get('max_tokens', 1000)
+                            }
+                            chat_widget.llm_framework.switch_adapter('custom', adapter_config)
                         elif default_adapter == 'local':
                             ollama_config = ai_config.get('ollama', {})
                             adapter_config = {

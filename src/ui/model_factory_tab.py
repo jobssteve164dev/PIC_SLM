@@ -338,7 +338,7 @@ class LLMChatWidget(QWidget):
         adapter_layout = QHBoxLayout()
         adapter_layout.addWidget(QLabel("AI模型:"))
         self.adapter_combo = QComboBox()
-        self.adapter_combo.addItems(["模拟适配器", "OpenAI GPT-4", "DeepSeek", "本地Ollama"])
+        self.adapter_combo.addItems(["模拟适配器", "OpenAI GPT-4", "DeepSeek", "本地Ollama", "自定义API"])
         self.adapter_combo.currentTextChanged.connect(self.switch_adapter)
         adapter_layout.addWidget(self.adapter_combo)
         adapter_layout.addStretch()
@@ -449,6 +449,20 @@ class LLMChatWidget(QWidget):
                 self.llm_framework = LLMFramework('local', ollama_config)
                 self.adapter_combo.setCurrentText("本地Ollama")
                 self.add_system_message("✅ AI助手已启动，使用本地Ollama")
+            elif default_adapter == 'custom':
+                custom_config = ai_config.get('custom_api', {})
+                api_key = custom_config.get('api_key', '')
+                base_url = custom_config.get('base_url', '')
+                if api_key and base_url:
+                    self.llm_framework = LLMFramework('custom', custom_config)
+                    self.adapter_combo.setCurrentText("自定义API")
+                    api_name = custom_config.get('name', '自定义API')
+                    self.add_system_message(f"✅ AI助手已启动，使用{api_name}")
+                else:
+                    # 没有配置，回退到模拟适配器
+                    self.llm_framework = LLMFramework('mock')
+                    self.adapter_combo.setCurrentText("模拟适配器")
+                    self.add_system_message("⚠️ 未配置自定义API，使用模拟适配器")
             else:
                 # 默认使用模拟适配器
                 self.llm_framework = LLMFramework('mock')
@@ -533,6 +547,24 @@ class LLMChatWidget(QWidget):
                     'num_predict': ollama_config.get('num_predict', 1000),
                     'timeout': ollama_config.get('timeout', 120)
                 }
+            elif adapter_name == "自定义API":
+                adapter_type = 'custom'
+                custom_config = ai_config.get('custom_api', {})
+                adapter_config = {
+                    'api_key': custom_config.get('api_key', ''),
+                    'model': custom_config.get('model', 'custom-model'),
+                    'base_url': custom_config.get('base_url', ''),
+                    'provider_type': custom_config.get('provider_type', 'OpenAI兼容'),
+                    'temperature': custom_config.get('temperature', 0.7),
+                    'max_tokens': custom_config.get('max_tokens', 1000)
+                }
+                
+                # 检查API密钥和基础URL
+                if not adapter_config['api_key'] or not adapter_config['base_url']:
+                    self.add_system_message("❌ 未配置自定义API密钥或基础URL，请在设置中配置")
+                    self.status_label.setText("配置缺失")
+                    self.status_label.setStyleSheet("color: #dc3545; font-weight: bold;")
+                    return
             else:
                 return
                 
@@ -552,6 +584,13 @@ class LLMChatWidget(QWidget):
                     base_url = adapter_config.get('base_url', 'localhost:11434')
                     self.add_system_message(f"   使用模型: {model_name}")
                     self.add_system_message(f"   服务器: {base_url}")
+                elif adapter_name == "自定义API":
+                    model_name = adapter_config.get('model', 'custom-model')
+                    base_url = adapter_config.get('base_url', '')
+                    api_name = custom_config.get('name', '自定义API')
+                    self.add_system_message(f"   使用模型: {model_name}")
+                    self.add_system_message(f"   API地址: {base_url}")
+                    self.add_system_message(f"   API名称: {api_name}")
                     
                 self.status_label.setText("AI助手已就绪")
                 self.status_label.setStyleSheet("color: #28a745; font-weight: bold;")
@@ -920,6 +959,15 @@ class LLMChatWidget(QWidget):
                 'api_key': '',
                 'base_url': '',
                 'model': 'deepseek-coder',
+                'temperature': 0.7,
+                'max_tokens': 1000
+            },
+            'custom_api': {
+                'name': '',
+                'api_key': '',
+                'base_url': '',
+                'model': 'custom-model',
+                'provider_type': 'OpenAI兼容',
                 'temperature': 0.7,
                 'max_tokens': 1000
             },
@@ -1607,6 +1655,8 @@ class ModelFactoryTab(BaseTab):
                     self.chat_widget.adapter_combo.setCurrentText("本地Ollama")
                 elif default_adapter == 'deepseek':
                     self.chat_widget.adapter_combo.setCurrentText("DeepSeek")
+                elif default_adapter == 'custom':
+                    self.chat_widget.adapter_combo.setCurrentText("自定义API")
                 else:
                     self.chat_widget.adapter_combo.setCurrentText("模拟适配器")
                 
