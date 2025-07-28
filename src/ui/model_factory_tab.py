@@ -78,6 +78,21 @@ class LLMChatThread(QThread):
     
     def _handle_chat(self):
         """处理聊天请求"""
+        # 获取训练配置上下文
+        config_context = ""
+        if hasattr(self.llm_framework, 'analysis_engine'):
+            config_context = self.llm_framework.analysis_engine._get_training_config_context()
+        
+        # 构建增强的用户消息，包含训练配置信息
+        enhanced_message = f"""
+{config_context}
+
+## 用户问题
+{self.user_message}
+
+请基于以上训练配置信息，针对用户的具体问题进行专业回答。如果用户的问题与训练相关，请结合训练配置参数进行分析和建议。
+"""
+        
         # 先更新训练上下文到LLM框架（如果有的话）
         if hasattr(self.llm_framework, 'analysis_engine') and self.training_context:
             self.llm_framework.analysis_engine.prompt_builder.add_context({
@@ -86,7 +101,7 @@ class LLMChatThread(QThread):
             })
         
         # 调用LLM框架进行对话
-        result = self.llm_framework.chat_with_training_context(self.user_message)
+        result = self.llm_framework.chat_with_training_context(enhanced_message)
         
         # 处理返回结果
         if isinstance(result, dict):
@@ -334,13 +349,36 @@ class LLMChatWidget(QWidget):
         title_label.setAlignment(Qt.AlignCenter)
         layout.addWidget(title_label)
         
-        # LLM适配器选择
+        # LLM适配器选择和重新加载按钮
         adapter_layout = QHBoxLayout()
         adapter_layout.addWidget(QLabel("AI模型:"))
         self.adapter_combo = QComboBox()
         self.adapter_combo.addItems(["模拟适配器", "OpenAI GPT-4", "DeepSeek", "本地Ollama", "自定义API"])
         self.adapter_combo.currentTextChanged.connect(self.switch_adapter)
         adapter_layout.addWidget(self.adapter_combo)
+        
+        # 添加重新加载配置按钮
+        self.reload_config_btn = QPushButton("🔄 重新加载配置")
+        self.reload_config_btn.setToolTip("重新加载AI设置配置")
+        self.reload_config_btn.clicked.connect(self.reload_ai_config)
+        self.reload_config_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #007bff;
+                color: white;
+                border: none;
+                padding: 5px 10px;
+                border-radius: 4px;
+                font-size: 10px;
+            }
+            QPushButton:hover {
+                background-color: #0056b3;
+            }
+            QPushButton:pressed {
+                background-color: #004085;
+            }
+        """)
+        adapter_layout.addWidget(self.reload_config_btn)
+        
         adapter_layout.addStretch()
         layout.addLayout(adapter_layout)
         
@@ -998,6 +1036,25 @@ class LLMChatWidget(QWidget):
         except Exception as e:
             print(f"加载AI配置失败: {str(e)}")
             return default_config
+    
+    def reload_ai_config(self):
+        """重新加载AI配置"""
+        try:
+            self.add_system_message("🔄 正在重新加载AI配置...")
+            self.status_label.setText("正在重新加载配置...")
+            self.status_label.setStyleSheet("color: #ffc107; font-weight: bold;")
+            
+            # 重新初始化LLM框架
+            self.init_llm_framework()
+            
+            self.add_system_message("✅ AI配置重新加载完成")
+            self.status_label.setText("AI助手已就绪")
+            self.status_label.setStyleSheet("color: #28a745; font-weight: bold;")
+            
+        except Exception as e:
+            self.add_system_message(f"❌ 重新加载AI配置失败: {str(e)}")
+            self.status_label.setText("配置加载失败")
+            self.status_label.setStyleSheet("color: #dc3545; font-weight: bold;")
 
 
 class AnalysisPanelWidget(QWidget):
@@ -1633,14 +1690,23 @@ class ModelFactoryTab(BaseTab):
         self.update_training_context(context)
     
     def reload_ai_config(self):
-        """重新加载AI配置并更新适配器"""
-        if hasattr(self, 'chat_widget') and self.chat_widget:
-            try:
-                # 重新初始化LLM框架
-                self.chat_widget.init_llm_framework()
-                self.update_status("AI配置已重新加载")
-            except Exception as e:
-                self.update_status(f"重新加载AI配置失败: {str(e)}")
+        """重新加载AI配置"""
+        try:
+            self.add_system_message("🔄 正在重新加载AI配置...")
+            self.status_label.setText("正在重新加载配置...")
+            self.status_label.setStyleSheet("color: #ffc107; font-weight: bold;")
+            
+            # 重新初始化LLM框架
+            self.init_llm_framework()
+            
+            self.add_system_message("✅ AI配置重新加载完成")
+            self.status_label.setText("AI助手已就绪")
+            self.status_label.setStyleSheet("color: #28a745; font-weight: bold;")
+            
+        except Exception as e:
+            self.add_system_message(f"❌ 重新加载AI配置失败: {str(e)}")
+            self.status_label.setText("配置加载失败")
+            self.status_label.setStyleSheet("color: #dc3545; font-weight: bold;")
     
     def update_ai_adapter_from_settings(self, ai_config):
         """从设置更新AI适配器配置"""

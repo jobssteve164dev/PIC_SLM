@@ -7,6 +7,8 @@ including performance analysis, optimization suggestions, and problem diagnosis.
 
 import json
 import time
+import os
+import glob
 from typing import Dict, List, Optional, Any, Tuple
 from .model_adapters import LLMAdapter, MockLLMAdapter
 from .prompt_templates import PromptTemplates, PromptBuilder
@@ -25,6 +27,214 @@ class TrainingAnalysisEngine:
         # 实时指标采集器 - 延迟导入避免循环依赖
         self.metrics_collector = None
         
+        # 训练配置文件缓存
+        self.training_config_cache = {}
+        self.config_cache_timestamp = 0
+        
+    def _find_latest_training_config(self) -> Optional[Dict[str, Any]]:
+        """查找最新的训练配置文件"""
+        try:
+            # 查找训练配置文件目录
+            config_dirs = [
+                "models/params/classification",
+                "models/params/detection", 
+                "train_config",
+                "models/saved_models"
+            ]
+            
+            latest_config = None
+            latest_timestamp = 0
+            
+            for config_dir in config_dirs:
+                if not os.path.exists(config_dir):
+                    continue
+                    
+                # 查找配置文件
+                patterns = [
+                    os.path.join(config_dir, "*_config.json"),
+                    os.path.join(config_dir, "*.json")
+                ]
+                
+                for pattern in patterns:
+                    config_files = glob.glob(pattern)
+                    for config_file in config_files:
+                        try:
+                            # 获取文件修改时间
+                            file_timestamp = os.path.getmtime(config_file)
+                            
+                            # 读取配置文件
+                            with open(config_file, 'r', encoding='utf-8') as f:
+                                config_data = json.load(f)
+                                
+                            # 检查是否是训练配置文件（包含关键训练参数）
+                            if self._is_training_config(config_data):
+                                if file_timestamp > latest_timestamp:
+                                    latest_timestamp = file_timestamp
+                                    latest_config = {
+                                        'file_path': config_file,
+                                        'timestamp': file_timestamp,
+                                        'config': config_data
+                                    }
+                                    
+                        except Exception as e:
+                            print(f"读取配置文件失败 {config_file}: {str(e)}")
+                            continue
+            
+            return latest_config
+            
+        except Exception as e:
+            print(f"查找训练配置文件时出错: {str(e)}")
+            return None
+    
+    def _is_training_config(self, config_data: Dict[str, Any]) -> bool:
+        """判断是否为训练配置文件"""
+        # 检查是否包含关键训练参数
+        training_keys = [
+            'model_name', 'num_epochs', 'batch_size', 'learning_rate',
+            'task_type', 'optimizer', 'data_dir'
+        ]
+        
+        return any(key in config_data for key in training_keys)
+    
+    def _get_training_config_context(self) -> str:
+        """获取训练配置上下文"""
+        try:
+            # 查找最新配置
+            latest_config = self._find_latest_training_config()
+            
+            if not latest_config:
+                return "⚠️ **训练配置**: 未找到训练配置文件"
+            
+            config_data = latest_config['config']
+            file_path = latest_config['file_path']
+            
+            # 构建配置上下文
+            context = f"""
+## 📋 训练配置信息
+**配置文件**: {os.path.basename(file_path)}
+**配置时间**: {time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(latest_config['timestamp']))}
+
+### 🏗️ 模型配置
+- **模型架构**: {config_data.get('model_name', 'N/A')}
+- **任务类型**: {config_data.get('task_type', 'N/A')}
+- **激活函数**: {config_data.get('activation_function', 'N/A')}
+- **Dropout率**: {config_data.get('dropout_rate', 'N/A')}
+
+### ⚙️ 训练参数
+- **训练轮数**: {config_data.get('num_epochs', 'N/A')}
+- **批次大小**: {config_data.get('batch_size', 'N/A')}
+- **学习率**: {config_data.get('learning_rate', 'N/A')}
+- **优化器**: {config_data.get('optimizer', 'N/A')}
+- **权重衰减**: {config_data.get('weight_decay', 'N/A')}
+- **学习率调度**: {config_data.get('lr_scheduler', 'N/A')}
+
+### 🔧 高级配置
+- **数据增强**: {'启用' if config_data.get('use_augmentation') else '禁用'}
+- **早停机制**: {'启用' if config_data.get('early_stopping') else '禁用'}
+- **早停耐心值**: {config_data.get('early_stopping_patience', 'N/A')}
+- **梯度裁剪**: {'启用' if config_data.get('gradient_clipping') else '禁用'}
+- **混合精度**: {'启用' if config_data.get('mixed_precision') else '禁用'}
+
+### ⚖️ 类别权重配置
+- **使用类别权重**: {'是' if config_data.get('use_class_weights') else '否'}
+- **权重策略**: {config_data.get('weight_strategy', 'N/A')}
+"""
+            
+            # 添加类别权重详情
+            if config_data.get('class_weights'):
+                context += "\n**类别权重详情**:\n"
+                for class_name, weight in config_data['class_weights'].items():
+                    context += f"- {class_name}: {weight}\n"
+            
+            # 添加高级超参数（如果存在）
+            advanced_params = []
+            if config_data.get('warmup_enabled'):
+                advanced_params.append(f"预热步数: {config_data.get('warmup_steps', 'N/A')}")
+            if config_data.get('min_lr_enabled'):
+                advanced_params.append(f"最小学习率: {config_data.get('min_lr', 'N/A')}")
+            if config_data.get('label_smoothing_enabled'):
+                advanced_params.append(f"标签平滑: {config_data.get('label_smoothing', 'N/A')}")
+            if config_data.get('model_ema'):
+                advanced_params.append(f"模型EMA: {config_data.get('model_ema_decay', 'N/A')}")
+            
+            if advanced_params:
+                context += "\n**高级超参数**:\n"
+                for param in advanced_params:
+                    context += f"- {param}\n"
+            
+            # 添加目标检测特有参数（如果存在）
+            if config_data.get('task_type') == 'detection':
+                context += f"""
+### 🎯 目标检测特有参数
+- **IOU阈值**: {config_data.get('iou_threshold', 'N/A')}
+- **置信度阈值**: {config_data.get('conf_threshold', 'N/A')}
+- **分辨率**: {config_data.get('resolution', 'N/A')}
+- **马赛克增强**: {'启用' if config_data.get('use_mosaic') else '禁用'}
+- **多尺度训练**: {'启用' if config_data.get('use_multiscale') else '禁用'}
+- **EMA**: {'启用' if config_data.get('use_ema') else '禁用'}
+"""
+            
+            return context.strip()
+            
+        except Exception as e:
+            return f"⚠️ **训练配置**: 读取配置文件时出错: {str(e)}"
+    
+    def _build_enhanced_analysis_prompt(self, metrics_data: Dict, trends: Dict, real_data: Dict) -> str:
+        """构建增强的分析提示词（包含训练配置）"""
+        # 获取训练配置上下文
+        config_context = self._get_training_config_context()
+        
+        return f"""
+请基于以下完整信息进行专业的深度学习训练分析：
+
+{config_context}
+
+## 📊 实时训练数据
+- 训练会话: {real_data.get('session_id', 'Unknown')}
+- 数据采集时长: {real_data.get('collection_duration', 0):.1f}秒
+- 数据点数量: {real_data.get('total_data_points', 0)}个
+- 训练状态: {real_data.get('training_status', 'unknown')}
+
+## 📈 当前训练指标
+- 当前Epoch: {metrics_data.get('epoch', 'N/A')}
+- 训练损失: {metrics_data.get('train_loss', 'N/A')}
+- 验证损失: {metrics_data.get('val_loss', 'N/A')}
+- 训练准确率: {metrics_data.get('train_accuracy', 'N/A')}
+- 验证准确率: {metrics_data.get('val_accuracy', 'N/A')}
+
+## 📉 训练趋势分析
+- 训练损失趋势: {trends.get('train_losses', [])}
+- 验证损失趋势: {trends.get('val_losses', [])}
+- 训练准确率趋势: {trends.get('train_accuracies', [])}
+- 验证准确率趋势: {trends.get('val_accuracies', [])}
+
+## 🎯 分析要求
+
+请基于以上训练配置和实时数据，提供以下分析：
+
+### 1. 参数配置评估
+- 当前参数配置是否合理？
+- 是否存在明显的参数冲突或不当设置？
+- 针对当前数据集和任务，参数是否需要调整？
+
+### 2. 训练状态诊断
+- 当前训练状态（收敛情况、过拟合/欠拟合风险）
+- 基于趋势数据的训练进展评估
+- 与配置参数的关联分析
+
+### 3. 针对性优化建议
+- 基于具体参数配置的优化建议
+- 参数调整的优先级和预期效果
+- 针对当前配置的具体改进方案
+
+### 4. 潜在问题预警
+- 需要关注的潜在问题
+- 配置参数可能带来的风险
+- 预防措施和建议
+
+请用中文回答，保持专业性和实用性，重点关注参数配置与训练表现的关联性。
+"""
+
     def analyze_real_training_progress(self) -> Dict[str, Any]:
         """分析真实的训练进度（使用实时采集的数据）"""
         try:
@@ -73,11 +283,11 @@ class TrainingAnalysisEngine:
                     'data_source': 'real_time_collector'
                 }
             
-            # 构建分析提示词，包含真实数据上下文
-            prompt = self._build_real_data_analysis_prompt(metrics_data, trends, real_data)
+            # 构建增强的分析提示词，包含训练配置和真实数据上下文
+            prompt = self._build_enhanced_analysis_prompt(metrics_data, trends, real_data)
             
-            # 获取LLM分析
-            llm_analysis = self.llm.analyze_metrics(metrics_data)
+            # 获取LLM分析（使用增强的提示词）
+            llm_analysis = self.llm.analyze_metrics(metrics_data, prompt)
             
             # 结合规则分析
             rule_analysis = self._rule_based_analysis(metrics_data)
@@ -128,11 +338,45 @@ class TrainingAnalysisEngine:
             if len(self.metrics_buffer) > 100:
                 self.metrics_buffer.pop(0)
             
-            # 构建分析提示词
-            prompt = self.prompt_templates.build_metrics_analysis_prompt(metrics_data)
+            # 构建增强的分析提示词，包含训练配置
+            config_context = self._get_training_config_context()
+            prompt = f"""
+请基于以下完整信息进行专业的深度学习训练分析：
+
+{config_context}
+
+## 📊 训练指标数据
+{json.dumps(metrics_data, ensure_ascii=False, indent=2)}
+
+## 🎯 分析要求
+
+请基于以上训练配置和指标数据，提供以下分析：
+
+### 1. 参数配置评估
+- 当前参数配置是否合理？
+- 是否存在明显的参数冲突或不当设置？
+- 针对当前数据集和任务，参数是否需要调整？
+
+### 2. 训练状态诊断
+- 当前训练状态（收敛情况、过拟合/欠拟合风险）
+- 基于指标数据的训练进展评估
+- 与配置参数的关联分析
+
+### 3. 针对性优化建议
+- 基于具体参数配置的优化建议
+- 参数调整的优先级和预期效果
+- 针对当前配置的具体改进方案
+
+### 4. 潜在问题预警
+- 需要关注的潜在问题
+- 配置参数可能带来的风险
+- 预防措施和建议
+
+请用中文回答，保持专业性和实用性，重点关注参数配置与训练表现的关联性。
+"""
             
-            # 获取LLM分析
-            llm_analysis = self.llm.analyze_metrics(metrics_data)
+            # 获取LLM分析（使用增强的提示词）
+            llm_analysis = self.llm.analyze_metrics(metrics_data, prompt)
             
             # 结合规则分析
             rule_analysis = self._rule_based_analysis(metrics_data)
@@ -497,29 +741,34 @@ class TrainingAnalysisEngine:
 
     def _combine_real_data_analyses(self, llm_analysis: str, rule_analysis: Dict, real_data: Dict) -> str:
         """结合LLM和规则分析（针对真实数据）"""
+        # 获取训练配置信息
+        config_context = self._get_training_config_context()
+        
         combined = f"""
-## 综合分析结果（基于真实训练数据）
+## 综合分析结果（基于真实训练数据和训练配置）
 
-### 数据来源信息
+{config_context}
+
+### 📊 数据来源信息
 - 训练会话: {real_data.get('session_id', 'Unknown')}
 - 数据采集时长: {real_data.get('collection_duration', 0):.1f}秒
 - 总数据点: {real_data.get('total_data_points', 0)}个
 - 训练状态: {real_data.get('training_status', 'unknown')}
 
-### 规则分析摘要
+### 📈 规则分析摘要
 - 训练状态: {rule_analysis.get('training_state', '未知')}
 - 收敛状态: {rule_analysis.get('convergence_status', '未知')}
 - 过拟合风险: {rule_analysis.get('overfitting_risk', '未知')}
 - 性能评估: {rule_analysis.get('performance_assessment', '未知')}
 
-### AI分析洞察
+### 🤖 AI分析洞察
 {llm_analysis}
 
-### 结论
-基于真实训练数据的综合判断，当前训练状态为{rule_analysis.get('training_state', '未知')}，
+### 🎯 结论
+基于真实训练数据和训练配置的综合判断，当前训练状态为{rule_analysis.get('training_state', '未知')}，
 建议关注{rule_analysis.get('convergence_status', '收敛')}情况。
 
-**注意**: 此分析基于实时采集的真实训练数据，具有较高的准确性和时效性。
+**注意**: 此分析基于实时采集的真实训练数据和训练配置文件，具有较高的准确性和针对性。
 """
         return combined
     

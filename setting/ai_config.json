@@ -23,7 +23,7 @@
   "custom_api": {
     "name": "openrouter",
     "base_url": "https://openrouter.ai/api/v1",
-    "api_key": "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",
+    "api_key": "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",
     "provider_type": "OpenAI兼容",
     "model": "deepseek/deepseek-r1-0528:free",
     "temperature": 0.7,

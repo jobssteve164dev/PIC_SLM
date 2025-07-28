@@ -26,7 +26,7 @@ class LLMAdapter(ABC):
         pass
     
     @abstractmethod
-    def analyze_metrics(self, metrics_data: Dict) -> str:
+    def analyze_metrics(self, metrics_data: Dict, custom_prompt: str = None) -> str:
         """分析训练指标"""
         pass
     
@@ -92,8 +92,11 @@ class OpenAIAdapter(LLMAdapter):
         except Exception as e:
             return f"OpenAI API调用失败: {str(e)}"
     
-    def analyze_metrics(self, metrics_data: Dict) -> str:
+    def analyze_metrics(self, metrics_data: Dict, custom_prompt: str = None) -> str:
         """分析训练指标"""
+        if custom_prompt:
+            return self.generate_response(custom_prompt)
+        
         prompt = f"""
 请分析以下CV模型训练指标并提供专业建议:
 
@@ -212,8 +215,11 @@ class DeepSeekAdapter(LLMAdapter):
         except Exception as e:
             return f"DeepSeek API调用失败: {str(e)}"
     
-    def analyze_metrics(self, metrics_data: Dict) -> str:
+    def analyze_metrics(self, metrics_data: Dict, custom_prompt: str = None) -> str:
         """分析训练指标"""
+        if custom_prompt:
+            return self.generate_response(custom_prompt)
+        
         prompt = f"""
 请分析以下CV模型训练指标并提供专业建议:
 
@@ -333,8 +339,11 @@ class LocalLLMAdapter(LLMAdapter):
         except Exception as e:
             return f"本地LLM调用异常: {str(e)}"
     
-    def analyze_metrics(self, metrics_data: Dict) -> str:
+    def analyze_metrics(self, metrics_data: Dict, custom_prompt: str = None) -> str:
         """分析训练指标"""
+        if custom_prompt:
+            return self.generate_response(custom_prompt)
+        
         prompt = f"""
 作为深度学习专家，请分析以下CV模型训练指标:
 
@@ -396,14 +405,18 @@ class CustomAPIAdapter(LLMAdapter):
         try:
             self.request_count += 1
             
+            # 基础认证头
             headers = {
                 "Authorization": f"Bearer {self.api_key}",
                 "Content-Type": "application/json"
             }
             
-            # 对于OpenRouter，添加X-API-Key头
+            # 对于OpenRouter，添加官方推荐的认证头
             if "openrouter.ai" in self.base_url:
-                headers["X-API-Key"] = self.api_key
+                headers.update({
+                    "HTTP-Referer": "https://github.com/ai-training-assistant",
+                    "X-Title": "AI Training Assistant"
+                })
             
             # 构建消息
             messages = []
@@ -464,8 +477,11 @@ class CustomAPIAdapter(LLMAdapter):
         except Exception as e:
             return f"API调用出错: {str(e)}"
     
-    def analyze_metrics(self, metrics_data: Dict) -> str:
+    def analyze_metrics(self, metrics_data: Dict, custom_prompt: str = None) -> str:
         """分析训练指标"""
+        if custom_prompt:
+            return self.generate_response(custom_prompt, context={'type': 'metrics_analysis'})
+        
         prompt = self._build_metrics_analysis_prompt(metrics_data)
         return self.generate_response(prompt, context={'type': 'metrics_analysis'})
     
@@ -529,8 +545,10 @@ class MockLLMAdapter(LLMAdapter):
         else:
             return f"这是一个模拟回答。您的问题是: {prompt[:100]}..."
     
-    def analyze_metrics(self, metrics_data: Dict) -> str:
+    def analyze_metrics(self, metrics_data: Dict, custom_prompt: str = None) -> str:
         """分析训练指标"""
+        if custom_prompt:
+            return self.generate_response(custom_prompt)
         return self._generate_metrics_analysis(metrics_data)
     
     def _generate_metrics_analysis(self, metrics_data: Any) -> str:

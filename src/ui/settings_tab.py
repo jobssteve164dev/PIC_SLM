@@ -701,93 +701,95 @@ class SettingsTab(BaseTab):
     
     def on_ai_settings_changed(self, ai_config: dict):
         """处理AI设置变化"""
-        print(f"AI设置已更新: {ai_config}")
-        # 保存AI配置到文件
         try:
-            import json
-            import os
-            
-            # 确保setting目录存在
-            os.makedirs("setting", exist_ok=True)
-            
-            # 保存到ai_config.json
+            # 保存AI配置到文件
             config_file = "setting/ai_config.json"
             with open(config_file, 'w', encoding='utf-8') as f:
                 json.dump(ai_config, f, indent=2, ensure_ascii=False)
             
-            print(f"AI配置已保存到: {config_file}")
+            print("AI配置已保存到文件")
             
-        except Exception as e:
-            print(f"保存AI配置文件失败: {str(e)}")
-        
-        # 通知模型工厂Tab更新配置
-        if hasattr(self.main_window, 'model_factory_tab'):
-            try:
-                # 获取默认适配器类型
-                default_adapter = ai_config.get('general', {}).get('default_adapter', 'mock')
-                
-                # 更新模型工厂Tab的适配器选择下拉框
-                if hasattr(self.main_window.model_factory_tab, 'chat_widget'):
-                    chat_widget = self.main_window.model_factory_tab.chat_widget
+            # 通知模型工厂Tab更新配置
+            if hasattr(self.main_window, 'model_factory_tab'):
+                try:
+                    # 获取默认适配器类型
+                    default_adapter = ai_config.get('general', {}).get('default_adapter', 'mock')
                     
-                    # 更新适配器选择下拉框
-                    if default_adapter == 'openai':
-                        chat_widget.adapter_combo.setCurrentText("OpenAI GPT-4")
-                    elif default_adapter == 'deepseek':
-                        chat_widget.adapter_combo.setCurrentText("DeepSeek")
-                    elif default_adapter == 'local':
-                        chat_widget.adapter_combo.setCurrentText("本地Ollama")
-                    else:
-                        chat_widget.adapter_combo.setCurrentText("模拟适配器")
-                    
-                    # 如果LLM框架存在，更新其配置
-                    if hasattr(chat_widget, 'llm_framework') and chat_widget.llm_framework:
+                    # 更新模型工厂Tab的适配器选择下拉框
+                    if hasattr(self.main_window.model_factory_tab, 'chat_widget'):
+                        chat_widget = self.main_window.model_factory_tab.chat_widget
+                        
+                        # 更新适配器选择下拉框
                         if default_adapter == 'openai':
-                            openai_config = ai_config.get('openai', {})
-                            adapter_config = {
-                                'api_key': openai_config.get('api_key', ''),
-                                'model': openai_config.get('model', 'gpt-4'),
-                                'base_url': openai_config.get('base_url', '') or None,
-                                'temperature': openai_config.get('temperature', 0.7),
-                                'max_tokens': openai_config.get('max_tokens', 1000)
-                            }
-                            chat_widget.llm_framework.switch_adapter('openai', adapter_config)
+                            chat_widget.adapter_combo.setCurrentText("OpenAI GPT-4")
                         elif default_adapter == 'deepseek':
-                            deepseek_config = ai_config.get('deepseek', {})
-                            adapter_config = {
-                                'api_key': deepseek_config.get('api_key', ''),
-                                'model': deepseek_config.get('model', 'deepseek-chat'),
-                                'base_url': deepseek_config.get('base_url', '') or None,
-                                'temperature': deepseek_config.get('temperature', 0.7),
-                                'max_tokens': deepseek_config.get('max_tokens', 1000)
-                            }
-                            chat_widget.llm_framework.switch_adapter('deepseek', adapter_config)
-                        elif default_adapter == 'custom':
-                            custom_config = ai_config.get('custom_api', {})
-                            adapter_config = {
-                                'api_key': custom_config.get('api_key', ''),
-                                'model': custom_config.get('model', 'custom-model'),
-                                'base_url': custom_config.get('base_url', ''),
-                                'provider_type': custom_config.get('provider_type', 'OpenAI兼容'),
-                                'temperature': custom_config.get('temperature', 0.7),
-                                'max_tokens': custom_config.get('max_tokens', 1000)
-                            }
-                            chat_widget.llm_framework.switch_adapter('custom', adapter_config)
+                            chat_widget.adapter_combo.setCurrentText("DeepSeek")
                         elif default_adapter == 'local':
-                            ollama_config = ai_config.get('ollama', {})
-                            adapter_config = {
-                                'model_name': ollama_config.get('model', 'llama2'),
-                                'base_url': ollama_config.get('base_url', 'http://localhost:11434'),
-                                'temperature': ollama_config.get('temperature', 0.7),
-                                'num_predict': ollama_config.get('num_predict', 1000),
-                                'timeout': ollama_config.get('timeout', 120)
-                            }
-                            chat_widget.llm_framework.switch_adapter('local', adapter_config)
+                            chat_widget.adapter_combo.setCurrentText("本地Ollama")
+                        elif default_adapter == 'custom':
+                            chat_widget.adapter_combo.setCurrentText("自定义API")
                         else:
-                            chat_widget.llm_framework.switch_adapter('mock', {})
+                            chat_widget.adapter_combo.setCurrentText("模拟适配器")
+                        
+                        # 如果LLM框架存在，更新其配置
+                        if hasattr(chat_widget, 'llm_framework') and chat_widget.llm_framework:
+                            if default_adapter == 'openai':
+                                openai_config = ai_config.get('openai', {})
+                                adapter_config = {
+                                    'api_key': openai_config.get('api_key', ''),
+                                    'model': openai_config.get('model', 'gpt-4'),
+                                    'base_url': openai_config.get('base_url', '') or None,
+                                    'temperature': openai_config.get('temperature', 0.7),
+                                    'max_tokens': openai_config.get('max_tokens', 1000)
+                                }
+                                chat_widget.llm_framework.switch_adapter('openai', adapter_config)
+                            elif default_adapter == 'deepseek':
+                                deepseek_config = ai_config.get('deepseek', {})
+                                adapter_config = {
+                                    'api_key': deepseek_config.get('api_key', ''),
+                                    'model': deepseek_config.get('model', 'deepseek-chat'),
+                                    'base_url': deepseek_config.get('base_url', '') or None,
+                                    'temperature': deepseek_config.get('temperature', 0.7),
+                                    'max_tokens': deepseek_config.get('max_tokens', 1000)
+                                }
+                                chat_widget.llm_framework.switch_adapter('deepseek', adapter_config)
+                            elif default_adapter == 'custom':
+                                custom_config = ai_config.get('custom_api', {})
+                                adapter_config = {
+                                    'api_key': custom_config.get('api_key', ''),
+                                    'model': custom_config.get('model', 'custom-model'),
+                                    'base_url': custom_config.get('base_url', ''),
+                                    'provider_type': custom_config.get('provider_type', 'OpenAI兼容'),
+                                    'temperature': custom_config.get('temperature', 0.7),
+                                    'max_tokens': custom_config.get('max_tokens', 1000)
+                                }
+                                chat_widget.llm_framework.switch_adapter('custom', adapter_config)
+                            elif default_adapter == 'local':
+                                ollama_config = ai_config.get('ollama', {})
+                                adapter_config = {
+                                    'model_name': ollama_config.get('model', 'llama2'),
+                                    'base_url': ollama_config.get('base_url', 'http://localhost:11434'),
+                                    'temperature': ollama_config.get('temperature', 0.7),
+                                    'num_predict': ollama_config.get('num_predict', 1000),
+                                    'timeout': ollama_config.get('timeout', 120)
+                                }
+                                chat_widget.llm_framework.switch_adapter('local', adapter_config)
+                            else:
+                                chat_widget.llm_framework.switch_adapter('mock', {})
+                        
+                        # 添加系统消息通知用户
+                        if default_adapter == 'custom':
+                            custom_config = ai_config.get('custom_api', {})
+                            api_name = custom_config.get('name', '自定义API')
+                            chat_widget.add_system_message(f"✅ AI设置已更新，当前使用{api_name}")
+                        else:
+                            chat_widget.add_system_message(f"✅ AI设置已更新，当前使用{default_adapter}适配器")
                             
-            except Exception as e:
-                print(f"更新模型工厂Tab配置时出错: {str(e)}")
+                except Exception as e:
+                    print(f"更新模型工厂Tab配置时出错: {str(e)}")
+        
+        except Exception as e:
+            print(f"保存AI配置时出错: {str(e)}")
         
         # 保存AI配置到主配置文件
         self.update_status("AI设置已更新")

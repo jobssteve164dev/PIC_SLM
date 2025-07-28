@@ -265,15 +265,18 @@ class CustomAPITestThread(QThread):
     def _fetch_available_models(self):
         """获取可用模型列表"""
         try:
-            # 使用标准认证头
+            # 基础认证头
             headers = {
                 "Authorization": f"Bearer {self.api_key}",
                 "Content-Type": "application/json"
             }
             
-            # 对于OpenRouter，尝试使用X-API-Key头
+            # 对于OpenRouter，添加官方推荐的认证头
             if "openrouter.ai" in self.base_url:
-                headers["X-API-Key"] = self.api_key
+                headers.update({
+                    "HTTP-Referer": "https://github.com/ai-training-assistant",
+                    "X-Title": "AI Training Assistant"
+                })
             
             print(f"正在获取模型列表: {self.base_url}/models")
             print(f"认证头: {headers}")
@@ -350,15 +353,18 @@ class CustomAPITestThread(QThread):
     def _test_api_call(self, model_name):
         """测试API调用"""
         try:
-            # 使用标准认证头
+            # 基础认证头
             headers = {
                 "Authorization": f"Bearer {self.api_key}",
                 "Content-Type": "application/json"
             }
             
-            # 对于OpenRouter，尝试使用X-API-Key头
+            # 对于OpenRouter，添加官方推荐的认证头
             if "openrouter.ai" in self.base_url:
-                headers["X-API-Key"] = self.api_key
+                headers.update({
+                    "HTTP-Referer": "https://github.com/ai-training-assistant",
+                    "X-Title": "AI Training Assistant"
+                })
             
             # 尝试简单的聊天请求
             data = {
