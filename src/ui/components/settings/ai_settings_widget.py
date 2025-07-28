@@ -218,6 +218,16 @@ class CustomAPITestThread(QThread):
     
     def run(self):
         try:
+            # 如果已经有选定的模型，直接测试API调用
+            if self.selected_model:
+                print(f"使用预选模型进行测试: {self.selected_model}")
+                test_success = self._test_api_call(self.selected_model)
+                if test_success:
+                    self.test_completed.emit(True, f"API连接成功，使用模型: {self.selected_model}", self.models_list or [])
+                else:
+                    self.test_completed.emit(False, f"API密钥验证失败，模型 {self.selected_model} 不可用", self.models_list or [])
+                return
+            
             # 首先尝试获取可用模型列表
             models = self._fetch_available_models()
             
@@ -242,28 +252,36 @@ class CustomAPITestThread(QThread):
                     self.test_completed.emit(False, "连接失败，请检查API地址和密钥", [])
                 
         except Exception as e:
+            print(f"自定义API测试异常: {str(e)}")
             self.test_completed.emit(False, f"测试失败: {str(e)}", [])
     
     def set_selected_model(self, model, models_list=None):
         """设置用户选择的模型"""
         self.selected_model = model
-        # 使用选定的模型测试API调用
-        test_success = self._test_api_call(self.selected_model)
-        if test_success:
-            self.test_completed.emit(True, f"API连接成功，使用模型: {self.selected_model}", models_list or [])
-        else:
-            self.test_completed.emit(False, f"API密钥验证失败，模型 {self.selected_model} 不可用", models_list or [])
+        self.models_list = models_list
+        # 重新启动线程来测试API调用
+        self.start()
     
     def _fetch_available_models(self):
         """获取可用模型列表"""
         try:
+            # 使用标准认证头
             headers = {
                 "Authorization": f"Bearer {self.api_key}",
                 "Content-Type": "application/json"
             }
             
+            # 对于OpenRouter，尝试使用X-API-Key头
+            if "openrouter.ai" in self.base_url:
+                headers["X-API-Key"] = self.api_key
+            
+            print(f"正在获取模型列表: {self.base_url}/models")
+            print(f"认证头: {headers}")
+            
             # 尝试标准的 /models 端点
             response = requests.get(f"{self.base_url}/models", headers=headers, timeout=10)
+            
+            print(f"模型列表响应状态码: {response.status_code}")
             
             if response.status_code == 200:
                 data = response.json()
@@ -299,8 +317,15 @@ class CustomAPITestThread(QThread):
                         elif isinstance(model, str):
                             models.append(model)
                 
+                print(f"获取到 {len(models)} 个模型")
                 return sorted(models) if models else []
             else:
+                print(f"获取模型列表失败，状态码: {response.status_code}")
+                try:
+                    error_data = response.json()
+                    print(f"错误响应: {error_data}")
+                except:
+                    print(f"错误响应文本: {response.text}")
                 return []
                 
         except Exception as e:
@@ -325,10 +350,15 @@ class CustomAPITestThread(QThread):
     def _test_api_call(self, model_name):
         """测试API调用"""
         try:
+            # 使用标准认证头
             headers = {
                 "Authorization": f"Bearer {self.api_key}",
                 "Content-Type": "application/json"
             }
+            
+            # 对于OpenRouter，尝试使用X-API-Key头
+            if "openrouter.ai" in self.base_url:
+                headers["X-API-Key"] = self.api_key
             
             # 尝试简单的聊天请求
             data = {
@@ -337,6 +367,10 @@ class CustomAPITestThread(QThread):
                 "max_tokens": 10
             }
             
+            print(f"正在测试API调用: {self.base_url}/chat/completions")
+            print(f"使用模型: {model_name}")
+            print(f"认证头: {headers}")
+            
             response = requests.post(
                 f"{self.base_url}/chat/completions",
                 headers=headers,
@@ -344,9 +378,28 @@ class CustomAPITestThread(QThread):
                 timeout=10
             )
             
+            print(f"API响应状态码: {response.status_code}")
+            print(f"响应头: {dict(response.headers)}")
+            
+            if response.status_code != 200:
+                try:
+                    error_data = response.json()
+                    print(f"API错误响应: {error_data}")
+                except:
+                    print(f"API错误响应文本: {response.text}")
+            else:
+                print("API调用成功！")
+            
             return response.status_code == 200
             
-        except Exception:
+        except requests.exceptions.Timeout:
+            print(f"API调用超时: {self.base_url}")
+            return False
+        except requests.exceptions.ConnectionError:
+            print(f"API连接错误: {self.base_url}")
+            return False
+        except Exception as e:
+            print(f"API调用异常: {str(e)}")
             return False
 
 

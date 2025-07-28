@@ -401,6 +401,10 @@ class CustomAPIAdapter(LLMAdapter):
                 "Content-Type": "application/json"
             }
             
+            # 对于OpenRouter，添加X-API-Key头
+            if "openrouter.ai" in self.base_url:
+                headers["X-API-Key"] = self.api_key
+            
             # 构建消息
             messages = []
             
