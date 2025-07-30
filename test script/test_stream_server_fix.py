@@ -9,9 +9,13 @@ import time
 import logging
 
 # 添加src目录到Python路径
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'src'))
+current_dir = os.path.dirname(os.path.abspath(__file__))
+src_dir = os.path.join(current_dir, 'src')
+sys.path.insert(0, src_dir)
 
-from api.stream_server_manager import get_stream_server
+print(f"当前目录: {current_dir}")
+print(f"src目录: {src_dir}")
+print(f"Python路径: {sys.path[:3]}")
 
 def test_stream_server_startup():
     """测试数据流服务器启动"""
@@ -25,6 +29,19 @@ def test_stream_server_startup():
     )
     
     try:
+        print("🔧 尝试导入数据流服务器管理器...")
+        
+        # 尝试导入
+        try:
+            from api.stream_server_manager import get_stream_server
+            print("✅ 成功导入数据流服务器管理器")
+        except ImportError as e:
+            print(f"❌ 导入失败: {str(e)}")
+            print("尝试直接导入...")
+            sys.path.insert(0, current_dir)
+            from src.api.stream_server_manager import get_stream_server
+            print("✅ 使用备用路径导入成功")
+        
         # 创建数据流服务器配置
         stream_config = {
             'sse_host': '127.0.0.1',
@@ -78,7 +95,10 @@ def test_stream_server_startup():
     finally:
         # 清理资源
         try:
-            from api.stream_server_manager import release_stream_server
+            try:
+                from api.stream_server_manager import release_stream_server
+            except ImportError:
+                from src.api.stream_server_manager import release_stream_server
             release_stream_server()
             print("🧹 已清理数据流服务器资源")
         except Exception as e:
