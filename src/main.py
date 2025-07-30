@@ -27,6 +27,7 @@ logger.info(f"当前工作目录: {os.getcwd()}")
 from PyQt5.QtWidgets import QApplication, QMessageBox, QTabWidget, QVBoxLayout, QWidget, QMainWindow
 logger.info("PyQt5模块已导入")
 from PyQt5.QtCore import QThread, QObject
+from PyQt5.QtGui import QTextCursor
 from src.ui.main_window import MainWindow
 logger.info("MainWindow已导入")
 from src.ui.evaluation_tab import EvaluationTab  # 从ui模块导入EvaluationTab
@@ -181,6 +182,11 @@ def main():
     
     # 创建应用程序
     app = QApplication(sys.argv)
+    
+    # 注册QTextCursor元类型，避免跨线程信号槽连接警告
+    from PyQt5.QtCore import QMetaType
+    # 确保QTextCursor类型已注册
+    QMetaType.type('QTextCursor')
     
     # 设置应用程序样式
     app.setStyle('Fusion')
