@@ -1493,14 +1493,16 @@ class ModelFactoryTab(BaseTab):
         
 
         
-        # 创建水平分割器
-        main_splitter = QSplitter(Qt.Horizontal)
+        # 创建垂直分割器
+        main_splitter = QSplitter(Qt.Vertical)
         main_splitter.setChildrenCollapsible(False)
+        
+        # 上半部分：LLM聊天和分析面板 - 使用水平分割器
+        upper_splitter = QSplitter(Qt.Horizontal)
+        upper_splitter.setChildrenCollapsible(False)
         
         # 左侧：LLM聊天界面
         left_widget = QWidget()
-        left_widget.setMinimumWidth(500)
-        left_widget.setMaximumWidth(800)
         left_layout = QVBoxLayout(left_widget)
         left_layout.setContentsMargins(5, 5, 5, 5)
         
@@ -1509,7 +1511,7 @@ class ModelFactoryTab(BaseTab):
         self.chat_widget.analysis_requested.connect(self.handle_analysis_request)
         left_layout.addWidget(self.chat_widget)
         
-        main_splitter.addWidget(left_widget)
+        upper_splitter.addWidget(left_widget)
         
         # 右侧：分析面板和系统状态
         right_widget = QWidget()
@@ -1550,9 +1552,33 @@ class ModelFactoryTab(BaseTab):
         status_group.setLayout(status_layout)
         right_layout.addWidget(status_group)
         
-        main_splitter.addWidget(right_widget)
+        upper_splitter.addWidget(right_widget)
         
-        # 设置分割器比例 (左侧70%, 右侧30%)
+        main_splitter.addWidget(upper_splitter)
+        
+        # 设置水平分割器的初始比例 (聊天界面60%, 分析面板40%)
+        upper_splitter.setSizes([600, 400])
+        
+        # 下半部分：实时数据流监控
+        lower_widget = QWidget()
+        lower_layout = QVBoxLayout(lower_widget)
+        lower_layout.setContentsMargins(5, 5, 5, 5)
+        
+        # 导入并创建实时数据流监控控件
+        try:
+            from src.ui.components.model_analysis.real_time_stream_monitor import RealTimeStreamMonitor
+            self.stream_monitor = RealTimeStreamMonitor()
+            lower_layout.addWidget(self.stream_monitor)
+        except ImportError as e:
+            # 如果导入失败，显示错误信息
+            error_label = QLabel(f"⚠️ 实时数据流监控控件加载失败: {str(e)}")
+            error_label.setStyleSheet("color: #dc3545; padding: 20px; border: 1px solid #dc3545; border-radius: 5px;")
+            error_label.setAlignment(Qt.AlignCenter)
+            lower_layout.addWidget(error_label)
+        
+        main_splitter.addWidget(lower_widget)
+        
+        # 设置分割器比例 (上半部分70%, 下半部分30%)
         main_splitter.setSizes([700, 300])
         
         main_layout.addWidget(main_splitter)

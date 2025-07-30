@@ -123,13 +123,15 @@ def display_gradcam(gradcam, original_image, viewer, class_name):
         # 原图 - 标准化图像数据
         plt.subplot(1, 2, 1)
         normalized_image = normalize_image_for_matplotlib(original_image)
-        plt.imshow(normalized_image)
+        # 确保图像数据在0-1范围内
+        normalized_image = np.clip(normalized_image, 0, 1)
+        plt.imshow(normalized_image, vmin=0, vmax=1)
         plt.title('原始图片')
         plt.axis('off')
         
         # GradCAM叠加
         plt.subplot(1, 2, 2)
-        plt.imshow(normalized_image)
+        plt.imshow(normalized_image, vmin=0, vmax=1)
         plt.imshow(normalized_gradcam, alpha=0.4, cmap='jet', vmin=0, vmax=1)
         plt.title(f'GradCAM - {class_name}')
         plt.axis('off')
@@ -186,14 +188,18 @@ def display_lime_explanation(explanation, original_image, viewer, target_class, 
         # 原图 - 标准化图像数据
         plt.subplot(1, 2, 1)
         normalized_original = normalize_image_for_matplotlib(original_image)
-        plt.imshow(normalized_original)
+        # 确保图像数据在0-1范围内
+        normalized_original = np.clip(normalized_original, 0, 1)
+        plt.imshow(normalized_original, vmin=0, vmax=1)
         plt.title('原始图片')
         plt.axis('off')
         
         # LIME解释 - 标准化解释图像数据
         plt.subplot(1, 2, 2)
         normalized_temp = normalize_image_for_matplotlib(temp)
-        plt.imshow(normalized_temp)
+        # 确保图像数据在0-1范围内
+        normalized_temp = np.clip(normalized_temp, 0, 1)
+        plt.imshow(normalized_temp, vmin=0, vmax=1)
         # 使用实际解释的类别名称
         class_name = class_names[target_class] if target_class < len(class_names) else f"类别{target_class}"
         plt.title(f'LIME解释 - {class_name}')
@@ -248,7 +254,9 @@ def display_integrated_gradients(gradients, original_image, viewer, class_name):
         
         # 原图
         normalized_image = normalize_image_for_matplotlib(original_image)
-        axes[0].imshow(normalized_image)
+        # 确保图像数据在0-1范围内
+        normalized_image = np.clip(normalized_image, 0, 1)
+        axes[0].imshow(normalized_image, vmin=0, vmax=1)
         axes[0].set_title('原始图片')
         axes[0].axis('off')
         
@@ -259,7 +267,7 @@ def display_integrated_gradients(gradients, original_image, viewer, class_name):
         plt.colorbar(im, ax=axes[1])
         
         # 叠加图
-        axes[2].imshow(normalized_image)
+        axes[2].imshow(normalized_image, vmin=0, vmax=1)
         axes[2].imshow(attribution, alpha=0.5, cmap='hot', vmin=0, vmax=1)
         axes[2].set_title('叠加显示')
         axes[2].axis('off')
@@ -327,7 +335,9 @@ def display_shap_explanation(shap_result, original_image, viewer, class_name):
         
         # 原图
         normalized_image = normalize_image_for_matplotlib(original_image)
-        axes[0].imshow(normalized_image)
+        # 确保图像数据在0-1范围内
+        normalized_image = np.clip(normalized_image, 0, 1)
+        axes[0].imshow(normalized_image, vmin=0, vmax=1)
         axes[0].set_title('原始图片')
         axes[0].axis('off')
         
@@ -338,7 +348,7 @@ def display_shap_explanation(shap_result, original_image, viewer, class_name):
         plt.colorbar(im, ax=axes[1])
         
         # 叠加图
-        axes[2].imshow(normalized_image)
+        axes[2].imshow(normalized_image, vmin=0, vmax=1)
         axes[2].imshow(attribution, alpha=0.5, cmap='RdBu_r', vmin=0, vmax=1)
         axes[2].set_title('叠加显示')
         axes[2].axis('off')
@@ -389,7 +399,9 @@ def display_smoothgrad(gradients, original_image, viewer, class_name):
         
         # 原图
         normalized_image = normalize_image_for_matplotlib(original_image)
-        axes[0].imshow(normalized_image)
+        # 确保图像数据在0-1范围内
+        normalized_image = np.clip(normalized_image, 0, 1)
+        axes[0].imshow(normalized_image, vmin=0, vmax=1)
         axes[0].set_title('原始图片')
         axes[0].axis('off')
         
@@ -400,7 +412,7 @@ def display_smoothgrad(gradients, original_image, viewer, class_name):
         plt.colorbar(im, ax=axes[1])
         
         # 叠加图
-        axes[2].imshow(normalized_image)
+        axes[2].imshow(normalized_image, vmin=0, vmax=1)
         axes[2].imshow(attribution, alpha=0.5, cmap='viridis', vmin=0, vmax=1)
         axes[2].set_title('叠加显示')
         axes[2].axis('off')

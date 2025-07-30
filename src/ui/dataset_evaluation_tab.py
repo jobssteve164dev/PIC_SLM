@@ -16,6 +16,12 @@ from PyQt5.QtCore import Qt, pyqtSignal
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 
+# 导入matplotlib配置和标准化函数
+from src.utils.matplotlib_config import suppress_matplotlib_warnings
+
+# 抑制matplotlib警告
+suppress_matplotlib_warnings()
+
 # 导入拆分的组件模块
 from .base_tab import BaseTab
 from .components.dataset_evaluation import ClassificationAnalyzer, DetectionAnalyzer

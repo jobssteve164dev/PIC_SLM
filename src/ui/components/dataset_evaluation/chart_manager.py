@@ -9,6 +9,12 @@ import matplotlib.pyplot as plt
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 from PyQt5.QtCore import QObject, pyqtSignal
 
+# 导入matplotlib配置和标准化函数
+from src.utils.matplotlib_config import suppress_matplotlib_warnings
+
+# 抑制matplotlib警告
+suppress_matplotlib_warnings()
+
 
 class ChartManager(QObject):
     """图表管理器"""

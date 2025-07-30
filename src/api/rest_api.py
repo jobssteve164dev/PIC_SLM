@@ -29,6 +29,10 @@ class TrainingAPI:
         self.current_metrics = {}
         self.logger = logging.getLogger(__name__)
         
+        # 服务器状态
+        self.is_running = False
+        self.server_thread = None
+        
         # 设置路由
         self._setup_routes()
         
@@ -305,7 +309,14 @@ class TrainingAPI:
     def start_server(self, host='127.0.0.1', port=8890, debug=False):
         """启动REST API服务器"""
         self.logger.info(f"启动REST API服务器: http://{host}:{port}")
+        self.is_running = True
         self.app.run(host=host, port=port, debug=debug, threaded=True)
+    
+    def stop_server(self):
+        """停止REST API服务器"""
+        self.logger.info("停止REST API服务器...")
+        self.is_running = False
+        # Flask应用会在主线程结束时自动停止
     
     def get_app(self):
         """获取Flask应用实例"""

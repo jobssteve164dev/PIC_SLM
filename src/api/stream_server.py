@@ -91,19 +91,24 @@ class TrainingStreamServer:
         
         try:
             # 启动SSE服务器
+            self.logger.info("启动SSE服务器...")
             self.start_sse_server()
             
-            # 启动WebSocket服务器
-            self.start_websocket_server()
-            
             # 启动REST API服务器
+            self.logger.info("启动REST API服务器...")
             self.start_rest_api_server()
+            
+            # 启动WebSocket服务器（最后启动）
+            self.logger.info("启动WebSocket服务器...")
+            self.start_websocket_server()
             
             self.is_running = True
             self.logger.info("所有数据流服务器启动成功")
             
         except Exception as e:
             self.logger.error(f"启动服务器时出错: {str(e)}")
+            import traceback
+            self.logger.error(f"详细错误信息: {traceback.format_exc()}")
             self.stop_all_servers()
             raise
     
@@ -130,15 +135,24 @@ class TrainingStreamServer:
     def start_websocket_server(self):
         """启动WebSocket服务器"""
         try:
+            self.logger.info("创建WebSocket服务器线程...")
             ws_thread = self.websocket_handler.start_server_thread()
             self.server_threads['websocket'] = ws_thread
             
             # 等待服务器启动
-            time.sleep(1)
-            self.logger.info("WebSocket服务器已启动")
+            self.logger.info("等待WebSocket服务器启动...")
+            time.sleep(3)
+            
+            # 检查WebSocket服务器状态
+            if self.websocket_handler.is_running:
+                self.logger.info("WebSocket服务器已启动")
+            else:
+                self.logger.warning("WebSocket服务器可能未完全启动")
             
         except Exception as e:
             self.logger.error(f"WebSocket服务器启动失败: {str(e)}")
+            import traceback
+            self.logger.error(f"WebSocket启动详细错误: {traceback.format_exc()}")
             raise
     
     def start_rest_api_server(self):
@@ -175,13 +189,15 @@ class TrainingStreamServer:
         
         # 停止WebSocket服务器
         try:
-            import asyncio
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-            loop.run_until_complete(self.websocket_handler.stop_server())
-            loop.close()
+            self.websocket_handler.stop_server_sync()
         except Exception as e:
             self.logger.error(f"停止WebSocket服务器时出错: {str(e)}")
+        
+        # 停止REST API服务器
+        try:
+            self.rest_api.stop_server()
+        except Exception as e:
+            self.logger.error(f"停止REST API服务器时出错: {str(e)}")
         
         # 等待线程结束
         for name, thread in self.server_threads.items():

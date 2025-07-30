@@ -17,6 +17,12 @@ import matplotlib.pyplot as plt
 import matplotlib
 matplotlib.use('Qt5Agg')
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
+
+# 导入matplotlib配置和标准化函数
+from src.utils.matplotlib_config import suppress_matplotlib_warnings
+
+# 抑制matplotlib警告
+suppress_matplotlib_warnings()
 from matplotlib.figure import Figure
 import seaborn as sns
 try:

@@ -29,6 +29,17 @@ from PyQt5.QtCore import QObject, pyqtSignal
 import psutil  # 用于系统资源监控
 from .real_time_metrics_collector import get_global_metrics_collector
 
+# 导入matplotlib配置和标准化函数
+from src.utils.matplotlib_config import (
+    normalize_image_for_matplotlib, 
+    normalize_feature_map, 
+    safe_imshow,
+    suppress_matplotlib_warnings
+)
+
+# 抑制matplotlib警告
+suppress_matplotlib_warnings()
+
 
 class TensorBoardLogger(QObject):
     """增强版TensorBoard日志记录器，支持实时数据流"""
@@ -418,6 +429,9 @@ class TensorBoardLogger(QObject):
             # 获取一个批次的样本数据
             sample_inputs, sample_labels = next(iter(dataloader))
             
+            # 确保图像数据在0-1范围内
+            sample_inputs = torch.clamp(sample_inputs, 0, 1)
+            
             # 记录样本图像
             grid = torchvision.utils.make_grid(sample_inputs[:max_images])
             self.writer.add_image('Sample Images', grid, epoch)
@@ -553,9 +567,13 @@ class TensorBoardLogger(QObject):
     def _create_confusion_matrix_chart(self, cm, class_names):
         """创建混淆矩阵图表"""
         plt.figure(figsize=(10, 10))
-        plt.imshow(cm, interpolation='nearest', cmap=plt.cm.Blues)
+        
+        # 创建混淆矩阵图像并保存mappable对象
+        im = plt.imshow(cm, interpolation='nearest', cmap=plt.cm.Blues)
         plt.title('Confusion matrix')
-        plt.colorbar()
+        
+        # 添加colorbar（使用保存的mappable对象）
+        plt.colorbar(im)
         
         tick_marks = np.arange(len(class_names))
         plt.xticks(tick_marks, class_names, rotation=45)
@@ -592,10 +610,14 @@ class TensorBoardLogger(QObject):
             img = img.cpu()
             if img.shape[0] == 1:  # 灰度图像
                 img = img.squeeze(0)
-                axes[i].imshow(img, cmap='gray')
+                # 标准化灰度图像数据到0-1范围
+                img = torch.clamp(img, 0, 1)
+                axes[i].imshow(img, cmap='gray', vmin=0, vmax=1)
             else:  # 彩色图像
                 img = img.permute(1, 2, 0)
-                axes[i].imshow(img)
+                # 标准化彩色图像数据到0-1范围
+                img = torch.clamp(img, 0, 1)
+                axes[i].imshow(img, vmin=0, vmax=1)
             
             # 获取预测概率
             probs = torch.nn.functional.softmax(output, dim=0)

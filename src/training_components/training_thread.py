@@ -436,7 +436,21 @@ class TrainingThread(QThread):
             self.resource_limiter.request_stop()
             self.status_updated.emit("🛑 已请求资源限制器停止所有操作")
         
+        # 释放数据流服务器引用
+        self._release_stream_server()
+        
         self.status_updated.emit("训练线程正在停止...")
+    
+    def _release_stream_server(self):
+        """释放数据流服务器引用"""
+        try:
+            if hasattr(self, 'stream_server') and self.stream_server is not None:
+                from ..api.stream_server_manager import release_stream_server
+                release_stream_server()
+                self.stream_server = None
+                print("数据流服务器引用已释放")
+        except Exception as e:
+            print(f"释放数据流服务器引用时出错: {str(e)}")
     
     def train_model(self, data_dir, model_name, num_epochs, batch_size, learning_rate, 
                    model_save_dir, task_type='classification', use_tensorboard=True):
@@ -1089,8 +1103,8 @@ class TrainingThread(QThread):
     def _initialize_stream_server(self):
         """初始化数据流服务器"""
         try:
-            # 导入数据流服务器
-            from ..api.stream_server import TrainingStreamServer
+            # 导入全局数据流服务器管理器
+            from ..api.stream_server_manager import get_stream_server
             
             # 创建数据流服务器配置
             stream_config = {
@@ -1104,8 +1118,8 @@ class TrainingThread(QThread):
                 'debug_mode': False
             }
             
-            # 创建并启动数据流服务器
-            self.stream_server = TrainingStreamServer(
+            # 获取全局数据流服务器实例
+            self.stream_server = get_stream_server(
                 training_system=self.parent() if self.parent() else None,
                 config=stream_config
             )
@@ -1113,18 +1127,7 @@ class TrainingThread(QThread):
             # 设置TensorBoard日志器的数据流服务器
             self.tensorboard_logger.set_stream_server(self.stream_server)
             
-            # 在独立线程中启动数据流服务器
-            import threading
-            def start_stream_server():
-                try:
-                    self.stream_server.start_all_servers()
-                except Exception as e:
-                    print(f"启动数据流服务器失败: {str(e)}")
-            
-            stream_thread = threading.Thread(target=start_stream_server, daemon=True)
-            stream_thread.start()
-            
-            # 等待服务器启动
+            # 等待服务器启动完成
             import time
             time.sleep(2)
             

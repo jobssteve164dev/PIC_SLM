@@ -727,6 +727,18 @@ class TrainingValidator(QObject):
         # 验证model_save_dir
         model_save_dir = config.get('model_save_dir', 'models/saved_models')
         
+        # 标准化路径，处理相对路径引用
+        try:
+            model_save_dir = os.path.normpath(model_save_dir)
+            # 如果是相对路径，转换为绝对路径
+            if not os.path.isabs(model_save_dir):
+                # 获取当前工作目录
+                current_dir = os.getcwd()
+                model_save_dir = os.path.join(current_dir, model_save_dir)
+        except Exception as e:
+            self.validation_error.emit(f"路径标准化失败: {model_save_dir}, 错误: {str(e)}")
+            return False
+        
         try:
             # 尝试创建目录
             os.makedirs(model_save_dir, exist_ok=True)
@@ -737,8 +749,8 @@ class TrainingValidator(QObject):
                 with open(test_file, 'w') as f:
                     f.write('test')
                 os.remove(test_file)
-            except Exception:
-                self.validation_error.emit(f"模型保存目录不可写: {model_save_dir}")
+            except Exception as e:
+                self.validation_error.emit(f"模型保存目录不可写: {model_save_dir}, 错误: {str(e)}")
                 return False
                 
         except Exception as e:
@@ -748,6 +760,18 @@ class TrainingValidator(QObject):
         # 验证参数保存目录（如果指定）
         param_save_dir = config.get('default_param_save_dir')
         if param_save_dir:
+            # 标准化路径，处理相对路径引用
+            try:
+                param_save_dir = os.path.normpath(param_save_dir)
+                # 如果是相对路径，转换为绝对路径
+                if not os.path.isabs(param_save_dir):
+                    # 获取当前工作目录
+                    current_dir = os.getcwd()
+                    param_save_dir = os.path.join(current_dir, param_save_dir)
+            except Exception as e:
+                self.validation_error.emit(f"参数保存路径标准化失败: {param_save_dir}, 错误: {str(e)}")
+                return False
+            
             try:
                 os.makedirs(param_save_dir, exist_ok=True)
                 
@@ -757,8 +781,8 @@ class TrainingValidator(QObject):
                     with open(test_file, 'w') as f:
                         f.write('test')
                     os.remove(test_file)
-                except Exception:
-                    self.validation_error.emit(f"参数保存目录不可写: {param_save_dir}")
+                except Exception as e:
+                    self.validation_error.emit(f"参数保存目录不可写: {param_save_dir}, 错误: {str(e)}")
                     return False
                     
             except Exception as e:

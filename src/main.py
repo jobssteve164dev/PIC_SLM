@@ -390,10 +390,35 @@ def main():
         # 如果设置中没有指定TensorBoard日志目录，则使用默认路径
         if not tensorboard_log_dir:
             tensorboard_log_dir = os.path.join('runs', 'tensorboard')
+        
+        # 标准化所有路径，处理相对路径引用
+        try:
+            model_save_dir = os.path.normpath(model_save_dir)
+            param_save_dir = os.path.normpath(param_save_dir)
+            tensorboard_log_dir = os.path.normpath(tensorboard_log_dir)
             
-        os.makedirs(model_save_dir, exist_ok=True)
-        os.makedirs(param_save_dir, exist_ok=True)
-        os.makedirs(tensorboard_log_dir, exist_ok=True)
+            # 如果是相对路径，转换为绝对路径
+            if not os.path.isabs(model_save_dir):
+                current_dir = os.getcwd()
+                model_save_dir = os.path.join(current_dir, model_save_dir)
+            if not os.path.isabs(param_save_dir):
+                current_dir = os.getcwd()
+                param_save_dir = os.path.join(current_dir, param_save_dir)
+            if not os.path.isabs(tensorboard_log_dir):
+                current_dir = os.getcwd()
+                tensorboard_log_dir = os.path.join(current_dir, tensorboard_log_dir)
+        except Exception as e:
+            QMessageBox.critical(self, '错误', f'路径标准化失败: {str(e)}')
+            return
+            
+        # 创建目录
+        try:
+            os.makedirs(model_save_dir, exist_ok=True)
+            os.makedirs(param_save_dir, exist_ok=True)
+            os.makedirs(tensorboard_log_dir, exist_ok=True)
+        except Exception as e:
+            QMessageBox.critical(self, '错误', f'无法创建保存目录: {str(e)}')
+            return
         
         # 获取类别权重配置 - 直接从配置中读取，确保与界面显示一致
         use_class_weights = config.get('use_class_weights', True)

@@ -41,6 +41,10 @@ class WebSocketHandler:
             'ping': self._handle_ping
         }
     
+    async def _handle_connection(self, websocket: WebSocketServerProtocol):
+        """处理WebSocket连接（兼容websockets库）"""
+        await self.register_client(websocket, "/")
+    
     async def register_client(self, websocket: WebSocketServerProtocol, path: str):
         """注册新的WebSocket客户端"""
         self.clients.add(websocket)
@@ -198,15 +202,25 @@ class WebSocketHandler:
         self.is_running = True
         self.logger.info(f"启动WebSocket服务器: ws://{self.host}:{self.port}")
         
-        self.server = await websockets.serve(
-            self.register_client,
-            self.host,
-            self.port,
-            ping_interval=20,
-            ping_timeout=10
-        )
-        
-        return self.server
+        try:
+            self.server = await websockets.serve(
+                self._handle_connection,
+                self.host,
+                self.port,
+                ping_interval=20,
+                ping_timeout=10
+            )
+            self.logger.info(f"WebSocket服务器启动成功: ws://{self.host}:{self.port}")
+            return self.server
+        except OSError as e:
+            if e.errno == 10048:  # 端口已被占用
+                self.logger.error(f"端口 {self.port} 已被占用，尝试停止现有服务器...")
+                # 强制重置状态
+                self.is_running = False
+                self.server = None
+                raise Exception(f"端口 {self.port} 已被占用，请确保没有其他WebSocket服务器在运行")
+            else:
+                raise
     
     def start_server_thread(self):
         """在独立线程中启动WebSocket服务器"""
@@ -216,14 +230,27 @@ class WebSocketHandler:
             
             async def server_main():
                 await self.start_server()
-                await asyncio.Future()  # 永远运行
+                # 保持服务器运行，直到is_running变为False
+                while self.is_running:
+                    await asyncio.sleep(0.1)
             
             try:
                 loop.run_until_complete(server_main())
             except KeyboardInterrupt:
                 self.logger.info("WebSocket服务器收到停止信号")
+            except Exception as e:
+                self.logger.error(f"WebSocket服务器运行出错: {str(e)}")
             finally:
-                loop.close()
+                try:
+                    # 确保服务器完全关闭
+                    if self.server:
+                        try:
+                            self.server.close()
+                        except:
+                            pass
+                    loop.close()
+                except:
+                    pass
         
         server_thread = threading.Thread(target=run_server, daemon=True)
         server_thread.start()
@@ -253,11 +280,47 @@ class WebSocketHandler:
         
         # 关闭服务器
         if self.server:
-            self.server.close()
-            await self.server.wait_closed()
+            try:
+                self.server.close()
+                await self.server.wait_closed()
+            except Exception as e:
+                self.logger.error(f"关闭WebSocket服务器时出错: {str(e)}")
         
         self.clients.clear()
         self.logger.info("WebSocket服务器已停止")
+    
+    def stop_server_sync(self):
+        """同步方式停止WebSocket服务器"""
+        if not self.is_running:
+            return
+        
+        try:
+            # 强制重置状态
+            self.is_running = False
+            self.clients.clear()
+            
+            # 直接关闭服务器，不使用异步方法
+            if self.server:
+                try:
+                    self.server.close()
+                    self.logger.info("WebSocket服务器已关闭")
+                except Exception as e:
+                    self.logger.error(f"关闭WebSocket服务器时出错: {str(e)}")
+                finally:
+                    self.server = None
+            else:
+                self.server = None
+                
+            # 等待一段时间确保端口释放
+            import time
+            time.sleep(1)
+                
+        except Exception as e:
+            self.logger.error(f"同步停止WebSocket服务器时出错: {str(e)}")
+            # 强制重置状态
+            self.is_running = False
+            self.clients.clear()
+            self.server = None
     
     def get_stats(self) -> Dict[str, Any]:
         """获取服务器统计信息"""
