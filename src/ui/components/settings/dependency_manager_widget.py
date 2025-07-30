@@ -492,6 +492,11 @@ class DependencyInstallThread(QThread):
                     if trusted_host.strip():
                         cmd.extend(["--trusted-host", trusted_host.strip()])
                 
+                # 添加详细输出和错误处理
+                cmd.extend(["--verbose"])
+                
+                self.progress_updated.emit(f"执行命令: {' '.join(cmd)}")
+                
                 # 执行安装
                 result = subprocess.run(
                     cmd, 
@@ -501,16 +506,45 @@ class DependencyInstallThread(QThread):
                 )
                 
                 if result.returncode != 0:
-                    error_msg = f"安装 {package} 失败:\n{result.stderr}"
+                    error_msg = f"安装 {package} 失败:\n"
+                    error_msg += f"返回码: {result.returncode}\n"
+                    error_msg += f"错误输出:\n{result.stderr}"
+                    
+                    # 分析常见错误类型
+                    stderr_lower = result.stderr.lower()
+                    if "ssl" in stderr_lower or "certificate" in stderr_lower:
+                        error_msg += "\n\nSSL证书错误诊断:"
+                        error_msg += "\n1. 请确认已启用'信任主机'选项"
+                        error_msg += "\n2. 请检查信任主机设置是否正确"
+                        error_msg += "\n3. 如果是公司内网，可能需要使用HTTP而非HTTPS"
+                    elif "connection" in stderr_lower or "timeout" in stderr_lower:
+                        error_msg += "\n\n连接错误诊断:"
+                        error_msg += "\n1. 请检查代理地址是否正确"
+                        error_msg += "\n2. 请确认网络连接正常"
+                        error_msg += "\n3. 请检查防火墙设置"
+                    elif "401" in stderr_lower or "unauthorized" in stderr_lower:
+                        error_msg += "\n\n认证错误诊断:"
+                        error_msg += "\n1. 请检查代理服务器是否需要认证"
+                        error_msg += "\n2. 请确认代理地址格式正确"
+                        error_msg += "\n3. 可能需要联系网络管理员"
+                    
                     self.install_finished.emit(False, error_msg)
                     return
                 else:
                     self.progress_updated.emit(f"成功安装: {package}")
+                    if result.stdout:
+                        # 显示安装成功的详细信息
+                        success_info = result.stdout.strip()
+                        if len(success_info) > 200:
+                            success_info = success_info[:200] + "..."
+                        self.progress_updated.emit(f"安装详情: {success_info}")
             
             self.install_finished.emit(True, "所有依赖安装完成")
             
         except Exception as e:
-            self.install_finished.emit(False, f"安装过程中出错: {str(e)}")
+            error_msg = f"安装过程中出错: {str(e)}"
+            error_msg += f"\n错误类型: {type(e).__name__}"
+            self.install_finished.emit(False, error_msg)
 
 
 class DependencyManagerWidget(QWidget):
@@ -633,26 +667,42 @@ class DependencyManagerWidget(QWidget):
         
         # 自定义镜像按钮
         self.custom_mirror_btn = QPushButton("自定义")
-        self.custom_mirror_btn.clicked.connect(self.handle_custom_mirror_click)
+        self.custom_mirror_btn.clicked.connect(self.show_custom_mirror_dialog)
         self.custom_mirror_btn.setMaximumWidth(80)
-        self.custom_mirror_btn.setStyleSheet("background-color: #4CAF50; color: white;")
-        self.custom_mirror_btn.setContextMenuPolicy(Qt.CustomContextMenu)
-        self.custom_mirror_btn.customContextMenuRequested.connect(self.show_custom_mirror_menu)
         shortcuts_layout.addWidget(self.custom_mirror_btn)
         
         shortcuts_layout.addStretch()
         proxy_layout.addLayout(shortcuts_layout)
+        
+        # 测试和诊断按钮
+        test_layout = QHBoxLayout()
+        
+        test_proxy_btn = QPushButton("测试连接")
+        test_proxy_btn.clicked.connect(self.test_proxy_connection)
+        test_proxy_btn.setMaximumWidth(100)
+        test_layout.addWidget(test_proxy_btn)
+        
+        ssl_diagnose_btn = QPushButton("SSL诊断")
+        ssl_diagnose_btn.clicked.connect(self.diagnose_ssl_issues)
+        ssl_diagnose_btn.setMaximumWidth(100)
+        ssl_diagnose_btn.setToolTip("诊断SSL证书相关问题")
+        test_layout.addWidget(ssl_diagnose_btn)
+        
+        apply_fix_btn = QPushButton("应用修复")
+        apply_fix_btn.clicked.connect(self.apply_ssl_fix)
+        apply_fix_btn.setMaximumWidth(100)
+        apply_fix_btn.setToolTip("自动应用SSL证书修复设置")
+        apply_fix_btn.setStyleSheet("background-color: #4CAF50; color: white;")
+        test_layout.addWidget(apply_fix_btn)
+        
+        test_layout.addStretch()
+        proxy_layout.addLayout(test_layout)
         
         # 当前自定义镜像显示
         self.custom_mirror_label = QLabel()
         self.custom_mirror_label.setStyleSheet("color: #666; font-size: 12px; margin: 5px 0;")
         self.custom_mirror_label.setVisible(False)
         proxy_layout.addWidget(self.custom_mirror_label)
-        
-        # 测试代理按钮
-        test_proxy_btn = QPushButton("测试代理连接")
-        test_proxy_btn.clicked.connect(self.test_proxy_connection)
-        proxy_layout.addWidget(test_proxy_btn)
         
         parent_layout.addWidget(proxy_group)
         
@@ -899,24 +949,69 @@ class DependencyManagerWidget(QWidget):
         """在线程中测试代理连接"""
         try:
             import requests
+            from urllib3.exceptions import InsecureRequestWarning
+            import warnings
+            
+            # 临时禁用SSL警告
+            warnings.filterwarnings('ignore', category=InsecureRequestWarning)
+            
+            # 获取信任主机设置
+            trusted_hosts = []
+            if self.enable_trusted_host_checkbox.isChecked():
+                trusted_hosts_text = self.trusted_hosts_input.text().strip()
+                if trusted_hosts_text:
+                    trusted_hosts = [host.strip() for host in trusted_hosts_text.replace(',', ' ').split() if host.strip()]
+            
+            # 创建自定义session，支持SSL验证跳过
+            session = requests.Session()
+            
+            # 如果启用了信任主机，则跳过SSL验证
+            if trusted_hosts:
+                session.verify = False
+                self.add_log("已启用SSL证书验证跳过模式")
             
             if self.proxy_type_combo.currentIndex() == 0:  # 索引代理
                 # 测试访问索引页面
-                response = requests.get(proxy_url, timeout=10)
-                if response.status_code == 200:
-                    self.add_log(f"✓ 代理连接成功: {proxy_url}")
-                else:
-                    self.add_log(f"✗ 代理连接失败，状态码: {response.status_code}")
+                try:
+                    response = session.get(proxy_url, timeout=10)
+                    if response.status_code == 200:
+                        self.add_log(f"✓ 代理连接成功: {proxy_url}")
+                        if trusted_hosts:
+                            self.add_log(f"  信任主机: {', '.join(trusted_hosts)}")
+                    else:
+                        self.add_log(f"✗ 代理连接失败，状态码: {response.status_code}")
+                except requests.exceptions.SSLError as ssl_err:
+                    self.add_log(f"✗ SSL证书验证失败: {str(ssl_err)}")
+                    self.add_log("建议：请启用'信任主机'选项并设置正确的信任主机")
+                except requests.exceptions.ConnectionError as conn_err:
+                    self.add_log(f"✗ 连接失败: {str(conn_err)}")
+                    self.add_log("建议：请检查代理地址是否正确，网络连接是否正常")
+                except requests.exceptions.Timeout:
+                    self.add_log("✗ 连接超时")
+                    self.add_log("建议：请检查网络连接或增加超时时间")
             else:  # HTTP代理
                 proxies = {'http': proxy_url, 'https': proxy_url}
-                response = requests.get('https://pypi.org', proxies=proxies, timeout=10)
-                if response.status_code == 200:
-                    self.add_log(f"✓ HTTP代理连接成功: {proxy_url}")
-                else:
-                    self.add_log(f"✗ HTTP代理连接失败，状态码: {response.status_code}")
+                try:
+                    response = session.get('https://pypi.org', proxies=proxies, timeout=10)
+                    if response.status_code == 200:
+                        self.add_log(f"✓ HTTP代理连接成功: {proxy_url}")
+                        if trusted_hosts:
+                            self.add_log(f"  信任主机: {', '.join(trusted_hosts)}")
+                    else:
+                        self.add_log(f"✗ HTTP代理连接失败，状态码: {response.status_code}")
+                except requests.exceptions.SSLError as ssl_err:
+                    self.add_log(f"✗ SSL证书验证失败: {str(ssl_err)}")
+                    self.add_log("建议：请启用'信任主机'选项并设置正确的信任主机")
+                except requests.exceptions.ConnectionError as conn_err:
+                    self.add_log(f"✗ 连接失败: {str(conn_err)}")
+                    self.add_log("建议：请检查代理地址是否正确，网络连接是否正常")
+                except requests.exceptions.Timeout:
+                    self.add_log("✗ 连接超时")
+                    self.add_log("建议：请检查网络连接或增加超时时间")
                     
         except Exception as e:
             self.add_log(f"✗ 代理连接测试失败: {str(e)}")
+            self.add_log("详细错误信息可能有助于诊断问题")
             
     def check_dependencies(self):
         """检查依赖"""
@@ -1369,3 +1464,208 @@ class DependencyManagerWidget(QWidget):
             self.add_log(f"已应用自定义镜像: {custom_mirror_config['name']}")
         else:
             QMessageBox.information(self, "提示", "尚未配置自定义镜像，请先点击'自定义'按钮进行配置") 
+    
+    def diagnose_ssl_issues(self):
+        """诊断SSL证书问题"""
+        self.add_log("=== SSL证书诊断开始 ===")
+        
+        # 获取当前设置
+        proxy_url = self.proxy_url_input.text().strip()
+        trusted_hosts_enabled = self.enable_trusted_host_checkbox.isChecked()
+        trusted_hosts_text = self.trusted_hosts_input.text().strip()
+        
+        self.add_log(f"当前代理地址: {proxy_url if proxy_url else '未设置'}")
+        self.add_log(f"信任主机启用: {'是' if trusted_hosts_enabled else '否'}")
+        self.add_log(f"信任主机列表: {trusted_hosts_text if trusted_hosts_text else '未设置'}")
+        
+        if not proxy_url:
+            self.add_log("✗ 未设置代理地址，无法进行SSL诊断")
+            return
+        
+        # 在新线程中执行诊断
+        threading.Thread(target=self._diagnose_ssl_in_thread, args=(proxy_url, trusted_hosts_enabled, trusted_hosts_text)).start()
+    
+    def _diagnose_ssl_in_thread(self, proxy_url: str, trusted_hosts_enabled: bool, trusted_hosts_text: str):
+        """在线程中执行SSL诊断"""
+        try:
+            import requests
+            import ssl
+            import socket
+            from urllib.parse import urlparse
+            from urllib3.exceptions import InsecureRequestWarning
+            import warnings
+            
+            # 临时禁用SSL警告
+            warnings.filterwarnings('ignore', category=InsecureRequestWarning)
+            
+            # 解析URL
+            parsed_url = urlparse(proxy_url)
+            hostname = parsed_url.hostname
+            port = parsed_url.port or (443 if parsed_url.scheme == 'https' else 80)
+            
+            self.add_log(f"目标主机: {hostname}:{port}")
+            self.add_log(f"协议: {parsed_url.scheme}")
+            
+            # 1. 测试SSL证书
+            if parsed_url.scheme == 'https':
+                self.add_log("\n--- SSL证书检查 ---")
+                try:
+                    # 创建SSL上下文
+                    context = ssl.create_default_context()
+                    
+                    # 连接到服务器并获取证书
+                    with socket.create_connection((hostname, port), timeout=10) as sock:
+                        with context.wrap_socket(sock, server_hostname=hostname) as ssock:
+                            cert = ssock.getpeercert()
+                            
+                            self.add_log("✓ SSL连接成功")
+                            self.add_log(f"证书主题: {cert.get('subject', 'N/A')}")
+                            self.add_log(f"证书颁发者: {cert.get('issuer', 'N/A')}")
+                            
+                            # 检查证书有效期
+                            if 'notAfter' in cert:
+                                self.add_log(f"证书有效期至: {cert['notAfter']}")
+                            
+                except ssl.SSLError as e:
+                    self.add_log(f"✗ SSL证书错误: {str(e)}")
+                    self.add_log("建议: 启用信任主机选项")
+                except socket.timeout:
+                    self.add_log("✗ 连接超时")
+                except Exception as e:
+                    self.add_log(f"✗ SSL连接失败: {str(e)}")
+            
+            # 2. 测试HTTP连接
+            self.add_log("\n--- HTTP连接测试 ---")
+            session = requests.Session()
+            
+            if trusted_hosts_enabled and trusted_hosts_text:
+                session.verify = False
+                self.add_log("已启用SSL验证跳过模式")
+            
+            try:
+                response = session.get(proxy_url, timeout=10)
+                self.add_log(f"✓ HTTP连接成功，状态码: {response.status_code}")
+                
+                if response.status_code == 200:
+                    self.add_log("✓ 代理服务器响应正常")
+                else:
+                    self.add_log(f"⚠ 代理服务器返回非200状态码: {response.status_code}")
+                    
+            except requests.exceptions.SSLError as e:
+                self.add_log(f"✗ SSL证书验证失败: {str(e)}")
+                self.add_log("解决方案:")
+                self.add_log("1. 启用'信任主机'选项")
+                self.add_log("2. 在信任主机中输入: " + hostname)
+                self.add_log("3. 如果是公司内网，考虑使用HTTP而非HTTPS")
+                
+            except requests.exceptions.ConnectionError as e:
+                self.add_log(f"✗ 连接错误: {str(e)}")
+                self.add_log("可能原因:")
+                self.add_log("1. 代理地址不正确")
+                self.add_log("2. 网络连接问题")
+                self.add_log("3. 防火墙阻止")
+                
+            except requests.exceptions.Timeout:
+                self.add_log("✗ 连接超时")
+                self.add_log("建议: 检查网络连接或增加超时时间")
+            
+            # 3. 测试pip命令
+            self.add_log("\n--- Pip命令测试 ---")
+            try:
+                import subprocess
+                
+                # 构建测试命令
+                test_cmd = [sys.executable, "-m", "pip", "search", "requests", "--verbose"]
+                
+                if self.proxy_type_combo.currentIndex() == 0:  # 索引代理
+                    test_cmd.extend(["-i", proxy_url])
+                else:  # HTTP代理
+                    test_cmd.extend(["--proxy", proxy_url])
+                
+                # 添加信任主机
+                if trusted_hosts_enabled and trusted_hosts_text:
+                    trusted_hosts = [host.strip() for host in trusted_hosts_text.replace(',', ' ').split() if host.strip()]
+                    for host in trusted_hosts:
+                        test_cmd.extend(["--trusted-host", host])
+                
+                self.add_log(f"测试命令: {' '.join(test_cmd)}")
+                
+                result = subprocess.run(test_cmd, capture_output=True, text=True, timeout=30)
+                
+                if result.returncode == 0:
+                    self.add_log("✓ Pip命令执行成功")
+                else:
+                    self.add_log(f"✗ Pip命令执行失败，返回码: {result.returncode}")
+                    if result.stderr:
+                        error_lines = result.stderr.strip().split('\n')[:5]  # 只显示前5行
+                        for line in error_lines:
+                            if line.strip():
+                                self.add_log(f"  错误: {line.strip()}")
+                                
+            except subprocess.TimeoutExpired:
+                self.add_log("✗ Pip命令执行超时")
+            except Exception as e:
+                self.add_log(f"✗ Pip命令测试失败: {str(e)}")
+            
+            # 4. 提供建议
+            self.add_log("\n--- 诊断建议 ---")
+            if not trusted_hosts_enabled:
+                self.add_log("1. 建议启用'信任主机'选项")
+                self.add_log(f"2. 在信任主机中输入: {hostname}")
+            
+            if parsed_url.scheme == 'https' and not trusted_hosts_enabled:
+                self.add_log("3. 如果SSL证书问题持续存在，考虑使用HTTP协议")
+                http_url = proxy_url.replace('https://', 'http://')
+                self.add_log(f"   HTTP版本: {http_url}")
+            
+            self.add_log("4. 如果问题仍然存在，请联系网络管理员")
+            
+            # 5. 快速修复建议
+            self.add_log("\n--- 快速修复建议 ---")
+            if parsed_url.scheme == 'https':
+                self.add_log("检测到HTTPS协议，建议执行以下操作:")
+                self.add_log("1. 启用'信任主机'复选框")
+                self.add_log(f"2. 在信任主机输入框中输入: {hostname}")
+                self.add_log("3. 点击'应用修复'按钮自动配置")
+                
+                # 提供自动修复选项
+                self.add_log("\n点击'应用修复'按钮可自动应用上述设置")
+            
+            self.add_log("=== SSL证书诊断完成 ===")
+            
+        except Exception as e:
+            self.add_log(f"✗ SSL诊断过程中出错: {str(e)}")
+            self.add_log("=== SSL证书诊断失败 ===") 
+    
+    def apply_ssl_fix(self):
+        """应用SSL修复设置"""
+        proxy_url = self.proxy_url_input.text().strip()
+        if not proxy_url:
+            QMessageBox.warning(self, "警告", "请先设置代理地址")
+            return
+        
+        try:
+            from urllib.parse import urlparse
+            parsed_url = urlparse(proxy_url)
+            hostname = parsed_url.hostname
+            
+            if not hostname:
+                QMessageBox.warning(self, "警告", "无法解析代理地址中的主机名")
+                return
+            
+            # 自动配置信任主机
+            self.enable_trusted_host_checkbox.setChecked(True)
+            self.trusted_hosts_input.setText(hostname)
+            
+            # 保存设置
+            self.save_proxy_settings()
+            
+            self.add_log("=== SSL修复已应用 ===")
+            self.add_log(f"已启用信任主机: {hostname}")
+            self.add_log("建议: 现在可以尝试测试连接或安装依赖")
+            
+            QMessageBox.information(self, "成功", f"已自动配置信任主机: {hostname}\n\n现在可以尝试测试连接或安装依赖。")
+            
+        except Exception as e:
+            self.add_log(f"✗ 应用SSL修复失败: {str(e)}")
+            QMessageBox.critical(self, "错误", f"应用SSL修复失败: {str(e)}") 
