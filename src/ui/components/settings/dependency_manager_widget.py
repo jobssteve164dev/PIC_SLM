@@ -1575,7 +1575,7 @@ class DependencyManagerWidget(QWidget):
                 import subprocess
                 
                 # 构建测试命令
-                test_cmd = [sys.executable, "-m", "pip", "search", "requests", "--verbose"]
+                test_cmd = [sys.executable, "-m", "pip", "index", "requests", "--verbose"]
                 
                 if self.proxy_type_combo.currentIndex() == 0:  # 索引代理
                     test_cmd.extend(["-i", proxy_url])

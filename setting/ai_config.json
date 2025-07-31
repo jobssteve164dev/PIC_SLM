@@ -30,7 +30,7 @@
     "max_tokens": 1000
   },
   "general": {
-    "default_adapter": "custom",
+    "default_adapter": "deepseek",
     "request_timeout": 180,
     "max_retries": 3,
     "enable_cache": true,
