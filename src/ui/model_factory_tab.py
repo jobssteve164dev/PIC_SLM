@@ -1559,23 +1559,62 @@ class ModelFactoryTab(BaseTab):
         # 设置水平分割器的初始比例 (聊天界面60%, 分析面板40%)
         upper_splitter.setSizes([600, 400])
         
-        # 下半部分：实时数据流监控
+        # 下半部分：Batch分析触发控件和实时数据流监控
         lower_widget = QWidget()
         lower_layout = QVBoxLayout(lower_widget)
         lower_layout.setContentsMargins(5, 5, 5, 5)
+        
+        # 创建水平分割器用于下半部分
+        lower_splitter = QSplitter(Qt.Horizontal)
+        lower_splitter.setChildrenCollapsible(False)
+        
+        # 左侧：Batch分析触发控件
+        left_lower_widget = QWidget()
+        left_lower_layout = QVBoxLayout(left_lower_widget)
+        left_lower_layout.setContentsMargins(5, 5, 5, 5)
+        
+        # 导入并创建Batch分析触发控件
+        try:
+            from src.ui.components.model_analysis.batch_analysis_trigger_widget import BatchAnalysisTriggerWidget
+            self.batch_analysis_trigger = BatchAnalysisTriggerWidget()
+            self.batch_analysis_trigger.status_updated.connect(self.update_status)
+            self.batch_analysis_trigger.analysis_triggered.connect(self.handle_batch_analysis_triggered)
+            left_lower_layout.addWidget(self.batch_analysis_trigger)
+            
+            # 从AI设置加载配置
+            self.load_batch_analysis_config()
+        except ImportError as e:
+            # 如果导入失败，显示错误信息
+            error_label = QLabel(f"⚠️ Batch分析触发控件加载失败: {str(e)}")
+            error_label.setStyleSheet("color: #dc3545; padding: 20px; border: 1px solid #dc3545; border-radius: 5px;")
+            error_label.setAlignment(Qt.AlignCenter)
+            left_lower_layout.addWidget(error_label)
+        
+        lower_splitter.addWidget(left_lower_widget)
+        
+        # 右侧：实时数据流监控
+        right_lower_widget = QWidget()
+        right_lower_layout = QVBoxLayout(right_lower_widget)
+        right_lower_layout.setContentsMargins(5, 5, 5, 5)
         
         # 导入并创建实时数据流监控控件
         try:
             from src.ui.components.model_analysis.real_time_stream_monitor import RealTimeStreamMonitor
             self.stream_monitor = RealTimeStreamMonitor()
-            lower_layout.addWidget(self.stream_monitor)
+            right_lower_layout.addWidget(self.stream_monitor)
         except ImportError as e:
             # 如果导入失败，显示错误信息
             error_label = QLabel(f"⚠️ 实时数据流监控控件加载失败: {str(e)}")
             error_label.setStyleSheet("color: #dc3545; padding: 20px; border: 1px solid #dc3545; border-radius: 5px;")
             error_label.setAlignment(Qt.AlignCenter)
-            lower_layout.addWidget(error_label)
+            right_lower_layout.addWidget(error_label)
         
+        lower_splitter.addWidget(right_lower_widget)
+        
+        # 设置下半部分分割器的比例 (Batch分析触发控件40%, 实时监控60%)
+        lower_splitter.setSizes([400, 600])
+        
+        lower_layout.addWidget(lower_splitter)
         main_splitter.addWidget(lower_widget)
         
         # 设置分割器比例 (上半部分70%, 下半部分30%)
@@ -1590,6 +1629,74 @@ class ModelFactoryTab(BaseTab):
         """处理分析请求"""
         self.llm_analysis_requested.emit(request_data)
         self.update_status("正在处理分析请求...")
+    
+    def handle_batch_analysis_triggered(self, analysis_data):
+        """处理Batch分析触发事件"""
+        try:
+            # 更新状态
+            trigger_type = analysis_data.get('trigger_type', 'unknown')
+            batch_count = analysis_data.get('batch_count', 0)
+            analysis_count = analysis_data.get('analysis_count', 0)
+            
+            self.update_status(f"Batch分析触发: {trigger_type} (Batch {batch_count}, 第{analysis_count}次)")
+            
+            # 如果有聊天组件，自动发送分析请求
+            if hasattr(self, 'chat_widget') and self.chat_widget:
+                # 构建分析提示
+                metrics = analysis_data.get('metrics', {})
+                analysis_prompt = self._build_batch_analysis_prompt(analysis_data)
+                
+                # 发送到聊天组件进行AI分析
+                self.chat_widget.add_user_message(analysis_prompt)
+                self.chat_widget.analyze_training()
+                
+        except Exception as e:
+            self.update_status(f"处理Batch分析触发时出错: {str(e)}")
+    
+    def _build_batch_analysis_prompt(self, analysis_data):
+        """构建Batch分析提示"""
+        trigger_type = analysis_data.get('trigger_type', 'unknown')
+        batch_count = analysis_data.get('batch_count', 0)
+        epoch = analysis_data.get('epoch', 0)
+        phase = analysis_data.get('phase', '')
+        analysis_count = analysis_data.get('analysis_count', 0)
+        metrics = analysis_data.get('metrics', {})
+        
+        prompt = f"""
+## 🎯 Batch分析请求 (第{analysis_count}次)
+
+**触发信息:**
+- 触发类型: {trigger_type}
+- 当前Epoch: {epoch}
+- 当前Phase: {phase}
+- 当前Batch: {batch_count}
+
+**训练指标:**
+{self._format_metrics_for_prompt(metrics)}
+
+请基于以上信息，对当前训练状态进行专业分析，包括：
+1. 训练进展评估
+2. 潜在问题诊断
+3. 优化建议
+4. 下一步预测
+
+请提供详细、专业的分析报告。
+"""
+        return prompt
+    
+    def _format_metrics_for_prompt(self, metrics):
+        """格式化指标用于提示"""
+        if not metrics:
+            return "暂无详细指标数据"
+            
+        formatted = []
+        for key, value in metrics.items():
+            if isinstance(value, (int, float)):
+                formatted.append(f"- {key}: {value}")
+            else:
+                formatted.append(f"- {key}: {value}")
+                
+        return "\n".join(formatted) if formatted else "暂无详细指标数据"
     
     def update_training_context(self, context):
         """更新训练上下文"""
@@ -1718,6 +1825,10 @@ class ModelFactoryTab(BaseTab):
             'start_time': datetime.now().isoformat()
         }
         self.update_training_context(context)
+        
+        # 通知Batch分析触发控件训练已开始
+        if hasattr(self, 'batch_analysis_trigger'):
+            self.batch_analysis_trigger.on_training_started(training_info)
     
     def on_training_progress(self, metrics):
         """训练进度更新时更新上下文"""
@@ -1726,6 +1837,10 @@ class ModelFactoryTab(BaseTab):
             'last_update': datetime.now().isoformat()
         }
         self.update_training_context(context)
+        
+        # 更新Batch分析触发控件
+        if hasattr(self, 'batch_analysis_trigger'):
+            self.batch_analysis_trigger.update_training_progress(metrics)
     
     def on_training_completed(self, results):
         """训练完成时更新上下文"""
@@ -1735,6 +1850,22 @@ class ModelFactoryTab(BaseTab):
             'completion_time': datetime.now().isoformat()
         }
         self.update_training_context(context)
+        
+        # 通知Batch分析触发控件训练已完成
+        if hasattr(self, 'batch_analysis_trigger'):
+            self.batch_analysis_trigger.on_training_completed(results)
+    
+    def on_training_stopped(self):
+        """训练停止时更新上下文"""
+        context = {
+            'training_active': False,
+            'stop_time': datetime.now().isoformat()
+        }
+        self.update_training_context(context)
+        
+        # 通知Batch分析触发控件训练已停止
+        if hasattr(self, 'batch_analysis_trigger'):
+            self.batch_analysis_trigger.on_training_stopped()
     
     def reload_ai_config(self):
         """重新加载AI配置"""
@@ -1777,4 +1908,20 @@ class ModelFactoryTab(BaseTab):
                 self.chat_widget.switch_adapter(self.chat_widget.adapter_combo.currentText())
                 
             except Exception as e:
-                print(f"更新AI适配器配置时出错: {str(e)}") 
+                print(f"更新AI适配器配置时出错: {str(e)}")
+        
+        # 更新Batch分析触发控件配置
+        self.load_batch_analysis_config()
+    
+    def load_batch_analysis_config(self):
+        """从AI设置加载Batch分析配置"""
+        try:
+            # 从配置管理器获取AI配置
+            from src.utils.config_manager import config_manager
+            ai_config = config_manager.get_ai_config()
+            
+            if ai_config and hasattr(self, 'batch_analysis_trigger'):
+                self.batch_analysis_trigger.update_config_from_ai_settings(ai_config)
+                
+        except Exception as e:
+            print(f"加载Batch分析配置时出错: {str(e)}") 

@@ -877,6 +877,60 @@ class AISettingsWidget(QWidget):
         advanced_group.setLayout(advanced_layout)
         layout.addWidget(advanced_group)
         
+        # 数据流服务器设置组
+        stream_server_group = QGroupBox("数据流服务器设置")
+        stream_server_layout = QFormLayout()
+        
+        # 启用数据流服务器
+        self.enable_data_stream_server = QCheckBox("启用数据流服务器")
+        self.enable_data_stream_server.setChecked(True)
+        self.enable_data_stream_server.setToolTip("控制是否启动SSE、WebSocket和REST API三种数据流服务器，关闭可节省训练资源")
+        stream_server_layout.addRow("服务器状态:", self.enable_data_stream_server)
+        
+        # 添加说明文字
+        stream_server_info = QLabel("💡 提示：数据流服务器包括SSE(端口8888)、WebSocket(端口8889)和REST API(端口8890)三种服务，用于实时监控训练进度。关闭后可节省系统资源，但将无法使用实时监控功能。")
+        stream_server_info.setStyleSheet("color: #6c757d; font-size: 12px;")
+        stream_server_info.setWordWrap(True)
+        stream_server_layout.addRow("", stream_server_info)
+        
+        stream_server_group.setLayout(stream_server_layout)
+        layout.addWidget(stream_server_group)
+        
+        # Batch分析触发设置组
+        batch_analysis_group = QGroupBox("Batch分析触发设置")
+        batch_analysis_layout = QFormLayout()
+        
+        # 启用自动分析
+        self.enable_batch_analysis = QCheckBox("启用自动Batch分析")
+        self.enable_batch_analysis.setChecked(True)
+        self.enable_batch_analysis.setToolTip("启用后，系统将根据设定的batch间隔自动触发AI分析")
+        batch_analysis_layout.addRow("自动分析:", self.enable_batch_analysis)
+        
+        # 触发间隔
+        self.batch_trigger_interval = QSpinBox()
+        self.batch_trigger_interval.setRange(1, 1000)
+        self.batch_trigger_interval.setValue(10)
+        self.batch_trigger_interval.setSuffix(" 个batch")
+        self.batch_trigger_interval.setToolTip("每隔多少个batch触发一次AI分析")
+        batch_analysis_layout.addRow("触发间隔:", self.batch_trigger_interval)
+        
+        # 分析冷却时间
+        self.analysis_cooldown = QSpinBox()
+        self.analysis_cooldown.setRange(5, 300)
+        self.analysis_cooldown.setValue(30)
+        self.analysis_cooldown.setSuffix(" 秒")
+        self.analysis_cooldown.setToolTip("两次分析之间的最小间隔时间，防止过于频繁的分析")
+        batch_analysis_layout.addRow("分析冷却:", self.analysis_cooldown)
+        
+        # 添加说明文字
+        batch_analysis_info = QLabel("💡 提示：Batch分析触发功能会在训练过程中自动调用AI对训练状态进行分析。触发间隔建议设置为5-20个batch，冷却时间建议设置为20-60秒。")
+        batch_analysis_info.setStyleSheet("color: #6c757d; font-size: 12px;")
+        batch_analysis_info.setWordWrap(True)
+        batch_analysis_layout.addRow("", batch_analysis_info)
+        
+        batch_analysis_group.setLayout(batch_analysis_layout)
+        layout.addWidget(batch_analysis_group)
+        
         # layout.addStretch() # 移除此行以消除空白
         return widget
     
@@ -1311,6 +1365,13 @@ class AISettingsWidget(QWidget):
         self.max_retries.setValue(general_config.get('max_retries', 3))
         self.enable_cache.setChecked(general_config.get('enable_cache', True))
         self.enable_streaming.setChecked(general_config.get('enable_streaming', False))
+        self.enable_data_stream_server.setChecked(general_config.get('enable_data_stream_server', True))
+        
+        # Batch分析触发设置
+        batch_analysis_config = general_config.get('batch_analysis', {})
+        self.enable_batch_analysis.setChecked(batch_analysis_config.get('enabled', True))
+        self.batch_trigger_interval.setValue(batch_analysis_config.get('trigger_interval', 10))
+        self.analysis_cooldown.setValue(batch_analysis_config.get('cooldown', 30))
     
     def _save_config_to_file(self):
         """保存配置到文件（内部方法，由设置Tab调用）"""
@@ -1365,6 +1426,12 @@ class AISettingsWidget(QWidget):
         self.max_retries.setValue(3)
         self.enable_cache.setChecked(True)
         self.enable_streaming.setChecked(False)
+        self.enable_data_stream_server.setChecked(True)
+        
+        # 重置Batch分析触发设置
+        self.enable_batch_analysis.setChecked(True)
+        self.batch_trigger_interval.setValue(10)
+        self.analysis_cooldown.setValue(30)
         
         # 重置测试结果
         self.openai_test_result.setText("尚未测试")
@@ -1418,6 +1485,12 @@ class AISettingsWidget(QWidget):
         self.max_retries.valueChanged.connect(self.update_settings_preview)
         self.enable_cache.toggled.connect(self.update_settings_preview)
         self.enable_streaming.toggled.connect(self.update_settings_preview)
+        self.enable_data_stream_server.toggled.connect(self.update_settings_preview)
+        
+        # Batch分析触发设置信号
+        self.enable_batch_analysis.toggled.connect(self.update_settings_preview)
+        self.batch_trigger_interval.valueChanged.connect(self.update_settings_preview)
+        self.analysis_cooldown.valueChanged.connect(self.update_settings_preview)
     
     def update_settings_preview(self):
         """更新设置预览（当任何设置改变时调用）"""
@@ -1470,7 +1543,13 @@ class AISettingsWidget(QWidget):
                 'request_timeout': self.request_timeout.value(),
                 'max_retries': self.max_retries.value(),
                 'enable_cache': self.enable_cache.isChecked(),
-                'enable_streaming': self.enable_streaming.isChecked()
+                'enable_streaming': self.enable_streaming.isChecked(),
+                'enable_data_stream_server': self.enable_data_stream_server.isChecked(),
+                'batch_analysis': {
+                    'enabled': self.enable_batch_analysis.isChecked(),
+                    'trigger_interval': self.batch_trigger_interval.value(),
+                    'cooldown': self.analysis_cooldown.value()
+                }
             }
         }
         

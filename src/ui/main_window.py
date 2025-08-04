@@ -257,6 +257,10 @@ class MainWindow(QMainWindow):
         
         self.model_analysis_tab.status_updated.connect(self.update_status)  # 连接模型分析标签页的信号
         self.model_analysis_tab.progress_updated.connect(self.update_progress)
+        
+        # 连接模型工厂标签页的信号
+        self.model_factory_tab.status_updated.connect(self.update_status)
+        self.model_factory_tab.progress_updated.connect(self.update_progress)
 
     def update_status(self, message):
         """更新状态栏消息"""

@@ -1,39 +1,40 @@
 {
   "openai": {
-    "api_key": "sk-test12345",
+    "api_key": "",
     "base_url": "",
-    "model": "gpt-3.5-turbo",
+    "model": "",
     "temperature": 0.7,
-    "max_tokens": 1003
+    "max_tokens": 1000
   },
   "deepseek": {
-    "api_key": "sk-63363d60338d444f9ad3709736609cd2",
-    "base_url": "https://api.deepseek.com/v1",
+    "api_key": "",
+    "base_url": "",
     "model": "deepseek-chat",
     "temperature": 0.7,
-    "max_tokens": 3000
+    "max_tokens": 1000
   },
   "ollama": {
     "base_url": "http://localhost:11434",
-    "model": "deepseek-r1:8b",
+    "model": "llama2",
     "temperature": 0.7,
     "num_predict": 1000,
     "timeout": 120
   },
   "custom_api": {
-    "name": "openrouter",
-    "base_url": "https://openrouter.ai/api/v1",
-    "api_key": "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",
+    "name": "",
+    "base_url": "",
+    "api_key": "",
     "provider_type": "OpenAI兼容",
-    "model": "deepseek/deepseek-r1-0528:free",
+    "model": "",
     "temperature": 0.7,
     "max_tokens": 1000
   },
   "general": {
     "default_adapter": "deepseek",
-    "request_timeout": 180,
+    "request_timeout": 60,
     "max_retries": 3,
     "enable_cache": true,
-    "enable_streaming": true
+    "enable_streaming": true,
+    "enable_data_stream_server": false
   }
 }

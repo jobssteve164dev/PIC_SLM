@@ -326,6 +326,24 @@ def main():
     if hasattr(window, 'training_tab') and hasattr(window.training_tab, 'connect_model_trainer_signals'):
         window.training_tab.connect_model_trainer_signals(worker.model_trainer)
     
+    # 连接模型工厂标签页的训练信号
+    if hasattr(window, 'model_factory_tab'):
+        # 连接训练开始信号
+        if hasattr(worker.model_trainer, 'training_started'):
+            worker.model_trainer.training_started.connect(window.model_factory_tab.on_training_started)
+        
+        # 连接训练进度信号
+        if hasattr(worker.model_trainer, 'epoch_finished'):
+            worker.model_trainer.epoch_finished.connect(window.model_factory_tab.on_training_progress)
+        
+        # 连接训练完成信号
+        if hasattr(worker.model_trainer, 'training_finished'):
+            worker.model_trainer.training_finished.connect(window.model_factory_tab.on_training_completed)
+        
+        # 连接训练停止信号
+        if hasattr(worker.model_trainer, 'training_stopped'):
+            worker.model_trainer.training_stopped.connect(window.model_factory_tab.on_training_stopped)
+    
     # 单张预测信号
     worker.predictor.prediction_error.connect(lambda msg: QMessageBox.critical(window, '错误', msg))
     window.prediction_started.connect(lambda: worker.predictor.predict(window.prediction_tab.image_file))

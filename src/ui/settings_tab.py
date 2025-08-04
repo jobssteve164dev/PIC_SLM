@@ -712,6 +712,9 @@ class SettingsTab(BaseTab):
             # 通知模型工厂Tab更新配置
             if hasattr(self.main_window, 'model_factory_tab'):
                 try:
+                    # 更新Batch分析配置
+                    self.main_window.model_factory_tab.load_batch_analysis_config()
+                    
                     # 获取默认适配器类型
                     default_adapter = ai_config.get('general', {}).get('default_adapter', 'mock')
                     

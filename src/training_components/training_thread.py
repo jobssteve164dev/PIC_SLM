@@ -449,6 +449,8 @@ class TrainingThread(QThread):
                 release_stream_server()
                 self.stream_server = None
                 print("数据流服务器引用已释放")
+            else:
+                print("数据流服务器未启动，无需释放")
         except Exception as e:
             print(f"释放数据流服务器引用时出错: {str(e)}")
     
@@ -1103,6 +1105,15 @@ class TrainingThread(QThread):
     def _initialize_stream_server(self):
         """初始化数据流服务器"""
         try:
+            # 首先检查AI配置中的数据流服务器开关
+            ai_config = self._load_ai_config()
+            enable_data_stream_server = ai_config.get('general', {}).get('enable_data_stream_server', True)
+            
+            if not enable_data_stream_server:
+                self.status_updated.emit("📊 数据流服务器已禁用（根据AI设置）")
+                self.stream_server = None
+                return
+            
             # 导入全局数据流服务器管理器
             from ..api.stream_server_manager import get_stream_server
             
@@ -1140,4 +1151,33 @@ class TrainingThread(QThread):
             
         except Exception as e:
             print(f"初始化数据流服务器失败: {str(e)}")
-            self.stream_server = None 
+            self.stream_server = None
+    
+    def _load_ai_config(self):
+        """加载AI配置文件"""
+        import json
+        import os
+        
+        config_file = "setting/ai_config.json"
+        default_config = {
+            'general': {
+                'enable_data_stream_server': True
+            }
+        }
+        
+        try:
+            if os.path.exists(config_file):
+                with open(config_file, 'r', encoding='utf-8') as f:
+                    config = json.load(f)
+                    # 确保general部分存在
+                    if 'general' not in config:
+                        config['general'] = {}
+                    # 确保enable_data_stream_server存在
+                    if 'enable_data_stream_server' not in config['general']:
+                        config['general']['enable_data_stream_server'] = True
+                    return config
+            else:
+                return default_config
+        except Exception as e:
+            print(f"加载AI配置失败: {str(e)}")
+            return default_config 
