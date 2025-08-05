@@ -456,6 +456,10 @@ class AISettingsWidget(QWidget):
         self.general_tab = self.create_general_tab()
         self.tabs.addTab(self.general_tab, "通用设置")
         
+        # 数据流监控标签页
+        self.stream_monitor_tab = self.create_stream_monitor_tab()
+        self.tabs.addTab(self.stream_monitor_tab, "📡 数据流监控")
+        
         layout.addWidget(self.tabs)
         
         # 添加重置按钮，并使其在左侧
@@ -932,6 +936,41 @@ class AISettingsWidget(QWidget):
         layout.addWidget(batch_analysis_group)
         
         # layout.addStretch() # 移除此行以消除空白
+        return widget
+    
+    def create_stream_monitor_tab(self):
+        """创建数据流监控标签页"""
+        widget = QWidget()
+        layout = QVBoxLayout(widget)
+        layout.setContentsMargins(10, 10, 10, 10)
+        layout.setSpacing(10)
+        
+        # 标题和说明
+        title_label = QLabel("📡 实时数据流监控")
+        title_label.setFont(QFont('微软雅黑', 14, QFont.Bold))
+        title_label.setAlignment(Qt.AlignCenter)
+        layout.addWidget(title_label)
+        
+        # 说明文字
+        info_label = QLabel("此组件用于监控AI训练过程中的实时数据流，包括SSE、WebSocket和REST API数据流状态")
+        info_label.setStyleSheet("color: #856404; background-color: #fff3cd; padding: 8px; border: 1px solid #ffeaa7; border-radius: 4px;")
+        info_label.setAlignment(Qt.AlignCenter)
+        info_label.setWordWrap(True)
+        layout.addWidget(info_label)
+        
+        # 导入并创建实时数据流监控控件
+        try:
+            from src.ui.components.model_analysis.real_time_stream_monitor import RealTimeStreamMonitor
+            self.stream_monitor = RealTimeStreamMonitor()
+            layout.addWidget(self.stream_monitor)
+        except ImportError as e:
+            # 如果导入失败，显示错误信息
+            error_label = QLabel(f"⚠️ 实时数据流监控控件加载失败: {str(e)}")
+            error_label.setStyleSheet("color: #dc3545; padding: 20px; border: 1px solid #dc3545; border-radius: 5px;")
+            error_label.setAlignment(Qt.AlignCenter)
+            error_label.setWordWrap(True)
+            layout.addWidget(error_label)
+        
         return widget
     
     def refresh_model_list(self):
