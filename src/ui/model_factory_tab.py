@@ -1596,6 +1596,25 @@ class ModelFactoryTab(BaseTab):
         
         # 初始化系统状态
         self.update_system_status()
+        
+        # 初始化Batch分析触发组件（不显示UI，只保留功能逻辑）
+        self.init_batch_analysis_trigger()
+    
+    def init_batch_analysis_trigger(self):
+        """初始化Batch分析触发组件（无UI版本）"""
+        try:
+            from src.ui.components.model_analysis.batch_analysis_trigger_widget import BatchAnalysisTriggerWidget
+            self.batch_analysis_trigger = BatchAnalysisTriggerWidget()
+            self.batch_analysis_trigger.analysis_triggered.connect(self.handle_batch_analysis_triggered)
+            self.batch_analysis_trigger.status_updated.connect(self.update_status)
+            
+            # 从AI设置加载配置
+            self.load_batch_analysis_config()
+            
+            print("✅ Batch分析触发组件初始化成功（无UI模式）")
+        except ImportError as e:
+            print(f"❌ Batch分析触发组件初始化失败: {str(e)}")
+            self.batch_analysis_trigger = None
     
     def handle_analysis_request(self, request_data):
         """处理分析请求"""
@@ -1798,8 +1817,10 @@ class ModelFactoryTab(BaseTab):
         }
         self.update_training_context(context)
         
-        # Batch分析功能现在由AI设置统一管理，这里只记录训练开始状态
-        self.update_status("训练已开始，Batch分析功能由AI设置管理")
+        # 通知Batch分析触发组件训练已开始
+        if hasattr(self, 'batch_analysis_trigger') and self.batch_analysis_trigger:
+            self.batch_analysis_trigger.on_training_started(training_info)
+        self.update_status("训练已开始，Batch分析功能已激活")
     
     def on_training_progress(self, metrics):
         """训练进度更新时更新上下文"""
@@ -1809,7 +1830,9 @@ class ModelFactoryTab(BaseTab):
         }
         self.update_training_context(context)
         
-        # Batch分析功能现在由AI设置统一管理，这里只更新训练上下文
+        # 更新Batch分析触发组件
+        if hasattr(self, 'batch_analysis_trigger') and self.batch_analysis_trigger:
+            self.batch_analysis_trigger.update_training_progress(metrics)
         self.update_status("训练进度更新")
     
     def on_training_completed(self, results):
@@ -1821,8 +1844,10 @@ class ModelFactoryTab(BaseTab):
         }
         self.update_training_context(context)
         
-        # Batch分析功能现在由AI设置统一管理，这里只记录训练完成状态
-        self.update_status("训练已完成，Batch分析功能由AI设置管理")
+        # 通知Batch分析触发组件训练已完成
+        if hasattr(self, 'batch_analysis_trigger') and self.batch_analysis_trigger:
+            self.batch_analysis_trigger.on_training_completed(results)
+        self.update_status("训练已完成，Batch分析功能已停止")
     
     def on_training_stopped(self):
         """训练停止时更新上下文"""
@@ -1832,8 +1857,10 @@ class ModelFactoryTab(BaseTab):
         }
         self.update_training_context(context)
         
-        # Batch分析功能现在由AI设置统一管理，这里只记录训练停止状态
-        self.update_status("训练已停止，Batch分析功能由AI设置管理")
+        # 通知Batch分析触发组件训练已停止
+        if hasattr(self, 'batch_analysis_trigger') and self.batch_analysis_trigger:
+            self.batch_analysis_trigger.on_training_stopped()
+        self.update_status("训练已停止，Batch分析功能已停止")
     
     def reload_ai_config(self):
         """重新加载AI配置"""
@@ -1882,11 +1909,35 @@ class ModelFactoryTab(BaseTab):
         self.update_status("AI配置已更新，Batch分析功能由AI设置管理")
     
     def load_batch_analysis_config(self):
-        """从AI设置加载Batch分析配置 - 现在由AI设置统一管理"""
-        # Batch分析配置现在由AI设置统一管理，这里只记录状态
-        self.update_status("Batch分析配置由AI设置统一管理")
+        """从AI设置加载Batch分析配置"""
+        try:
+            # 直接加载AI配置文件
+            import json
+            import os
+            
+            config_file = "setting/ai_config.json"
+            if os.path.exists(config_file):
+                with open(config_file, 'r', encoding='utf-8') as f:
+                    ai_config = json.load(f)
+                    
+                if ai_config and hasattr(self, 'batch_analysis_trigger') and self.batch_analysis_trigger:
+                    # 更新Batch分析触发组件的配置
+                    self.batch_analysis_trigger.update_config_from_ai_settings(ai_config)
+                    print("✅ Batch分析配置已从AI设置加载")
+                else:
+                    print("❌ Batch分析配置加载失败：组件未初始化或配置不可用")
+            else:
+                print("❌ AI配置文件不存在")
+                
+        except Exception as e:
+            print(f"加载Batch分析配置时出错: {str(e)}")
     
     def update_status(self, status_message):
         """更新状态显示"""
-        self.status_label.setText(status_message)
-        self.status_label.setStyleSheet("color: #28a745; font-weight: bold;")
+        if hasattr(self, 'system_status_display'):
+            self.system_status_display.append(f"[{time.strftime('%H:%M:%S')}] {status_message}")
+            # 自动滚动到底部
+            cursor = self.system_status_display.textCursor()
+            cursor.movePosition(cursor.End)
+            self.system_status_display.setTextCursor(cursor)
+        print(f"状态更新: {status_message}")
