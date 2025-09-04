@@ -76,12 +76,27 @@ class ConfigManager:
                           default_param_save_dir: str = "",
                           default_classes: List[str] = None,
                           class_weights: Dict[str, float] = None,
-                          weight_strategy: WeightStrategy = WeightStrategy.BALANCED) -> Dict[str, Any]:
+                          weight_strategy: WeightStrategy = WeightStrategy.BALANCED,
+                          intelligent_training: Dict[str, Any] = None) -> Dict[str, Any]:
         """创建配置字典"""
         if default_classes is None:
             default_classes = []
         if class_weights is None:
             class_weights = {}
+        if intelligent_training is None:
+            intelligent_training = {
+                'overfitting_threshold': 0.80,
+                'underfitting_threshold': 0.70,
+                'stagnation_epochs': 5,
+                'divergence_threshold': 2.00,
+                'min_training_epochs': 3,
+                'tuning_strategy': 'conservative',
+                'enable_auto_intervention': True,
+                'intervention_cooldown': 2,
+                'max_interventions_per_session': 10,
+                'llm_analysis_enabled': True,
+                'confidence_threshold': 0.7
+            }
             
         return {
             'default_source_folder': default_source_folder,
@@ -96,7 +111,8 @@ class ConfigManager:
             'default_classes': default_classes,
             'class_weights': class_weights,
             'weight_strategy': weight_strategy.value,
-            'use_class_weights': weight_strategy != WeightStrategy.NONE
+            'use_class_weights': weight_strategy != WeightStrategy.NONE,
+            'intelligent_training': intelligent_training
         }
     
     def save_config_to_file(self, config: Dict[str, Any], file_path: str) -> bool:

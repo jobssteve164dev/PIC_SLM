@@ -8,11 +8,12 @@ from PyQt5.QtCore import Qt, pyqtSignal, QTimer
 from PyQt5.QtGui import QFont
 import os
 import time
+import json
 from .base_tab import BaseTab
 from .components.settings import (ConfigManager, FolderConfigWidget, 
                                 ClassWeightWidget, ModelConfigWidget, WeightStrategy,
                                 ConfigProfileSelector, ResourceLimitWidget, LogViewerWidget,
-                                DependencyManagerWidget, AISettingsWidget)
+                                DependencyManagerWidget, AISettingsWidget, IntelligentTrainingSettingsWidget)
 
 
 class SettingsTab(BaseTab):
@@ -149,6 +150,18 @@ class SettingsTab(BaseTab):
         # 添加AI设置选项卡
         self.settings_tabs.addTab(ai_tab, "🤖 AI设置")
         
+        # 创建智能训练设置选项卡
+        intelligent_tab = QWidget()
+        intelligent_layout = QVBoxLayout(intelligent_tab)
+        intelligent_layout.setContentsMargins(10, 10, 10, 10)
+        
+        # 添加智能训练设置组件
+        self.intelligent_training_settings_widget = IntelligentTrainingSettingsWidget()
+        intelligent_layout.addWidget(self.intelligent_training_settings_widget)
+        
+        # 添加智能训练设置选项卡
+        self.settings_tabs.addTab(intelligent_tab, "🧠 智能训练")
+        
         main_layout.addWidget(self.settings_tabs)
         
         # 添加按钮组
@@ -234,6 +247,9 @@ class SettingsTab(BaseTab):
         # 连接配置文件选择器信号
         self.config_profile_selector.profile_changed.connect(self.on_profile_changed)
         self.config_profile_selector.profile_loaded.connect(self.on_profile_loaded)
+        
+        # 连接智能训练设置信号
+        self.intelligent_training_settings_widget.config_changed.connect(self.on_intelligent_training_config_changed)
         
         # 连接资源限制组件信号
         self.resource_limit_widget.limits_changed.connect(self.on_resource_limits_changed)
@@ -355,6 +371,13 @@ class SettingsTab(BaseTab):
         if dependency_config:
             self.dependency_manager_widget.apply_config({'proxy_settings': dependency_config})
         
+        # 应用智能训练配置
+        print(f"SettingsTab._apply_config_to_ui: 应用智能训练配置...")
+        intelligent_training_config = self.config.get('intelligent_training', {})
+        if intelligent_training_config:
+            self.intelligent_training_settings_widget.set_config(intelligent_training_config)
+            print(f"  智能训练配置已应用: {intelligent_training_config}")
+        
         print("SettingsTab._apply_config_to_ui: 配置应用完成")
     
     def _collect_current_config(self) -> dict:
@@ -401,6 +424,10 @@ class SettingsTab(BaseTab):
         
         # 添加依赖管理配置
         config.update(dependency_config)
+        
+        # 添加智能训练配置
+        intelligent_training_config = self.intelligent_training_settings_widget.get_current_config()
+        config['intelligent_training'] = intelligent_training_config
         
         return config
     
@@ -698,6 +725,24 @@ class SettingsTab(BaseTab):
         """处理资源监控开关"""
         print(f"资源监控状态: {'启用' if enabled else '禁用'}")
         # 这里可以添加更多处理逻辑，比如通知主窗口
+    
+    def on_intelligent_training_config_changed(self, intelligent_config: dict):
+        """处理智能训练配置变化"""
+        try:
+            print(f"智能训练配置已变更: {intelligent_config}")
+            
+            # 通知主窗口的智能训练管理器更新配置
+            if hasattr(self.main_window, 'intelligent_manager'):
+                self.main_window.intelligent_manager.config.update(intelligent_config)
+                print("智能训练管理器配置已更新")
+            
+            # 自动保存到主配置文件
+            self.save_settings()
+            
+        except Exception as e:
+            print(f"处理智能训练配置变更时出错: {str(e)}")
+            import traceback
+            traceback.print_exc()
     
     def on_ai_settings_changed(self, ai_config: dict):
         """处理AI设置变化"""

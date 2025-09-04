@@ -284,8 +284,12 @@ class MainWindow(QMainWindow):
     # 智能训练：开始监控
     def on_start_intelligent_monitoring(self, it_config: Dict):
         try:
-            # 将配置合并到管理器
+            # 从主配置中加载智能训练配置
+            self._load_intelligent_training_config_from_main_config()
+            
+            # 将UI配置合并到管理器（UI配置优先级更高）
             self.intelligent_manager.config.update(it_config)
+            
             # 绑定模型训练器
             if hasattr(self, 'worker') and hasattr(self.worker, 'model_trainer'):
                 self.intelligent_manager.set_model_trainer(self.worker.model_trainer)
@@ -298,6 +302,18 @@ class MainWindow(QMainWindow):
             self.update_status('智能训练监控已启动')
         except Exception as e:
             self.update_status(f'启动智能训练失败: {e}')
+    
+    def _load_intelligent_training_config_from_main_config(self):
+        """从主配置中加载智能训练配置"""
+        try:
+            from src.config_loader import ConfigLoader
+            cfg = ConfigLoader().get_config()
+            intelligent_config = cfg.get('intelligent_training', {})
+            if intelligent_config:
+                self.intelligent_manager.config.update(intelligent_config)
+                print(f"从主配置加载智能训练配置: {intelligent_config}")
+        except Exception as e:
+            print(f"从主配置加载智能训练配置失败: {e}")
 
     def _build_training_config_from_ui(self) -> Dict:
         """从训练页与集中配置构建完整训练配置，保证两条启动路径一致。"""

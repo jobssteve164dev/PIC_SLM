@@ -44,7 +44,6 @@ class IntelligentTrainingWidget(QWidget):
         self.progress_bar = None
         self.intervention_table = None
         self.session_info_display = None
-        self.config_widgets = {}
         
         # 状态管理
         self.is_monitoring = False
@@ -151,10 +150,6 @@ class IntelligentTrainingWidget(QWidget):
         intervention_tab = self.create_intervention_tab()
         tab_widget.addTab(intervention_tab, "📝 干预历史")
         
-        # 配置设置标签页
-        config_tab = self.create_config_tab()
-        tab_widget.addTab(config_tab, "⚙️ 配置设置")
-        
         # 会话报告标签页
         report_tab = self.create_report_tab()
         tab_widget.addTab(report_tab, "📋 会话报告")
@@ -248,147 +243,6 @@ class IntelligentTrainingWidget(QWidget):
         
         return widget
     
-    def create_config_tab(self):
-        """创建配置设置标签页"""
-        widget = QWidget()
-        layout = QVBoxLayout(widget)
-        
-        scroll_area = QScrollArea()
-        scroll_widget = QWidget()
-        scroll_layout = QVBoxLayout(scroll_widget)
-        
-        # 基本设置组
-        basic_group = QGroupBox("🔧 基本设置")
-        basic_layout = QVBoxLayout()
-        
-        # 自动干预开关
-        self.config_widgets['auto_intervention_enabled'] = QCheckBox("启用自动干预")
-        self.config_widgets['auto_intervention_enabled'].setChecked(True)
-        basic_layout.addWidget(self.config_widgets['auto_intervention_enabled'])
-        
-        # 分析间隔
-        interval_layout = QHBoxLayout()
-        interval_layout.addWidget(QLabel("分析间隔:"))
-        self.config_widgets['analysis_interval'] = QSpinBox()
-        self.config_widgets['analysis_interval'].setRange(1, 100)
-        self.config_widgets['analysis_interval'].setValue(10)
-        self.config_widgets['analysis_interval'].setSuffix(" 轮")
-        interval_layout.addWidget(self.config_widgets['analysis_interval'])
-        interval_layout.addStretch()
-        basic_layout.addLayout(interval_layout)
-        
-        # 最大干预次数
-        max_interventions_layout = QHBoxLayout()
-        max_interventions_layout.addWidget(QLabel("最大干预次数:"))
-        self.config_widgets['max_interventions_per_session'] = QSpinBox()
-        self.config_widgets['max_interventions_per_session'].setRange(1, 10)
-        self.config_widgets['max_interventions_per_session'].setValue(3)
-        max_interventions_layout.addWidget(self.config_widgets['max_interventions_per_session'])
-        max_interventions_layout.addStretch()
-        basic_layout.addLayout(max_interventions_layout)
-        
-        basic_group.setLayout(basic_layout)
-        scroll_layout.addWidget(basic_group)
-        
-        # 阈值设置组
-        thresholds_group = QGroupBox("📊 干预阈值设置")
-        thresholds_layout = QVBoxLayout()
-        
-        # 过拟合风险阈值
-        overfitting_layout = QHBoxLayout()
-        overfitting_layout.addWidget(QLabel("过拟合风险阈值:"))
-        self.config_widgets['overfitting_risk'] = QDoubleSpinBox()
-        self.config_widgets['overfitting_risk'].setRange(0.1, 2.0)
-        self.config_widgets['overfitting_risk'].setSingleStep(0.1)
-        self.config_widgets['overfitting_risk'].setValue(0.8)
-        overfitting_layout.addWidget(self.config_widgets['overfitting_risk'])
-        overfitting_layout.addStretch()
-        thresholds_layout.addLayout(overfitting_layout)
-        
-        # 欠拟合风险阈值
-        underfitting_layout = QHBoxLayout()
-        underfitting_layout.addWidget(QLabel("欠拟合风险阈值:"))
-        self.config_widgets['underfitting_risk'] = QDoubleSpinBox()
-        self.config_widgets['underfitting_risk'].setRange(0.1, 2.0)
-        self.config_widgets['underfitting_risk'].setSingleStep(0.1)
-        self.config_widgets['underfitting_risk'].setValue(0.7)
-        underfitting_layout.addWidget(self.config_widgets['underfitting_risk'])
-        underfitting_layout.addStretch()
-        thresholds_layout.addLayout(underfitting_layout)
-        
-        # 停滞轮数阈值
-        stagnation_layout = QHBoxLayout()
-        stagnation_layout.addWidget(QLabel("停滞轮数阈值:"))
-        self.config_widgets['stagnation_epochs'] = QSpinBox()
-        self.config_widgets['stagnation_epochs'].setRange(1, 20)
-        self.config_widgets['stagnation_epochs'].setValue(5)
-        stagnation_layout.addWidget(self.config_widgets['stagnation_epochs'])
-        stagnation_layout.addStretch()
-        thresholds_layout.addLayout(stagnation_layout)
-        
-        # 发散阈值
-        divergence_layout = QHBoxLayout()
-        divergence_layout.addWidget(QLabel("发散阈值:"))
-        self.config_widgets['divergence_threshold'] = QDoubleSpinBox()
-        self.config_widgets['divergence_threshold'].setRange(0.5, 5.0)
-        self.config_widgets['divergence_threshold'].setSingleStep(0.1)
-        self.config_widgets['divergence_threshold'].setValue(2.0)
-        divergence_layout.addWidget(self.config_widgets['divergence_threshold'])
-        divergence_layout.addStretch()
-        thresholds_layout.addLayout(divergence_layout)
-        
-        # 最小训练轮数
-        min_epochs_layout = QHBoxLayout()
-        min_epochs_layout.addWidget(QLabel("最小训练轮数:"))
-        self.config_widgets['min_training_epochs'] = QSpinBox()
-        self.config_widgets['min_training_epochs'].setRange(1, 10)
-        self.config_widgets['min_training_epochs'].setValue(3)
-        min_epochs_layout.addWidget(self.config_widgets['min_training_epochs'])
-        min_epochs_layout.addStretch()
-        thresholds_layout.addLayout(min_epochs_layout)
-        
-        thresholds_group.setLayout(thresholds_layout)
-        scroll_layout.addWidget(thresholds_group)
-        
-        # 参数调优策略组
-        strategy_group = QGroupBox("🎯 参数调优策略")
-        strategy_layout = QVBoxLayout()
-        
-        strategy_layout.addWidget(QLabel("调优策略:"))
-        self.config_widgets['parameter_tuning_strategy'] = QComboBox()
-        self.config_widgets['parameter_tuning_strategy'].addItems([
-            "保守", "平衡", "激进"
-        ])
-        strategy_layout.addWidget(self.config_widgets['parameter_tuning_strategy'])
-        
-        strategy_group.setLayout(strategy_layout)
-        scroll_layout.addWidget(strategy_group)
-        
-        # 配置操作按钮
-        config_buttons_layout = QHBoxLayout()
-        
-        save_config_btn = QPushButton("💾 保存配置")
-        save_config_btn.clicked.connect(self.save_config)
-        config_buttons_layout.addWidget(save_config_btn)
-        
-        load_config_btn = QPushButton("📂 加载配置")
-        load_config_btn.clicked.connect(self.load_config)
-        config_buttons_layout.addWidget(load_config_btn)
-        
-        reset_config_btn = QPushButton("🔄 重置默认")
-        reset_config_btn.clicked.connect(self.reset_config)
-        config_buttons_layout.addWidget(reset_config_btn)
-        
-        config_buttons_layout.addStretch()
-        scroll_layout.addLayout(config_buttons_layout)
-        
-        scroll_layout.addStretch()
-        scroll_widget.setLayout(scroll_layout)
-        scroll_area.setWidget(scroll_widget)
-        scroll_area.setWidgetResizable(True)
-        layout.addWidget(scroll_area)
-        
-        return widget
     
     def create_report_tab(self):
         """创建会话报告标签页"""
@@ -470,30 +324,18 @@ class IntelligentTrainingWidget(QWidget):
         self.stop_monitoring_requested.emit()
     
     def get_current_config(self) -> Dict[str, Any]:
-        """获取当前配置"""
-        config = {}
-        
-        # 基本设置
-        config['auto_intervention_enabled'] = self.config_widgets['auto_intervention_enabled'].isChecked()
-        config['analysis_interval'] = self.config_widgets['analysis_interval'].value()
-        config['max_interventions_per_session'] = self.config_widgets['max_interventions_per_session'].value()
-        
-        # 阈值设置
-        config['intervention_thresholds'] = {
-            'overfitting_risk': self.config_widgets['overfitting_risk'].value(),
-            'underfitting_risk': self.config_widgets['underfitting_risk'].value(),
-            'stagnation_epochs': self.config_widgets['stagnation_epochs'].value(),
-            'divergence_threshold': self.config_widgets['divergence_threshold'].value(),
-            'min_training_epochs': self.config_widgets['min_training_epochs'].value(),
-        }
-        
-        # 策略设置
-        strategy_map = {"保守": "conservative", "平衡": "balanced", "激进": "aggressive"}
-        config['parameter_tuning_strategy'] = strategy_map.get(
-            self.config_widgets['parameter_tuning_strategy'].currentText(), "conservative"
-        )
-        
-        return config
+        """获取当前配置（从主配置中读取）"""
+        try:
+            # 从主配置中读取智能训练配置
+            from src.config_loader import ConfigLoader
+            cfg = ConfigLoader().get_config()
+            intelligent_config = cfg.get('intelligent_training', {})
+            
+            # 返回智能训练配置，如果没有则返回空字典
+            return intelligent_config
+        except Exception as e:
+            print(f"从主配置读取智能训练配置失败: {e}")
+            return {}
     
     def start_monitoring(self, training_config: Dict[str, Any]):
         """开始监控"""
@@ -683,99 +525,9 @@ class IntelligentTrainingWidget(QWidget):
                     'suggested_params': suggested_params
                 })
     
-    def save_config(self):
-        """保存配置"""
-        try:
-            file_path, _ = QFileDialog.getSaveFileName(
-                self, "保存配置", "", "JSON文件 (*.json)"
-            )
-            
-            if file_path:
-                config = self.get_current_config()
-                with open(file_path, 'w', encoding='utf-8') as f:
-                    json.dump(config, f, ensure_ascii=False, indent=2)
-                
-                QMessageBox.information(self, "成功", f"配置已保存到: {file_path}")
-                
-        except Exception as e:
-            QMessageBox.warning(self, "错误", f"保存配置失败: {str(e)}")
     
-    def load_config(self):
-        """加载配置"""
-        try:
-            file_path, _ = QFileDialog.getOpenFileName(
-                self, "加载配置", "", "JSON文件 (*.json)"
-            )
-            
-            if file_path:
-                with open(file_path, 'r', encoding='utf-8') as f:
-                    config = json.load(f)
-                
-                self.apply_config(config)
-                QMessageBox.information(self, "成功", f"配置已从 {file_path} 加载")
-                
-        except Exception as e:
-            QMessageBox.warning(self, "错误", f"加载配置失败: {str(e)}")
     
-    def apply_config(self, config: Dict[str, Any]):
-        """应用配置到UI"""
-        try:
-            # 基本设置
-            if 'auto_intervention_enabled' in config:
-                self.config_widgets['auto_intervention_enabled'].setChecked(config['auto_intervention_enabled'])
-            
-            if 'analysis_interval' in config:
-                self.config_widgets['analysis_interval'].setValue(config['analysis_interval'])
-            
-            if 'max_interventions_per_session' in config:
-                self.config_widgets['max_interventions_per_session'].setValue(config['max_interventions_per_session'])
-            
-            # 阈值设置
-            if 'intervention_thresholds' in config:
-                thresholds = config['intervention_thresholds']
-                if 'overfitting_risk' in thresholds:
-                    self.config_widgets['overfitting_risk'].setValue(thresholds['overfitting_risk'])
-                if 'underfitting_risk' in thresholds:
-                    self.config_widgets['underfitting_risk'].setValue(thresholds['underfitting_risk'])
-                if 'stagnation_epochs' in thresholds:
-                    self.config_widgets['stagnation_epochs'].setValue(thresholds['stagnation_epochs'])
-                if 'divergence_threshold' in thresholds:
-                    self.config_widgets['divergence_threshold'].setValue(thresholds['divergence_threshold'])
-                if 'min_training_epochs' in thresholds:
-                    self.config_widgets['min_training_epochs'].setValue(thresholds['min_training_epochs'])
-            
-            # 策略设置
-            if 'parameter_tuning_strategy' in config:
-                strategy_map = {"conservative": 0, "balanced": 1, "aggressive": 2}
-                strategy_index = strategy_map.get(config['parameter_tuning_strategy'], 0)
-                self.config_widgets['parameter_tuning_strategy'].setCurrentIndex(strategy_index)
-                
-        except Exception as e:
-            QMessageBox.warning(self, "错误", f"应用配置失败: {str(e)}")
     
-    def reset_config(self):
-        """重置为默认配置"""
-        reply = QMessageBox.question(
-            self, 
-            "确认重置", 
-            "确定要重置为默认配置吗？",
-            QMessageBox.Yes | QMessageBox.No,
-            QMessageBox.No
-        )
-        
-        if reply == QMessageBox.Yes:
-            # 重置为默认值
-            self.config_widgets['auto_intervention_enabled'].setChecked(True)
-            self.config_widgets['analysis_interval'].setValue(10)
-            self.config_widgets['max_interventions_per_session'].setValue(3)
-            self.config_widgets['overfitting_risk'].setValue(0.8)
-            self.config_widgets['underfitting_risk'].setValue(0.7)
-            self.config_widgets['stagnation_epochs'].setValue(5)
-            self.config_widgets['divergence_threshold'].setValue(2.0)
-            self.config_widgets['min_training_epochs'].setValue(3)
-            self.config_widgets['parameter_tuning_strategy'].setCurrentIndex(0)
-            
-            QMessageBox.information(self, "成功", "配置已重置为默认值")
     
     def export_intervention_history(self):
         """导出干预历史"""

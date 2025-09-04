@@ -24,6 +24,7 @@ from .resource_limit_widget import ResourceLimitWidget
 from .log_viewer_widget import LogViewerWidget
 from .dependency_manager_widget import DependencyManagerWidget
 from .ai_settings_widget import AISettingsWidget
+from .intelligent_training_settings_widget import IntelligentTrainingSettingsWidget
 
 __all__ = [
     'ConfigManager',
@@ -35,5 +36,6 @@ __all__ = [
     'ResourceLimitWidget',
     'LogViewerWidget',
     'DependencyManagerWidget',
-    'AISettingsWidget'
+    'AISettingsWidget',
+    'IntelligentTrainingSettingsWidget'
 ] 
