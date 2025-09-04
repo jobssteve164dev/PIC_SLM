@@ -27,6 +27,7 @@ from .base_tab import BaseTab
 
 # 导入预处理线程
 from ..image_processing.preprocessing_thread import PreprocessingThread
+from ..training_components.intelligent_training_manager import IntelligentTrainingManager
 
 class MainWindow(QMainWindow):
     """主窗口类，负责组织和管理所有标签页"""
@@ -66,6 +67,8 @@ class MainWindow(QMainWindow):
         
         # 初始化预处理线程
         self.preprocessing_thread = None
+        # 智能训练管理器
+        self.intelligent_manager = IntelligentTrainingManager()
         
         # 初始化系统托盘
         self.init_system_tray()
@@ -215,6 +218,14 @@ class MainWindow(QMainWindow):
         
         # 连接信号
         self.connect_signals()
+        # 连接智能训练管理器信号
+        try:
+            self.intelligent_manager.status_updated.connect(self.update_status)
+            self.intelligent_manager.error_occurred.connect(lambda e: QMessageBox.warning(self, "智能训练错误", e))
+            # 智能训练事件桥接到评估曲线
+            self.intelligent_manager.analysis_completed.connect(lambda d: self.update_status("AI分析完成"))
+        except Exception:
+            pass
         
     def connect_signals(self):
         """连接信号和槽"""
@@ -234,6 +245,14 @@ class MainWindow(QMainWindow):
         self.training_tab.training_started.connect(self.on_training_started)
         # 连接训练进度更新信号到评估标签页的实时训练曲线更新函数
         self.training_tab.training_progress_updated.connect(self.evaluation_tab.update_training_visualization)
+        # 连接训练进度到智能训练管理器
+        self.training_tab.training_progress_updated.connect(self.intelligent_manager.update_training_progress)
+        
+        # 智能训练控件信号桥接
+        if hasattr(self.training_tab, 'intelligent_widget'):
+            self.training_tab.intelligent_widget.start_monitoring_requested.connect(self.on_start_intelligent_monitoring)
+            self.training_tab.intelligent_widget.stop_monitoring_requested.connect(self.on_stop_intelligent_monitoring)
+            self.training_tab.intelligent_widget.restart_training_requested.connect(self.on_restart_training_with_params)
         
         self.prediction_tab.status_updated.connect(self.update_status)
         self.prediction_tab.progress_updated.connect(self.update_progress)
@@ -261,6 +280,195 @@ class MainWindow(QMainWindow):
         # 连接模型工厂标签页的信号
         self.model_factory_tab.status_updated.connect(self.update_status)
         self.model_factory_tab.progress_updated.connect(self.update_progress)
+
+    # 智能训练：开始监控
+    def on_start_intelligent_monitoring(self, it_config: Dict):
+        try:
+            # 将配置合并到管理器
+            self.intelligent_manager.config.update(it_config)
+            # 绑定模型训练器
+            if hasattr(self, 'worker') and hasattr(self.worker, 'model_trainer'):
+                self.intelligent_manager.set_model_trainer(self.worker.model_trainer)
+            # 统一构建完整训练配置（与普通开始训练一致）
+            training_config = self._build_training_config_from_ui()
+            self.intelligent_manager.start_intelligent_training(training_config)
+            # 同步按钮UI
+            if hasattr(self.training_tab, 'intelligent_widget'):
+                self.training_tab.intelligent_widget.start_monitoring(training_config)
+            self.update_status('智能训练监控已启动')
+        except Exception as e:
+            self.update_status(f'启动智能训练失败: {e}')
+
+    def _build_training_config_from_ui(self) -> Dict:
+        """从训练页与集中配置构建完整训练配置，保证两条启动路径一致。"""
+        try:
+            params = self.training_tab.get_training_params() if hasattr(self, 'training_tab') else {}
+            task_type = params.get('task_type', 'classification')
+            from src.config_loader import ConfigLoader
+            cfg = ConfigLoader().get_config()
+            model_save_dir = cfg.get('default_model_save_dir', '') or os.path.join('models', 'saved_models')
+            param_save_dir = cfg.get('default_param_save_dir', '') or model_save_dir
+            tensorboard_log_dir = cfg.get('default_tensorboard_log_dir', '') or os.path.join('runs', 'tensorboard')
+            data_dir = self.training_tab.annotation_folder if hasattr(self, 'training_tab') else ''
+
+            if task_type == 'classification':
+                model_name = params.get('model', 'ResNet50')
+                batch_size = params.get('batch_size', 32)
+                epochs = params.get('epochs', 20)
+                learning_rate = params.get('learning_rate', 0.001)
+                optimizer = params.get('optimizer', 'Adam')
+                use_pretrained = params.get('use_pretrained', True)
+                pretrained_path = params.get('pretrained_path', '')
+                metrics = params.get('metrics', ['accuracy'])
+                weight_decay = params.get('weight_decay', 0.0001)
+                lr_scheduler = params.get('lr_scheduler', 'StepLR')
+                use_augmentation = params.get('use_augmentation', True)
+                early_stopping = params.get('early_stopping', True)
+                early_stopping_patience = params.get('early_stopping_patience', 10)
+                gradient_clipping = params.get('gradient_clipping', False)
+                gradient_clipping_value = params.get('gradient_clipping_value', 1.0)
+                mixed_precision = params.get('mixed_precision', True)
+                dropout_rate = params.get('dropout_rate', 0.0)
+            else:
+                model_name = params.get('model', 'YOLOv5')
+                batch_size = params.get('batch_size', 16)
+                epochs = params.get('epochs', 50)
+                learning_rate = params.get('learning_rate', 0.0005)
+                optimizer = params.get('optimizer', 'Adam')
+                use_pretrained = params.get('use_pretrained', True)
+                pretrained_path = params.get('pretrained_path', '')
+                metrics = params.get('metrics', ['mAP'])
+                weight_decay = params.get('weight_decay', 0.0005)
+                lr_scheduler = params.get('lr_scheduler', 'StepLR')
+                use_augmentation = params.get('use_augmentation', True)
+                early_stopping = params.get('early_stopping', True)
+                early_stopping_patience = params.get('early_stopping_patience', 10)
+                gradient_clipping = params.get('gradient_clipping', False)
+                gradient_clipping_value = params.get('gradient_clipping_value', 1.0)
+                mixed_precision = params.get('mixed_precision', True)
+                dropout_rate = params.get('dropout_rate', 0.0)
+                iou_threshold = params.get('iou_threshold', 0.5)
+                conf_threshold = params.get('conf_threshold', 0.25)
+                use_mosaic = params.get('use_mosaic', True)
+                use_multiscale = params.get('use_multiscale', True)
+                use_ema = params.get('use_ema', True)
+
+            use_class_weights = cfg.get('use_class_weights', True)
+            weight_strategy = cfg.get('weight_strategy', 'balanced')
+            weight_config = {}
+            if 'class_weights' in cfg and cfg['class_weights']:
+                weight_config['class_weights'] = cfg['class_weights']
+            if 'custom_class_weights' in cfg and cfg['custom_class_weights']:
+                weight_config['custom_class_weights'] = cfg['custom_class_weights']
+            if 'weight_config_file' in cfg and cfg['weight_config_file']:
+                weight_config['weight_config_file'] = cfg['weight_config_file']
+            if 'all_strategies' in cfg and cfg['all_strategies']:
+                weight_config['all_strategies'] = cfg['all_strategies']
+
+            training_config = {
+                'data_dir': data_dir,
+                'model_name': model_name,
+                'num_epochs': epochs,
+                'batch_size': batch_size,
+                'learning_rate': learning_rate,
+                'model_save_dir': os.path.normpath(model_save_dir),
+                'default_param_save_dir': os.path.normpath(param_save_dir),
+                'tensorboard_log_dir': os.path.normpath(tensorboard_log_dir),
+                'task_type': task_type,
+                'optimizer': optimizer,
+                'use_pretrained': use_pretrained,
+                'pretrained_path': pretrained_path,
+                'metrics': metrics,
+                'use_tensorboard': True,
+                'model_note': params.get('model_note', ''),
+                'use_class_weights': use_class_weights,
+                'weight_strategy': weight_strategy,
+                'weight_decay': weight_decay,
+                'lr_scheduler': lr_scheduler,
+                'use_augmentation': use_augmentation,
+                'early_stopping': early_stopping,
+                'early_stopping_patience': early_stopping_patience,
+                'gradient_clipping': gradient_clipping,
+                'gradient_clipping_value': gradient_clipping_value,
+                'mixed_precision': mixed_precision,
+                'dropout_rate': dropout_rate,
+                'activation_function': params.get('activation_function', 'ReLU'),
+                'beta1': params.get('beta1', 0.9),
+                'beta2': params.get('beta2', 0.999),
+                'momentum': params.get('momentum', 0.9),
+                'nesterov': params.get('nesterov', False),
+                'warmup_enabled': params.get('warmup_enabled', False),
+                'warmup_steps': params.get('warmup_steps', 0),
+                'warmup_ratio': params.get('warmup_ratio', 0.0),
+                'warmup_method': params.get('warmup_method', 'linear'),
+                'min_lr_enabled': params.get('min_lr_enabled', False),
+                'min_lr': params.get('min_lr', 1e-6),
+                'label_smoothing_enabled': params.get('label_smoothing_enabled', False),
+                'label_smoothing': params.get('label_smoothing', 0.0),
+                'model_ema': params.get('model_ema', False),
+                'model_ema_decay': params.get('model_ema_decay', 0.9999),
+                'gradient_accumulation_enabled': params.get('gradient_accumulation_enabled', False),
+                'gradient_accumulation_steps': params.get('gradient_accumulation_steps', 1),
+                'advanced_augmentation_enabled': params.get('advanced_augmentation_enabled', False),
+                'cutmix_prob': params.get('cutmix_prob', 0.0),
+                'mixup_alpha': params.get('mixup_alpha', 0.0),
+                'loss_scaling_enabled': params.get('loss_scaling_enabled', False),
+                'loss_scale': params.get('loss_scale', 'dynamic'),
+                'static_loss_scale': params.get('static_loss_scale', 128.0),
+            }
+
+            training_config.update(weight_config)
+            if task_type == 'detection':
+                training_config.update({
+                    'iou_threshold': iou_threshold,
+                    'conf_threshold': conf_threshold,
+                    'resolution': params.get('resolution', '640x640'),
+                    'nms_threshold': 0.45,
+                    'use_fpn': True,
+                    'use_mosaic': use_mosaic,
+                    'use_multiscale': use_multiscale,
+                    'use_ema': use_ema
+                })
+            return training_config
+        except Exception:
+            return {
+                'data_dir': self.training_tab.annotation_folder if hasattr(self, 'training_tab') else '',
+                'model_name': 'ResNet50',
+                'num_epochs': 20,
+                'batch_size': 32,
+                'learning_rate': 0.001,
+                'model_save_dir': os.path.join('models', 'saved_models'),
+                'tensorboard_log_dir': os.path.join('runs', 'tensorboard'),
+                'task_type': 'classification'
+            }
+
+    # 智能训练：停止监控
+    def on_stop_intelligent_monitoring(self):
+        try:
+            self.intelligent_manager.stop_intelligent_training()
+            try:
+                if hasattr(self.training_tab, 'intelligent_widget'):
+                    self.training_tab.intelligent_widget.stop_monitoring()
+            except Exception:
+                pass
+            self.update_status('智能训练监控已停止')
+        except Exception as e:
+            self.update_status(f'停止智能训练失败: {e}')
+
+    # 智能训练：根据建议参数重启
+    def on_restart_training_with_params(self, data: Dict):
+        try:
+            suggested = data.get('suggested_params', {}) if isinstance(data, dict) else {}
+            if not suggested:
+                self.update_status('无可用的优化参数，忽略重启请求')
+                return
+            # 将建议交给管理器处理（它内部会更新配置并重启）
+            # 直接调用公开接口：合并建议并触发重启
+            updated_config = self.intelligent_manager._update_training_config(suggested)
+            # 模拟控制器触发的延时重启流程
+            self.intelligent_manager._on_training_restart_requested({'new_params': suggested})
+        except Exception as e:
+            self.update_status(f'处理智能重启失败: {e}')
 
     def update_status(self, message):
         """更新状态栏消息"""

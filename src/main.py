@@ -336,9 +336,9 @@ def main():
         if hasattr(worker.model_trainer, 'epoch_finished'):
             worker.model_trainer.epoch_finished.connect(window.model_factory_tab.on_training_progress)
         
-        # 连接训练完成信号
+        # 连接训练完成信号（修复：补足results参数）
         if hasattr(worker.model_trainer, 'training_finished'):
-            worker.model_trainer.training_finished.connect(window.model_factory_tab.on_training_completed)
+            worker.model_trainer.training_finished.connect(lambda: window.model_factory_tab.on_training_completed({}))
         
         # 连接训练停止信号
         if hasattr(worker.model_trainer, 'training_stopped'):

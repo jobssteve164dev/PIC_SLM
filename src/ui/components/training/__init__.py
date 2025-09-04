@@ -20,6 +20,7 @@ from .model_download_dialog import ModelDownloadDialog
 from .weight_config_manager import WeightConfigManager
 from .training_config_selector import TrainingConfigSelector
 from .config_applier import ConfigApplier
+from .intelligent_training_widget import IntelligentTrainingWidget
 
 __all__ = [
     'ClassificationTrainingWidget',
@@ -30,5 +31,6 @@ __all__ = [
     'ModelDownloadDialog',
     'WeightConfigManager',
     'TrainingConfigSelector',
-    'ConfigApplier'
+    'ConfigApplier',
+    'IntelligentTrainingWidget'
 ] 

@@ -16,7 +16,8 @@ from .components.training import (
     DetectionTrainingWidget,
     TrainingControlWidget,
     TrainingConfigSelector,
-    ConfigApplier
+    ConfigApplier,
+    IntelligentTrainingWidget
 )
 import json
 import subprocess
@@ -167,6 +168,19 @@ class TrainingTab(BaseTab):
         
         # 将控制组件添加到滚动布局
         main_layout.addWidget(self.control_widget)
+
+        # 智能训练控件
+        try:
+            self.intelligent_widget = IntelligentTrainingWidget(
+                training_system=self.main_window.worker.model_trainer if hasattr(self, 'main_window') and hasattr(self.main_window, 'worker') else None,
+                parent=self,
+                use_external_controller=True,
+                external_manager=self.main_window.intelligent_manager if hasattr(self, 'main_window') and hasattr(self.main_window, 'intelligent_manager') else None
+            )
+            main_layout.addWidget(self.intelligent_widget)
+        except Exception:
+            # 安静失败，不阻塞训练主流程
+            pass
         
         # 连接信号
         self.task_button_group.buttonClicked.connect(self.on_task_changed)
