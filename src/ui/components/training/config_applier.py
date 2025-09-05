@@ -231,22 +231,48 @@ class ConfigApplier:
     def apply_to_training_tab(config, training_tab):
         """将配置应用到训练标签页"""
         try:
+            print(f"ConfigApplier.apply_to_training_tab: 开始应用配置")
+            print(f"ConfigApplier.apply_to_training_tab: training_tab类型: {type(training_tab)}")
+            print(f"ConfigApplier.apply_to_training_tab: training_tab属性: {dir(training_tab) if training_tab else 'None'}")
+            
+            if training_tab is None:
+                print("ConfigApplier.apply_to_training_tab: training_tab为None")
+                return False
+            
             # 根据任务类型选择相应的组件
             task_type = config.get('task_type', 'classification')
+            print(f"ConfigApplier.apply_to_training_tab: 任务类型: {task_type}")
             
             if task_type == 'classification':
+                if not hasattr(training_tab, 'classification_radio'):
+                    print("ConfigApplier.apply_to_training_tab: training_tab缺少classification_radio属性")
+                    return False
+                if not hasattr(training_tab, 'classification_widget'):
+                    print("ConfigApplier.apply_to_training_tab: training_tab缺少classification_widget属性")
+                    return False
+                    
                 training_tab.classification_radio.setChecked(True)
                 training_tab.stacked_widget.setCurrentIndex(0)
                 ConfigApplier.apply_to_classification_widget(config, training_tab.classification_widget)
             elif task_type == 'detection':
+                if not hasattr(training_tab, 'detection_radio'):
+                    print("ConfigApplier.apply_to_training_tab: training_tab缺少detection_radio属性")
+                    return False
+                if not hasattr(training_tab, 'detection_widget'):
+                    print("ConfigApplier.apply_to_training_tab: training_tab缺少detection_widget属性")
+                    return False
+                    
                 training_tab.detection_radio.setChecked(True)
                 training_tab.stacked_widget.setCurrentIndex(1)
                 ConfigApplier.apply_to_detection_widget(config, training_tab.detection_widget)
             
+            print("ConfigApplier.apply_to_training_tab: 配置应用成功")
             return True
             
         except Exception as e:
             print(f"应用配置到训练标签页失败: {str(e)}")
+            import traceback
+            traceback.print_exc()
             return False
     
     @staticmethod

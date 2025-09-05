@@ -296,6 +296,9 @@ class IntelligentTrainingWidget(QWidget):
         self.orchestrator.status_updated.connect(self._on_status_updated)
         self.orchestrator.error_occurred.connect(self._on_error_occurred)
         
+        # 连接配置生成器的调整记录信号
+        self.orchestrator.config_generator.adjustment_recorded.connect(self._on_adjustment_recorded)
+        
     def start_intelligent_training(self):
         """启动智能训练"""
         try:
@@ -305,6 +308,7 @@ class IntelligentTrainingWidget(QWidget):
                 QMessageBox.warning(self, "错误", "无法访问父组件 TrainingTab")
                 return
 
+            # 获取配置
             config = training_tab.get_config_from_manager()
             default_output_folder = config.get('default_output_folder', '')
             
@@ -312,27 +316,67 @@ class IntelligentTrainingWidget(QWidget):
                 QMessageBox.warning(self, "错误", "未配置默认输出文件夹，请先在设置中配置")
                 return
             
+            # 根据任务类型自动刷新数据集目录
             if training_tab.task_type == "classification":
                 dataset_folder = os.path.join(default_output_folder, 'dataset')
+                train_folder = os.path.join(dataset_folder, 'train')
+                val_folder = os.path.join(dataset_folder, 'val')
+                
+                # 检查数据集结构
                 if not os.path.exists(dataset_folder):
-                    QMessageBox.warning(self, "错误", f"未找到分类数据集文件夹: {dataset_folder}")
+                    QMessageBox.warning(self, "错误", f"未找到分类数据集文件夹: {dataset_folder}\n\n请确保已正确配置数据集路径。")
                     return
+                
+                if not os.path.exists(train_folder) or not os.path.exists(val_folder):
+                    QMessageBox.warning(self, "错误", f"分类数据集结构不完整:\n- 缺少训练集: {train_folder}\n- 缺少验证集: {val_folder}\n\n请确保数据集包含完整的train和val文件夹。")
+                    return
+                
+                # 设置数据集路径
                 training_tab.annotation_folder = dataset_folder
                 if hasattr(training_tab, 'classification_widget'):
                     training_tab.classification_widget.set_folder_path(dataset_folder)
                 training_tab.update_status(f"已自动刷新分类数据集目录: {dataset_folder}")
-            else:
+                self.add_log(f"✅ 分类数据集目录已刷新: {dataset_folder}")
+                
+            else:  # 目标检测
                 detection_data_folder = os.path.join(default_output_folder, 'detection_data')
+                train_images = os.path.join(detection_data_folder, 'images', 'train')
+                val_images = os.path.join(detection_data_folder, 'images', 'val')
+                train_labels = os.path.join(detection_data_folder, 'labels', 'train')
+                val_labels = os.path.join(detection_data_folder, 'labels', 'val')
+                
+                # 检查目标检测数据集结构
                 if not os.path.exists(detection_data_folder):
-                    QMessageBox.warning(self, "错误", f"未找到目标检测数据集文件夹: {detection_data_folder}")
+                    QMessageBox.warning(self, "错误", f"未找到目标检测数据集文件夹: {detection_data_folder}\n\n请确保已正确配置数据集路径。")
                     return
+                
+                missing_folders = []
+                if not os.path.exists(train_images):
+                    missing_folders.append("images/train")
+                if not os.path.exists(val_images):
+                    missing_folders.append("images/val")
+                if not os.path.exists(train_labels):
+                    missing_folders.append("labels/train")
+                if not os.path.exists(val_labels):
+                    missing_folders.append("labels/val")
+                
+                if missing_folders:
+                    QMessageBox.warning(self, "错误", f"目标检测数据集结构不完整，缺少以下文件夹:\n{chr(10).join(missing_folders)}\n\n请确保数据集包含完整的images和labels文件夹结构。")
+                    return
+                
+                # 设置数据集路径
                 training_tab.annotation_folder = detection_data_folder
                 if hasattr(training_tab, 'detection_widget'):
                     training_tab.detection_widget.set_folder_path(detection_data_folder)
                 training_tab.update_status(f"已自动刷新目标检测数据集目录: {detection_data_folder}")
+                self.add_log(f"✅ 目标检测数据集目录已刷新: {detection_data_folder}")
             
-            training_tab.check_training_ready()
-            self.add_log("✅ 数据集目录已自动刷新")
+            # 检查训练准备状态
+            if not training_tab.check_training_ready():
+                QMessageBox.warning(self, "错误", "训练准备检查失败，请检查数据集配置")
+                return
+            
+            self.add_log("✅ 数据集目录验证通过，可以开始智能训练")
             
             # 启动时总是从UI获取最新配置，而不是依赖可能过时的缓存
             self.current_config = self._get_current_training_config()
@@ -349,6 +393,16 @@ class IntelligentTrainingWidget(QWidget):
 当前未检测到有效的训练配置。"""
                 QMessageBox.warning(self, "配置缺失", error_msg)
                 return
+            
+            # 确保data_dir使用正确的数据集路径
+            if training_tab.task_type == "classification":
+                correct_data_dir = os.path.join(default_output_folder, 'dataset')
+            else:  # 目标检测
+                correct_data_dir = os.path.join(default_output_folder, 'detection_data')
+            
+            # 更新配置中的data_dir
+            self.current_config['data_dir'] = correct_data_dir
+            self.add_log(f"✅ 已更新数据目录配置: {correct_data_dir}")
             
             # 检查关键配置项
             required_fields = ['data_dir', 'model_name', 'num_epochs', 'batch_size', 'learning_rate']
@@ -678,3 +732,9 @@ class IntelligentTrainingWidget(QWidget):
         """错误发生回调"""
         self.add_log(f"❌ 错误: {error}")
         QMessageBox.warning(self, "错误", error)
+    
+    def _on_adjustment_recorded(self, adjustment: Dict[str, Any]):
+        """调整记录回调"""
+        self.add_log(f"📝 配置调整已记录: {adjustment.get('adjustment_id', 'unknown')}")
+        # 更新历史表格
+        self.update_history_table()

@@ -21,6 +21,7 @@ from PyQt5.QtWidgets import QMessageBox
 from .intelligent_config_generator import IntelligentConfigGenerator, ConfigAdjustment
 from .model_trainer import ModelTrainer
 from .real_time_metrics_collector import get_global_metrics_collector
+from .intelligent_training_state_manager import IntelligentTrainingStateManager, TrainingState
 
 
 @dataclass
@@ -50,6 +51,7 @@ class IntelligentTrainingOrchestrator(QObject):
     iteration_completed = pyqtSignal(dict)   # 迭代完成信号
     status_updated = pyqtSignal(str)         # 状态更新信号
     error_occurred = pyqtSignal(str)         # 错误信号
+    apply_config_requested = pyqtSignal(dict)  # 请求应用配置信号
     
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -58,6 +60,7 @@ class IntelligentTrainingOrchestrator(QObject):
         self.config_generator = IntelligentConfigGenerator()
         self.model_trainer = None
         self.metrics_collector = get_global_metrics_collector()
+        self.state_manager = IntelligentTrainingStateManager()
         
         # 训练会话管理
         self.current_session: Optional[IntelligentTrainingSession] = None
@@ -66,7 +69,7 @@ class IntelligentTrainingOrchestrator(QObject):
         # 配置参数
         self.config = {
             'max_iterations': 5,           # 最大迭代次数
-            'min_iteration_epochs': 3,     # 每次迭代最小训练轮数
+            'min_iteration_epochs': 5,     # 每次迭代最小训练轮数
             'analysis_interval': 5,        # 分析间隔（epoch）
             'convergence_threshold': 0.01, # 收敛阈值
             'improvement_threshold': 0.02, # 改进阈值
@@ -82,6 +85,9 @@ class IntelligentTrainingOrchestrator(QObject):
         
         # 初始化组件
         self._initialize_components()
+        
+        # 连接状态管理器信号
+        self.state_manager.state_changed.connect(self._on_state_changed)
         
     def _initialize_components(self):
         """初始化组件"""
@@ -105,7 +111,8 @@ class IntelligentTrainingOrchestrator(QObject):
         # 连接训练器信号
         if self.model_trainer:
             # 使用ModelTrainer实际存在的信号
-            self.model_trainer.training_finished.connect(self._on_training_completed)
+            # training_finished信号不传递参数，所以使用lambda包装
+            self.model_trainer.training_finished.connect(lambda: self._on_training_completed({}))
             self.model_trainer.training_error.connect(self._on_training_failed)
             self.model_trainer.status_updated.connect(self.status_updated)
     
@@ -192,6 +199,7 @@ class IntelligentTrainingOrchestrator(QObject):
             self.current_session.training_iterations.append(iteration_record)
             
             # 启动训练
+            self.state_manager.start_training()
             self.model_trainer.train_model_with_config(self.current_session.current_config)
             
         except Exception as e:
@@ -215,10 +223,16 @@ class IntelligentTrainingOrchestrator(QObject):
             while not self.stop_monitoring and self.is_running:
                 # 检查训练状态
                 if self._should_analyze_and_optimize():
-                    self._analyze_and_optimize()
+                    # 再次检查停止标志，防止在分析过程中被停止
+                    if not self.stop_monitoring and self.is_running:
+                        self._analyze_and_optimize()
                 
-                # 等待一段时间
-                time.sleep(self.config['analysis_interval'] * 2)  # 每N个epoch检查一次
+                # 使用较长的睡眠时间，避免过于频繁的检查
+                # 每30秒检查一次，而不是每秒检查
+                for _ in range(30):  # 30秒检查一次
+                    if self.stop_monitoring or not self.is_running:
+                        break
+                    time.sleep(1)  # 每秒检查一次停止标志
                 
         except Exception as e:
             self.error_occurred.emit(f"监控循环出错: {str(e)}")
@@ -234,14 +248,20 @@ class IntelligentTrainingOrchestrator(QObject):
             current_metrics = real_data.get('current_metrics', {})
             epoch = current_metrics.get('epoch', 0)
             
+            # 添加调试日志
+            self.status_updated.emit(f"🔍 检查分析条件: epoch={epoch}, min_iteration_epochs={self.config['min_iteration_epochs']}, analysis_interval={self.config['analysis_interval']}")
+            
             # 检查是否达到最小训练轮数
             if epoch < self.config['min_iteration_epochs']:
+                self.status_updated.emit(f"⏳ 未达到最小训练轮数: {epoch} < {self.config['min_iteration_epochs']}")
                 return False
             
             # 检查是否达到分析间隔
             if epoch % self.config['analysis_interval'] != 0:
+                self.status_updated.emit(f"⏳ 未达到分析间隔: {epoch} % {self.config['analysis_interval']} != 0")
                 return False
             
+            self.status_updated.emit(f"✅ 满足分析条件: epoch={epoch}")
             return True
             
         except Exception as e:
@@ -262,26 +282,23 @@ class IntelligentTrainingOrchestrator(QObject):
             if optimized_config != self.current_session.current_config:
                 self.status_updated.emit("检测到配置优化机会，准备重启训练...")
                 
+                # 开始智能重启过程
+                restart_context = {
+                    'config': optimized_config,
+                    'session_id': self.current_session.session_id if self.current_session else None,
+                    'reason': 'parameter_optimization'
+                }
+                self.state_manager.start_intelligent_restart(restart_context)
+                
                 # 停止当前训练
                 if self.model_trainer:
-                    self.model_trainer.stop_training()
+                    self.model_trainer.stop()
                 
                 # 等待训练停止
                 time.sleep(2)
                 
-                # 应用新配置
-                success = self.config_generator.apply_config_to_training_system(
-                    optimized_config, self.training_tab
-                )
-                
-                if success:
-                    # 更新当前配置
-                    self.current_session.current_config = optimized_config
-                    
-                    # 开始新的训练迭代
-                    self._start_training_iteration()
-                else:
-                    self.error_occurred.emit("应用优化配置失败")
+                # 通过信号请求应用配置（避免在后台线程中直接操作UI）
+                self.apply_config_requested.emit(restart_context)
             
         except Exception as e:
             self.error_occurred.emit(f"分析和优化失败: {str(e)}")
@@ -313,11 +330,21 @@ class IntelligentTrainingOrchestrator(QObject):
                 'timestamp': time.time()
             })
             
+            # 检查是否仍在运行状态
+            if not self.is_running or self.stop_monitoring:
+                self.status_updated.emit("训练已停止，不继续下一轮")
+                return
+            
             # 检查是否继续下一轮
             if self._should_continue_training(metrics):
                 self.status_updated.emit("训练完成，准备下一轮优化...")
                 time.sleep(3)  # 等待一段时间
-                self._start_training_iteration()
+                
+                # 再次检查运行状态，防止在等待期间被停止
+                if self.is_running and not self.stop_monitoring:
+                    self._start_training_iteration()
+                else:
+                    self.status_updated.emit("训练已停止，取消下一轮")
             else:
                 self._complete_training_session()
             
@@ -339,11 +366,21 @@ class IntelligentTrainingOrchestrator(QObject):
             
             self.status_updated.emit(f"训练失败: {error_message}")
             
+            # 检查是否仍在运行状态
+            if not self.is_running or self.stop_monitoring:
+                self.status_updated.emit("训练已停止，不进行重试")
+                return
+            
             # 检查是否重试
             if self.current_iteration < self.config['max_iterations']:
                 self.status_updated.emit("准备重试训练...")
                 time.sleep(5)  # 等待一段时间
-                self._start_training_iteration()
+                
+                # 再次检查运行状态，防止在等待期间被停止
+                if self.is_running and not self.stop_monitoring:
+                    self._start_training_iteration()
+                else:
+                    self.status_updated.emit("训练已停止，取消重试")
             else:
                 self._complete_training_session()
             
@@ -463,18 +500,25 @@ class IntelligentTrainingOrchestrator(QObject):
             if not self.is_running:
                 return
             
+            # 立即设置停止标志
             self.is_running = False
             self.stop_monitoring = True
             
             # 停止当前训练
             if self.model_trainer:
-                self.model_trainer.stop_training()
+                self.model_trainer.stop()
             
             # 更新会话状态
             if self.current_session:
                 self.current_session.status = 'stopped'
                 self.config_generator.stop_training_session()
             
+            # 等待监控线程结束
+            if self.monitoring_thread and self.monitoring_thread.is_alive():
+                self.monitoring_thread.join(timeout=5)
+            
+            # 设置状态为真正停止
+            self.state_manager.stop_training()
             self.status_updated.emit("智能训练已停止")
             
         except Exception as e:
@@ -491,6 +535,37 @@ class IntelligentTrainingOrchestrator(QObject):
     def _on_adjustment_recorded(self, adjustment: Dict[str, Any]):
         """调整记录回调"""
         self.status_updated.emit(f"配置调整已记录: {adjustment.get('adjustment_id', 'unknown')}")
+    
+    def apply_config_request(self, request_data: Dict[str, Any]):
+        """处理配置应用请求（在主线程中执行）"""
+        try:
+            config = request_data.get('config', {})
+            session_id = request_data.get('session_id')
+            
+            if self.training_tab is None:
+                self.error_occurred.emit("训练标签页引用为空，无法应用配置")
+                return
+            
+            self.status_updated.emit(f"正在应用配置到训练标签页: {type(self.training_tab)}")
+            success = self.config_generator.apply_config_to_training_system(
+                config, self.training_tab
+            )
+            
+            if success:
+                # 更新当前配置
+                if self.current_session:
+                    self.current_session.current_config = config
+                
+                # 完成智能重启过程
+                self.state_manager.complete_intelligent_restart()
+                
+                # 开始新的训练迭代
+                self._start_training_iteration()
+            else:
+                self.error_occurred.emit("应用优化配置失败")
+                
+        except Exception as e:
+            self.error_occurred.emit(f"应用配置请求失败: {str(e)}")
     
     def get_current_session_info(self) -> Dict[str, Any]:
         """获取当前会话信息"""
@@ -523,3 +598,86 @@ class IntelligentTrainingOrchestrator(QObject):
             'config_generator_report': self.config_generator.export_adjustment_report(),
             'export_time': time.time()
         }
+    
+    def get_intervention_history(self) -> List[Dict[str, Any]]:
+        """获取干预历史"""
+        if not self.current_session:
+            return []
+        
+        # 从训练迭代中提取干预记录
+        interventions = []
+        for iteration in self.current_session.training_iterations:
+            if 'intervention' in iteration:
+                interventions.append(iteration['intervention'])
+        
+        return interventions
+    
+    def update_training_progress(self, metrics: Dict[str, Any]):
+        """更新训练进度"""
+        try:
+            # 这个方法主要用于兼容性，智能训练编排器通过metrics_collector获取训练数据
+            # 这里可以添加一些额外的进度处理逻辑
+            if self.current_session:
+                # 更新当前会话的训练进度信息
+                if self.current_session.training_iterations:
+                    current_iteration = self.current_session.training_iterations[-1]
+                    current_iteration['latest_metrics'] = metrics
+                    current_iteration['last_update_time'] = time.time()
+            
+            # 可以在这里添加进度更新的事件处理
+            # 例如：检查是否达到分析条件、更新UI显示等
+            
+        except Exception as e:
+            self.error_occurred.emit(f"更新训练进度失败: {str(e)}")
+    
+    def save_session_report(self, file_path: str):
+        """保存会话报告"""
+        try:
+            if not self.current_session:
+                self.error_occurred.emit("没有活跃的会话可以保存")
+                return
+            
+            # 准备报告数据
+            report_data = {
+                'session_info': self.get_current_session_info(),
+                'training_iterations': self.current_session.training_iterations,
+                'best_metrics': self.current_session.best_metrics,
+                'best_config': self.current_session.best_config,
+                'intervention_history': self.get_intervention_history(),
+                'adjustment_history': self.get_adjustment_history(),
+                'timestamp': time.time()
+            }
+            
+            # 保存到文件
+            os.makedirs(os.path.dirname(file_path), exist_ok=True)
+            with open(file_path, 'w', encoding='utf-8') as f:
+                json.dump(report_data, f, indent=2, ensure_ascii=False)
+            
+            self.status_updated.emit(f"会话报告已保存到: {file_path}")
+            
+        except Exception as e:
+            self.error_occurred.emit(f"保存会话报告失败: {str(e)}")
+    
+    def _on_state_changed(self, new_state: TrainingState, message: str):
+        """处理状态改变事件"""
+        try:
+            # 根据状态类型发射相应的信号
+            if new_state == TrainingState.INTELLIGENT_RESTARTING:
+                self.status_updated.emit("🔄 智能训练正在重启...")
+            elif new_state == TrainingState.RUNNING:
+                if self.state_manager.is_intelligent_restarting():
+                    self.status_updated.emit("✅ 智能训练重启完成")
+                else:
+                    self.status_updated.emit("🚀 训练已开始")
+            elif new_state == TrainingState.STOPPED:
+                self.status_updated.emit("⏹️ 训练已停止")
+            elif new_state == TrainingState.COMPLETED:
+                self.status_updated.emit("✅ 训练已完成")
+            elif new_state == TrainingState.ERROR:
+                self.status_updated.emit(f"❌ {message}")
+        except Exception as e:
+            self.error_occurred.emit(f"处理状态改变事件失败: {str(e)}")
+    
+    def get_state_manager(self) -> IntelligentTrainingStateManager:
+        """获取状态管理器"""
+        return self.state_manager

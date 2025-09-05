@@ -88,7 +88,7 @@ class ConfigManager:
                 # 智能训练编排器配置
                 'enabled': True,
                 'max_iterations': 5,
-                'min_iteration_epochs': 3,
+                'min_iteration_epochs': 5,
                 'analysis_interval': 5,
                 'convergence_threshold': 0.01,
                 'improvement_threshold': 0.02,
@@ -100,7 +100,7 @@ class ConfigManager:
                 'underfitting_threshold': 0.70,
                 'stagnation_epochs': 5,
                 'divergence_threshold': 2.00,
-                'min_training_epochs': 3,
+                'min_training_epochs': 5,
                 
                 # 参数调优策略
                 'tuning_strategy': 'conservative',

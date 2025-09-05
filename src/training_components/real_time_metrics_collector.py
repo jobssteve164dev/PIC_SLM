@@ -242,10 +242,23 @@ class RealTimeMetricsCollector(QObject):
             return
             
         try:
+            # 清理数据，移除不可序列化的对象
+            cleaned_metric = self._clean_metric_data(new_metric)
+            
             # 读取现有数据
             if os.path.exists(self.data_file_path):
-                with open(self.data_file_path, 'r', encoding='utf-8') as f:
-                    data = json.load(f)
+                try:
+                    with open(self.data_file_path, 'r', encoding='utf-8') as f:
+                        data = json.load(f)
+                except json.JSONDecodeError:
+                    # 如果文件损坏，重新创建
+                    data = {
+                        "session_id": self.current_training_session,
+                        "start_time": time.time(),
+                        "metrics_history": [],
+                        "current_metrics": {},
+                        "training_status": "running"
+                    }
             else:
                 data = {
                     "session_id": self.current_training_session,
@@ -256,8 +269,8 @@ class RealTimeMetricsCollector(QObject):
                 }
             
             # 添加新指标
-            data["metrics_history"].append(new_metric)
-            data["current_metrics"] = new_metric
+            data["metrics_history"].append(cleaned_metric)
+            data["current_metrics"] = cleaned_metric
             data["last_update"] = time.time()
             
             # 保持历史数据在合理范围内
@@ -273,6 +286,33 @@ class RealTimeMetricsCollector(QObject):
             
         except Exception as e:
             print(f"❌ 更新数据文件失败: {str(e)}")
+    
+    def _clean_metric_data(self, metric_data: Dict[str, Any]) -> Dict[str, Any]:
+        """清理指标数据，移除不可序列化的对象"""
+        cleaned_data = {}
+        
+        for key, value in metric_data.items():
+            if hasattr(value, 'item'):  # PyTorch Tensor
+                try:
+                    cleaned_data[key] = value.item()
+                except:
+                    cleaned_data[key] = float(value)
+            elif hasattr(value, 'tolist'):  # NumPy array
+                try:
+                    cleaned_data[key] = value.tolist()
+                except:
+                    cleaned_data[key] = str(value)
+            elif isinstance(value, (int, float, str, bool, type(None))):
+                cleaned_data[key] = value
+            elif isinstance(value, (list, tuple)):
+                cleaned_data[key] = [self._clean_metric_data({'item': v})['item'] if isinstance(v, dict) else v for v in value]
+            elif isinstance(value, dict):
+                cleaned_data[key] = self._clean_metric_data(value)
+            else:
+                # 对于其他类型，尝试转换为字符串
+                cleaned_data[key] = str(value)
+        
+        return cleaned_data
             
     def _update_training_status(self, status: str):
         """更新训练状态"""

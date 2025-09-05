@@ -186,8 +186,14 @@ class IntelligentConfigGenerator(QObject):
             validated_config = self._validate_config(optimized_config)
             
             # 记录配置调整
+            # 确保analysis_result是字典格式
+            if isinstance(analysis_result, str):
+                analysis_dict = {'reason': analysis_result, 'analysis': analysis_result}
+            else:
+                analysis_dict = analysis_result
+            
             self._record_config_adjustment(
-                current_config, validated_config, training_metrics, analysis_result
+                current_config, validated_config, training_metrics, analysis_dict
             )
             
             self.status_updated.emit("优化配置生成完成")

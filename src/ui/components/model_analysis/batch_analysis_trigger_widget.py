@@ -26,7 +26,7 @@ class BatchAnalysisTriggerWidget(QWidget):
     
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.batch_trigger_interval = 10  # 默认每10个batch触发一次
+        self.batch_trigger_interval = 5  # 默认每5个batch触发一次
         self.current_batch_count = 0
         self.total_analysis_count = 0
         self.is_auto_analysis_enabled = True
@@ -458,7 +458,7 @@ class BatchAnalysisTriggerWidget(QWidget):
             
             # 更新配置
             self.is_auto_analysis_enabled = batch_analysis_config.get('enabled', True)
-            self.batch_trigger_interval = batch_analysis_config.get('trigger_interval', 10)
+            self.batch_trigger_interval = batch_analysis_config.get('trigger_interval', 5)
             self.analysis_cooldown = batch_analysis_config.get('cooldown', 30)
             
             # 更新UI

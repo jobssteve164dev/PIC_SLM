@@ -26,6 +26,7 @@ from .training_validator import TrainingValidator
 from .resource_limited_trainer import ResourceLimitedTrainer, enable_resource_limited_training
 from .model_ema import ModelEMAManager
 from .advanced_augmentation import AdvancedAugmentationManager, create_advanced_criterion
+from .real_time_metrics_collector import get_global_metrics_collector
 from ..utils.resource_limiter import (
     initialize_resource_limiter, ResourceLimits, ResourceLimitException, get_resource_limiter
 )
@@ -64,6 +65,7 @@ class TrainingThread(QThread):
         self.model_configurator = ModelConfigurator()
         self.tensorboard_logger = TensorBoardLogger()
         self.validator = TrainingValidator()
+        self.metrics_collector = get_global_metrics_collector()
         
         # 初始化第二阶段组件
         self.ema_manager = None
@@ -266,6 +268,11 @@ class TrainingThread(QThread):
         try:
             # 重置停止标志
             self.stop_training = False
+            
+            # 启动实时指标采集
+            if self.metrics_collector:
+                session_id = f"training_{int(time.time())}"
+                self.metrics_collector.start_collection(session_id)
             
             # 🔍 完整的参数接收验证
             print("=" * 60)
@@ -734,6 +741,16 @@ class TrainingThread(QThread):
                     self.tensorboard_logger.log_advanced_metrics(
                         all_labels, all_preds, epoch=epoch, phase=phase
                     )
+                
+                # 采集实时指标数据供智能训练使用
+                if self.metrics_collector:
+                    metrics_data = {
+                        'loss': epoch_loss,
+                        'accuracy': epoch_acc,
+                        'epoch': epoch + 1,  # 转换为从1开始的epoch编号
+                        'phase': phase
+                    }
+                    self.metrics_collector.collect_tensorboard_metrics(epoch + 1, phase, metrics_data)
                 
                 # 记录样本图像（每5个epoch一次）
                 if phase == 'val' and epoch % 5 == 0:

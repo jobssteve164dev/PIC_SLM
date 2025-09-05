@@ -490,6 +490,10 @@ class TrainingTab(BaseTab):
     def on_training_finished(self):
         """训练完成时调用"""
         self.control_widget.set_training_finished()
+    
+    def on_training_stopped(self, is_intelligent_restart=False):
+        """训练停止时调用"""
+        self.control_widget.set_training_stopped(is_intelligent_restart)
         self.update_status("训练完成")
         self.update_progress(100)
     

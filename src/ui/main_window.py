@@ -294,6 +294,11 @@ class MainWindow(QMainWindow):
             # 绑定模型训练器
             if hasattr(self, 'worker') and hasattr(self.worker, 'model_trainer'):
                 self.intelligent_manager.set_model_trainer(self.worker.model_trainer)
+            
+            # 绑定训练标签页
+            if hasattr(self, 'training_tab'):
+                self.intelligent_manager.set_training_tab(self.training_tab)
+            
             # 统一构建完整训练配置（与普通开始训练一致）
             training_config = self._build_training_config_from_ui()
             self.intelligent_manager.start_intelligent_training(training_config)

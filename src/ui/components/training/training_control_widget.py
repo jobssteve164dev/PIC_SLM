@@ -151,11 +151,17 @@ class TrainingControlWidget(QWidget):
         self.stop_btn.setEnabled(True)
         self.training_status_label.setText("正在训练...")
     
-    def set_training_stopped(self):
+    def set_training_stopped(self, is_intelligent_restart=False):
         """设置训练停止状态"""
-        self.train_btn.setEnabled(True)
-        self.stop_btn.setEnabled(False)
-        self.training_status_label.setText("训练已停止")
+        if is_intelligent_restart:
+            # 智能训练重启中，不显示"训练已停止"
+            self.training_status_label.setText("智能训练重启中...")
+            # 保持按钮状态不变，因为训练实际上还在继续
+        else:
+            # 真正的训练停止
+            self.train_btn.setEnabled(True)
+            self.stop_btn.setEnabled(False)
+            self.training_status_label.setText("训练已停止")
     
     def set_training_finished(self):
         """设置训练完成状态"""
