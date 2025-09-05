@@ -468,7 +468,7 @@ class IntelligentTrainingOrchestrator(QObject):
             
             # 停止当前训练
             if self.model_trainer:
-                self.model_trainer.stop()
+                self.model_trainer.stop_training()
             
             # 更新会话状态
             if self.current_session:
