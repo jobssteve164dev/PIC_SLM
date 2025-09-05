@@ -85,17 +85,47 @@ class ConfigManager:
             class_weights = {}
         if intelligent_training is None:
             intelligent_training = {
+                # 智能训练编排器配置
+                'enabled': True,
+                'max_iterations': 5,
+                'min_iteration_epochs': 3,
+                'analysis_interval': 5,
+                'convergence_threshold': 0.01,
+                'improvement_threshold': 0.02,
+                'auto_restart': True,
+                'preserve_best_model': True,
+                
+                # 干预阈值设置
                 'overfitting_threshold': 0.80,
                 'underfitting_threshold': 0.70,
                 'stagnation_epochs': 5,
                 'divergence_threshold': 2.00,
                 'min_training_epochs': 3,
+                
+                # 参数调优策略
                 'tuning_strategy': 'conservative',
                 'enable_auto_intervention': True,
                 'intervention_cooldown': 2,
                 'max_interventions_per_session': 10,
+                
+                # LLM分析配置
                 'llm_analysis_enabled': True,
-                'confidence_threshold': 0.7
+                'adapter_type': 'mock',
+                'analysis_frequency': 'epoch_based',
+                'min_data_points': 5,
+                'confidence_threshold': 0.7,
+                
+                # 监控配置
+                'check_interval': 5,
+                'metrics_buffer_size': 100,
+                'trend_analysis_window': 10,
+                'alert_on_intervention': True,
+                
+                # 报告配置
+                'auto_generate_reports': True,
+                'report_format': 'json',
+                'include_visualizations': True,
+                'save_intervention_details': True
             }
             
         return {

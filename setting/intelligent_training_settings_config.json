@@ -1,0 +1,35 @@
+{
+  "intelligent_training_settings": {
+    "enabled": true,
+    "max_iterations": 5,
+    "min_iteration_epochs": 3,
+    "analysis_interval": 5,
+    "convergence_threshold": 0.01,
+    "improvement_threshold": 0.02,
+    "auto_restart": true,
+    "preserve_best_model": true,
+    "overfitting_threshold": 0.80,
+    "underfitting_threshold": 0.70,
+    "stagnation_epochs": 5,
+    "divergence_threshold": 2.00,
+    "min_training_epochs": 3,
+    "tuning_strategy": "conservative",
+    "enable_auto_intervention": true,
+    "intervention_cooldown": 2,
+    "max_interventions_per_session": 10,
+    "llm_analysis_enabled": true,
+    "adapter_type": "mock",
+    "analysis_frequency": "epoch_based",
+    "min_data_points": 5,
+    "confidence_threshold": 0.7,
+    "check_interval": 5,
+    "metrics_buffer_size": 100,
+    "trend_analysis_window": 10,
+    "alert_on_intervention": true,
+    "auto_generate_reports": true,
+    "report_format": "json",
+    "include_visualizations": true,
+    "save_intervention_details": true
+  }
+}
+

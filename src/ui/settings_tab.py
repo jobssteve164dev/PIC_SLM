@@ -736,8 +736,9 @@ class SettingsTab(BaseTab):
                 self.main_window.intelligent_manager.config.update(intelligent_config)
                 print("智能训练管理器配置已更新")
             
-            # 自动保存到主配置文件
-            self.save_settings()
+            # 不自动保存，避免多次弹出保存提示
+            # 用户可以通过点击"保存配置"按钮手动保存
+            # self.save_settings()
             
         except Exception as e:
             print(f"处理智能训练配置变更时出错: {str(e)}")

@@ -1,0 +1,93 @@
+{
+  "intelligent_training": {
+    "enabled": true,
+    "max_iterations": 5,
+    "min_iteration_epochs": 3,
+    "analysis_interval": 5,
+    "convergence_threshold": 0.01,
+    "improvement_threshold": 0.02,
+    "auto_restart": true,
+    "preserve_best_model": true,
+    "parameter_constraints": {
+      "learning_rate": {
+        "min": 1e-6,
+        "max": 0.1,
+        "step": 1e-6,
+        "description": "学习率"
+      },
+      "batch_size": {
+        "min": 1,
+        "max": 128,
+        "step": 1,
+        "description": "批次大小"
+      },
+      "num_epochs": {
+        "min": 1,
+        "max": 1000,
+        "step": 1,
+        "description": "训练轮数"
+      },
+      "dropout_rate": {
+        "min": 0.0,
+        "max": 0.9,
+        "step": 0.01,
+        "description": "Dropout率"
+      },
+      "weight_decay": {
+        "min": 0.0,
+        "max": 0.01,
+        "step": 1e-6,
+        "description": "权重衰减"
+      },
+      "early_stopping_patience": {
+        "min": 1,
+        "max": 50,
+        "step": 1,
+        "description": "早停耐心值"
+      }
+    },
+    "optimization_strategies": {
+      "conservative": {
+        "learning_rate_adjustment": 0.5,
+        "batch_size_adjustment": 0.8,
+        "dropout_increase": 0.1,
+        "weight_decay_increase": 1.5,
+        "description": "保守策略：小幅调整参数"
+      },
+      "balanced": {
+        "learning_rate_adjustment": 0.7,
+        "batch_size_adjustment": 0.9,
+        "dropout_increase": 0.15,
+        "weight_decay_increase": 2.0,
+        "description": "平衡策略：中等幅度调整"
+      },
+      "aggressive": {
+        "learning_rate_adjustment": 0.3,
+        "batch_size_adjustment": 0.6,
+        "dropout_increase": 0.2,
+        "weight_decay_increase": 2.5,
+        "description": "激进策略：大幅调整参数"
+      }
+    },
+    "llm_analysis": {
+      "enabled": true,
+      "adapter_type": "mock",
+      "analysis_frequency": "epoch_based",
+      "min_data_points": 5,
+      "confidence_threshold": 0.7
+    },
+    "monitoring": {
+      "check_interval": 5,
+      "metrics_buffer_size": 100,
+      "trend_analysis_window": 10,
+      "alert_on_intervention": true
+    },
+    "reporting": {
+      "auto_generate_reports": true,
+      "report_format": "json",
+      "include_visualizations": true,
+      "save_intervention_details": true
+    }
+  }
+}
+

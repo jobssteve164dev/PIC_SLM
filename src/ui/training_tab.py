@@ -171,14 +171,14 @@ class TrainingTab(BaseTab):
 
         # 智能训练控件
         try:
-            self.intelligent_widget = IntelligentTrainingWidget(
-                training_system=self.main_window.worker.model_trainer if hasattr(self, 'main_window') and hasattr(self.main_window, 'worker') else None,
-                parent=self,
-                use_external_controller=True,
-                external_manager=self.main_window.intelligent_manager if hasattr(self, 'main_window') and hasattr(self.main_window, 'intelligent_manager') else None
-            )
+            self.intelligent_widget = IntelligentTrainingWidget(parent=self)
+            # 连接智能训练信号
+            self.intelligent_widget.training_started.connect(self._on_intelligent_training_started)
+            self.intelligent_widget.training_stopped.connect(self._on_intelligent_training_stopped)
+            self.intelligent_widget.status_updated.connect(self._on_intelligent_status_updated)
             main_layout.addWidget(self.intelligent_widget)
-        except Exception:
+        except Exception as e:
+            print(f"智能训练组件初始化失败: {str(e)}")
             # 安静失败，不阻塞训练主流程
             pass
         
@@ -225,6 +225,19 @@ class TrainingTab(BaseTab):
                 # 刷新权重配置显示
                 self.refresh_weight_config()
                 print("训练配置已成功应用到界面")
+                
+                # 通知智能训练组件配置已更新
+                if hasattr(self, 'intelligent_widget') and self.intelligent_widget:
+                    try:
+                        # 从主窗口构建当前训练配置并传递给智能训练组件
+                        if hasattr(self, 'main_window') and hasattr(self.main_window, '_build_training_config_from_ui'):
+                            training_config = self.main_window._build_training_config_from_ui()
+                            self.intelligent_widget.on_config_applied_from_selector(training_config)
+                            print("已通知智能训练组件配置更新")
+                        else:
+                            print("无法从主窗口获取训练配置")
+                    except Exception as e:
+                        print(f"通知智能训练组件失败: {str(e)}")
             else:
                 print("应用训练配置失败")
                 
@@ -232,6 +245,21 @@ class TrainingTab(BaseTab):
             print(f"应用配置时出错: {str(e)}")
             import traceback
             traceback.print_exc()
+    
+    def _on_intelligent_training_started(self, data):
+        """智能训练开始回调"""
+        print(f"智能训练已启动: {data.get('session_id', 'unknown')}")
+        # 可以在这里添加额外的处理逻辑
+    
+    def _on_intelligent_training_stopped(self, data):
+        """智能训练停止回调"""
+        print(f"智能训练已停止: {data.get('total_iterations', 0)} 次迭代")
+        # 可以在这里添加额外的处理逻辑
+    
+    def _on_intelligent_status_updated(self, message):
+        """智能训练状态更新回调"""
+        print(f"智能训练状态: {message}")
+        # 可以在这里添加状态显示逻辑
     
     def check_training_ready(self):
         """检查是否可以开始训练"""
@@ -391,6 +419,15 @@ class TrainingTab(BaseTab):
         # 更新训练状态标签
         self.control_widget.update_status(f"正在准备训练，使用数据集: {os.path.basename(self.annotation_folder)}")
         
+        # 将配置传递给智能训练组件
+        if hasattr(self, 'intelligent_widget') and self.intelligent_widget:
+            try:
+                # 构建当前训练配置
+                training_config = self._build_training_config_from_ui()
+                self.intelligent_widget.set_training_config(training_config)
+            except Exception as e:
+                print(f"传递配置给智能训练组件失败: {str(e)}")
+        
         # 发射训练开始信号
         self.training_started.emit()
     
@@ -465,9 +502,17 @@ class TrainingTab(BaseTab):
     def get_training_params(self):
         """获取当前训练参数"""
         if self.task_type == "classification":
-            return self.classification_widget.get_training_params()
+            params = self.classification_widget.get_training_params()
         else:
-            return self.detection_widget.get_training_params()
+            params = self.detection_widget.get_training_params()
+        
+        # 从训练控制组件获取模型名称备注
+        if hasattr(self, 'control_widget'):
+            params['model_note'] = self.control_widget.get_model_note()
+        else:
+            params['model_note'] = ''
+            
+        return params
 
     def on_model_download_failed(self, model_name, model_link):
         """处理模型下载失败事件"""

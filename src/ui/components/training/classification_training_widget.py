@@ -311,14 +311,6 @@ class ClassificationTrainingWidget(QWidget):
         self.mixed_precision_checkbox.setToolTip("使用FP16和FP32混合精度：\n- 加速训练(最高2倍)\n- 减少内存占用\n- 几乎不影响精度\n- 需要支持FP16的GPU")
         advanced_layout.addWidget(self.mixed_precision_checkbox, 2, 1)
         
-        # 模型命名备注
-        model_note_label = QLabel("模型命名备注:")
-        model_note_label.setToolTip("添加到训练输出模型文件名中的备注")
-        advanced_layout.addWidget(model_note_label, 3, 0)
-        self.model_note_edit = QLineEdit()
-        self.model_note_edit.setPlaceholderText("可选: 添加模型命名备注")
-        self.model_note_edit.setToolTip("这个备注将添加到输出模型文件名中，方便识别不同训练的模型")
-        advanced_layout.addWidget(self.model_note_edit, 3, 1, 1, 3)
         
         advanced_group.setLayout(advanced_layout)
         main_layout.addWidget(advanced_group)
@@ -451,8 +443,6 @@ class ClassificationTrainingWidget(QWidget):
         pretrained_path = self.pretrained_path_edit.text() if use_local_pretrained else ""
         pretrained_model = "" if use_local_pretrained else self.model_combo.currentText()
         
-        # 获取模型命名备注
-        model_note = self.model_note_edit.text().strip()
             
         params = {
             "task_type": "classification",
@@ -467,7 +457,6 @@ class ClassificationTrainingWidget(QWidget):
             "pretrained_path": pretrained_path,
             "pretrained_model": pretrained_model,
             "use_augmentation": self.augmentation_checkbox.isChecked(),
-            "model_note": model_note,
             "enable_resource_limits": self.enable_resource_limits_checkbox.isChecked(),
             
             # 添加已有但之前未收集的参数

@@ -1,4 +1,4 @@
-from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel, QMessageBox)
+from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel, QMessageBox, QLineEdit)
 from PyQt5.QtCore import Qt, pyqtSignal
 import os
 import platform
@@ -21,10 +21,25 @@ class TrainingControlWidget(QWidget):
     def init_ui(self):
         """初始化UI"""
         # 创建底部控制区域
-        self.setMaximumHeight(100)  # 增加底部区域高度
+        self.setMaximumHeight(140)  # 增加底部区域高度以容纳模型名称备注
         layout = QVBoxLayout(self)
         layout.setSpacing(10)
         layout.setContentsMargins(10, 10, 10, 10)
+        
+        # 创建模型名称备注区域
+        model_note_layout = QHBoxLayout()
+        model_note_layout.setSpacing(10)
+        
+        model_note_label = QLabel("模型命名备注:")
+        model_note_label.setToolTip("添加到训练输出模型文件名中的备注")
+        model_note_layout.addWidget(model_note_label)
+        
+        self.model_note_edit = QLineEdit()
+        self.model_note_edit.setPlaceholderText("可选: 添加模型命名备注")
+        self.model_note_edit.setToolTip("这个备注将添加到输出模型文件名中，方便识别不同训练的模型")
+        model_note_layout.addWidget(self.model_note_edit)
+        
+        layout.addLayout(model_note_layout)
         
         # 创建训练按钮布局
         button_layout = QHBoxLayout()
@@ -159,6 +174,10 @@ class TrainingControlWidget(QWidget):
     def update_status(self, message):
         """更新状态信息"""
         self.training_status_label.setText(message)
+    
+    def get_model_note(self):
+        """获取模型名称备注"""
+        return self.model_note_edit.text().strip()
     
     def open_model_folder(self):
         """打开保存模型的文件夹"""

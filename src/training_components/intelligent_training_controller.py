@@ -96,21 +96,91 @@ class IntelligentTrainingController(QObject):
     def _initialize_components(self):
         """初始化相关组件"""
         try:
+            # 从AI设置中读取适配器配置
+            adapter_type, adapter_config = self._load_ai_adapter_config()
+            
             # 初始化LLM框架
-            self.llm_framework = LLMFramework()
+            self.llm_framework = LLMFramework(
+                adapter_type=adapter_type,
+                adapter_config=adapter_config
+            )
             if not self.llm_framework.is_active:
-                self.llm_framework.initialize()
+                self.llm_framework.start()
             
             # 初始化分析引擎
-            self.analysis_engine = TrainingAnalysisEngine()
+            self.analysis_engine = TrainingAnalysisEngine(self.llm_framework.llm_adapter)
             
             # 获取指标采集器
             self.metrics_collector = get_global_metrics_collector()
             
-            self.status_updated.emit("智能训练控制器初始化完成")
+            self.status_updated.emit(f"智能训练控制器初始化完成，使用适配器: {adapter_type}")
             
         except Exception as e:
             self.error_occurred.emit(f"初始化组件失败: {str(e)}")
+    
+    def _load_ai_adapter_config(self) -> tuple:
+        """从AI设置中加载适配器配置"""
+        try:
+            ai_config_file = "setting/ai_config.json"
+            if os.path.exists(ai_config_file):
+                with open(ai_config_file, 'r', encoding='utf-8') as f:
+                    ai_config = json.load(f)
+                
+                # 获取默认适配器类型
+                general_config = ai_config.get('general', {})
+                default_adapter = general_config.get('default_adapter', 'mock')
+                
+                # 根据适配器类型构建配置
+                if default_adapter == 'openai':
+                    openai_config = ai_config.get('openai', {})
+                    adapter_config = {
+                        'api_key': openai_config.get('api_key', ''),
+                        'base_url': openai_config.get('base_url', ''),
+                        'model': openai_config.get('model', 'gpt-3.5-turbo'),
+                        'temperature': openai_config.get('temperature', 0.7),
+                        'max_tokens': openai_config.get('max_tokens', 1000)
+                    }
+                    return 'openai', adapter_config
+                    
+                elif default_adapter == 'deepseek':
+                    deepseek_config = ai_config.get('deepseek', {})
+                    adapter_config = {
+                        'api_key': deepseek_config.get('api_key', ''),
+                        'base_url': deepseek_config.get('base_url', 'https://api.deepseek.com/v1'),
+                        'model': deepseek_config.get('model', 'deepseek-chat'),
+                        'temperature': deepseek_config.get('temperature', 0.7),
+                        'max_tokens': deepseek_config.get('max_tokens', 1000)
+                    }
+                    return 'deepseek', adapter_config
+                    
+                elif default_adapter == 'local':
+                    ollama_config = ai_config.get('ollama', {})
+                    adapter_config = {
+                        'base_url': ollama_config.get('base_url', 'http://localhost:11434'),
+                        'model': ollama_config.get('model', 'llama2'),
+                        'temperature': ollama_config.get('temperature', 0.7),
+                        'num_predict': ollama_config.get('num_predict', 1000),
+                        'timeout': ollama_config.get('timeout', 120)
+                    }
+                    return 'ollama', adapter_config
+                    
+                elif default_adapter == 'custom':
+                    custom_config = ai_config.get('custom_api', {})
+                    adapter_config = {
+                        'api_key': custom_config.get('api_key', ''),
+                        'base_url': custom_config.get('base_url', ''),
+                        'model': custom_config.get('model', ''),
+                        'temperature': custom_config.get('temperature', 0.7),
+                        'max_tokens': custom_config.get('max_tokens', 1000)
+                    }
+                    return 'custom', adapter_config
+            
+            # 默认使用mock适配器
+            return 'mock', {}
+            
+        except Exception as e:
+            print(f"加载AI适配器配置失败: {str(e)}")
+            return 'mock', {}
     
     def start_monitoring(self, training_config: Dict[str, Any]):
         """开始智能监控训练"""

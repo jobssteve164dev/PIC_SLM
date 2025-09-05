@@ -269,7 +269,8 @@ class MainWindow(QMainWindow):
         
         self.settings_tab.status_updated.connect(self.update_status)
         self.settings_tab.progress_updated.connect(self.update_progress)
-        self.settings_tab.settings_saved.connect(self.apply_config)
+        # 不直接连接settings_saved信号到apply_config，避免重复应用配置
+        # self.settings_tab.settings_saved.connect(self.apply_config)
         
         self.dataset_evaluation_tab.status_updated.connect(self.update_status)  # 连接数据集评估标签页的信号
         self.dataset_evaluation_tab.progress_updated.connect(self.update_progress)
