@@ -1,6 +1,6 @@
 {
   "auto_intervention_enabled": true,
-  "analysis_interval": 10,
+  "analysis_interval": 2,
   "max_interventions_per_session": 3,
   "parameter_tuning_strategy": "conservative",
   "intervention_thresholds": {
@@ -8,12 +8,12 @@
     "underfitting_risk": 0.7,
     "stagnation_epochs": 5,
     "divergence_threshold": 2.0,
-    "min_training_epochs": 3
+    "min_training_epochs": 2
   },
   "llm_analysis": {
     "enabled": true,
     "analysis_frequency": "epoch_based",
-    "min_data_points": 5,
+    "min_data_points": 2,
     "confidence_threshold": 0.7
   },
   "intervention_strategies": {

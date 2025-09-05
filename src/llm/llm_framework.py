@@ -34,7 +34,10 @@ class LLMFramework:
         self.enable_streaming = enable_streaming
         
         # 初始化组件
+        print(f"[DEBUG] LLM框架初始化，适配器类型: {adapter_type}")
+        print(f"[DEBUG] 适配器配置: {adapter_config}")
         self.llm_adapter = self._create_adapter()
+        print(f"[DEBUG] 创建的适配器实例: {type(self.llm_adapter).__name__}")
         self.analysis_engine = TrainingAnalysisEngine(self.llm_adapter)
         self.prompt_templates = PromptTemplates()
         
@@ -66,12 +69,19 @@ class LLMFramework:
     def _create_adapter(self) -> LLMAdapter:
         """创建LLM适配器"""
         try:
+            print(f"[DEBUG] 尝试创建适配器: {self.adapter_type}")
             if self.adapter_type == 'mock':
+                print("[DEBUG] 创建MockLLMAdapter")
                 return MockLLMAdapter()
             else:
-                return create_llm_adapter(self.adapter_type, **self.adapter_config)
+                print(f"[DEBUG] 调用create_llm_adapter，参数: {self.adapter_config}")
+                adapter = create_llm_adapter(self.adapter_type, **self.adapter_config)
+                print(f"[DEBUG] 成功创建适配器: {type(adapter).__name__}")
+                return adapter
         except Exception as e:
-            print(f"创建适配器失败，使用模拟适配器: {str(e)}")
+            print(f"[ERROR] 创建适配器失败，使用模拟适配器: {str(e)}")
+            print(f"[ERROR] 适配器类型: {self.adapter_type}")
+            print(f"[ERROR] 适配器配置: {self.adapter_config}")
             return MockLLMAdapter()
     
     def start(self):
@@ -95,6 +105,12 @@ class LLMFramework:
             self.stats['total_requests'] += 1
             self.stats['request_types']['analyze_metrics'] += 1
             
+            # 添加调试信息
+            print(f"[DEBUG] LLM框架开始分析训练指标")
+            print(f"[DEBUG] 适配器类型: {self.adapter_type}")
+            print(f"[DEBUG] 适配器实例: {type(self.llm_adapter).__name__}")
+            print(f"[DEBUG] 指标数据: {list(metrics_data.keys())}")
+            
             # 使用分析引擎进行分析
             result = self.analysis_engine.analyze_training_progress(metrics_data)
             
@@ -104,6 +120,9 @@ class LLMFramework:
                 'processing_time': time.time() - start_time,
                 'timestamp': time.time()
             }
+            
+            print(f"[DEBUG] 分析完成，耗时: {time.time() - start_time:.2f}秒")
+            print(f"[DEBUG] 结果类型: {type(result)}")
             
             self.stats['successful_requests'] += 1
             self._update_response_time(time.time() - start_time)
@@ -115,6 +134,7 @@ class LLMFramework:
             
         except Exception as e:
             self.stats['failed_requests'] += 1
+            print(f"[ERROR] LLM分析失败: {str(e)}")
             error_result = {
                 'error': f'分析失败: {str(e)}',
                 'timestamp': time.time(),

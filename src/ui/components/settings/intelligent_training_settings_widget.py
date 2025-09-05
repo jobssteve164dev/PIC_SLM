@@ -34,8 +34,8 @@ class IntelligentTrainingSettingsWidget(QWidget):
             # 智能训练编排器配置
             'enabled': True,
             'max_iterations': 5,
-            'min_iteration_epochs': 3,
-            'analysis_interval': 5,
+            'min_iteration_epochs': 2,
+            'analysis_interval': 2,
             'convergence_threshold': 0.01,
             'improvement_threshold': 0.02,
             'auto_restart': True,
@@ -57,7 +57,7 @@ class IntelligentTrainingSettingsWidget(QWidget):
             # LLM分析配置
             'llm_analysis_enabled': True,
             'confidence_threshold': 0.7,
-            'adapter_type': 'mock',  # 使用AI设置中配置的适配器
+            'adapter_type': 'openai',  # 生产环境使用真实LLM适配器
             'analysis_frequency': 'epoch_based',
             'min_data_points': 5,
             
@@ -310,10 +310,16 @@ class IntelligentTrainingSettingsWidget(QWidget):
         
         # 适配器类型 - 引用AI设置中的适配器
         self.adapter_type_combo = QComboBox()
-        self.adapter_type_combo.addItems(['mock', 'openai', 'deepseek', 'ollama', 'custom'])
+        self.adapter_type_combo.addItems(['openai', 'deepseek', 'ollama', 'custom', 'mock'])
         self.adapter_type_combo.setCurrentText(self.current_config['adapter_type'])
-        self.adapter_type_combo.setToolTip("LLM适配器类型 - 使用AI设置中配置的适配器")
+        self.adapter_type_combo.setToolTip("LLM适配器类型 - 生产环境请使用真实LLM服务，mock仅用于测试")
         llm_layout.addRow("适配器类型:", self.adapter_type_combo)
+        
+        # 添加警告标签
+        warning_label = QLabel("⚠️ 生产环境请配置真实的LLM服务，避免使用mock适配器")
+        warning_label.setStyleSheet("color: #ff6b35; font-weight: bold;")
+        warning_label.setWordWrap(True)
+        llm_layout.addRow("", warning_label)
         
         # 分析频率
         self.analysis_frequency_combo = QComboBox()
@@ -601,10 +607,76 @@ class IntelligentTrainingSettingsWidget(QWidget):
         """保存配置"""
         try:
             self.update_current_config()
+            
+            # 保存到智能训练配置文件
+            self._save_to_intelligent_training_config()
+            
             self.config_changed.emit(self.current_config)
             QMessageBox.information(self, "成功", "智能训练配置已保存到应用设置中")
         except Exception as e:
             QMessageBox.warning(self, "错误", f"保存配置失败: {str(e)}")
+    
+    def _save_to_intelligent_training_config(self):
+        """保存到智能训练配置文件"""
+        try:
+            config_file = "setting/intelligent_training_config.json"
+            
+            # 创建配置目录
+            os.makedirs(os.path.dirname(config_file), exist_ok=True)
+            
+            # 构建完整的配置
+            full_config = {
+                # 智能训练编排器配置
+                'enabled': self.current_config['enabled'],
+                'max_iterations': self.current_config['max_iterations'],
+                'min_iteration_epochs': self.current_config['min_iteration_epochs'],
+                'analysis_interval': self.current_config['analysis_interval'],
+                'convergence_threshold': self.current_config['convergence_threshold'],
+                'improvement_threshold': self.current_config['improvement_threshold'],
+                'auto_restart': self.current_config['auto_restart'],
+                'preserve_best_model': self.current_config['preserve_best_model'],
+                
+                # 干预阈值设置
+                'overfitting_threshold': self.current_config['overfitting_threshold'],
+                'underfitting_threshold': self.current_config['underfitting_threshold'],
+                'stagnation_epochs': self.current_config['stagnation_epochs'],
+                'divergence_threshold': self.current_config['divergence_threshold'],
+                'min_training_epochs': self.current_config['min_training_epochs'],
+                
+                # 参数调优策略
+                'tuning_strategy': self.current_config['tuning_strategy'],
+                'enable_auto_intervention': self.current_config['enable_auto_intervention'],
+                'intervention_cooldown': self.current_config['intervention_cooldown'],
+                'max_interventions_per_session': self.current_config['max_interventions_per_session'],
+                
+                # LLM配置
+                'llm_config': {
+                    'adapter_type': self.current_config['adapter_type'],
+                    'analysis_frequency': self.current_config['analysis_frequency'],
+                    'min_data_points': self.current_config['min_data_points'],
+                    'confidence_threshold': self.current_config['confidence_threshold']
+                },
+                
+                # 监控配置
+                'check_interval': self.current_config['check_interval'],
+                'metrics_buffer_size': self.current_config['metrics_buffer_size'],
+                'trend_analysis_window': self.current_config['trend_analysis_window'],
+                'alert_on_intervention': self.current_config['alert_on_intervention'],
+                
+                # 报告配置
+                'auto_generate_reports': self.current_config['auto_generate_reports'],
+                'report_format': self.current_config['report_format'],
+                'include_visualizations': self.current_config['include_visualizations'],
+                'save_intervention_details': self.current_config['save_intervention_details']
+            }
+            
+            # 保存到文件
+            with open(config_file, 'w', encoding='utf-8') as f:
+                json.dump(full_config, f, ensure_ascii=False, indent=2)
+                
+        except Exception as e:
+            print(f"保存智能训练配置失败: {str(e)}")
+            raise
     
     def reset_to_default(self):
         """重置为默认配置"""

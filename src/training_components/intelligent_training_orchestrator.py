@@ -69,8 +69,8 @@ class IntelligentTrainingOrchestrator(QObject):
         # 配置参数
         self.config = {
             'max_iterations': 5,           # 最大迭代次数
-            'min_iteration_epochs': 5,     # 每次迭代最小训练轮数
-            'analysis_interval': 5,        # 分析间隔（epoch）
+            'min_iteration_epochs': 2,     # 每次迭代最小训练轮数（调试用）
+            'analysis_interval': 2,        # 分析间隔（epoch）（调试用）
             'convergence_threshold': 0.01, # 收敛阈值
             'improvement_threshold': 0.02, # 改进阈值
             'auto_restart': True,          # 自动重启训练
@@ -99,10 +99,38 @@ class IntelligentTrainingOrchestrator(QObject):
             self.config_generator.status_updated.connect(self.status_updated)
             self.config_generator.error_occurred.connect(self.error_occurred)
             
+            # 检查LLM配置
+            self._check_llm_configuration()
+            
             print("智能训练编排器初始化完成")
             
         except Exception as e:
             self.error_occurred.emit(f"初始化组件失败: {str(e)}")
+    
+    def _check_llm_configuration(self):
+        """检查LLM配置"""
+        try:
+            from ..utils.llm_config_checker import LLMConfigChecker
+            checker = LLMConfigChecker()
+            result = checker.check_all_configs()
+            
+            if result['overall_status'] == 'error':
+                self.error_occurred.emit("❌ LLM配置检查失败，请检查配置")
+                print("[ERROR] LLM配置检查失败:")
+                for error in result['errors']:
+                    print(f"  ❌ {error}")
+            elif result['overall_status'] == 'warning':
+                self.status_updated.emit("⚠️ LLM配置有警告，请检查")
+                print("[WARNING] LLM配置有警告:")
+                for warning in result['warnings']:
+                    print(f"  ⚠️ {warning}")
+            else:
+                self.status_updated.emit("✅ LLM配置检查通过")
+                print("[INFO] LLM配置检查通过")
+                
+        except Exception as e:
+            print(f"[WARNING] LLM配置检查失败: {str(e)}")
+            self.status_updated.emit("⚠️ LLM配置检查失败，请手动验证")
     
     def set_model_trainer(self, model_trainer: ModelTrainer):
         """设置模型训练器"""
@@ -515,7 +543,9 @@ class IntelligentTrainingOrchestrator(QObject):
             
             # 等待监控线程结束
             if self.monitoring_thread and self.monitoring_thread.is_alive():
-                self.monitoring_thread.join(timeout=5)
+                self.monitoring_thread.join(timeout=10)
+                if self.monitoring_thread.is_alive():
+                    print("⚠️ 监控线程未能在10秒内结束，强制继续")
             
             # 设置状态为真正停止
             self.state_manager.stop_training()

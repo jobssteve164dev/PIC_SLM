@@ -583,29 +583,49 @@ class IntelligentTrainingWidget(QWidget):
                 timestamp = time.strftime("%H:%M:%S", time.localtime(adjustment.get('timestamp', 0)))
                 self.history_table.setItem(row, 0, QTableWidgetItem(timestamp))
                 
-                # 参数变更
+                # 参数变更 - 为每个参数创建单独的行
                 changes = adjustment.get('changes', {})
                 if changes:
+                    # 为每个参数创建单独的行
                     param_names = list(changes.keys())
-                    self.history_table.setItem(row, 1, QTableWidgetItem(", ".join(param_names)))
-                    
-                    # 显示第一个参数的原值和新值
-                    first_param = param_names[0]
-                    change_info = changes[first_param]
-                    self.history_table.setItem(row, 2, QTableWidgetItem(str(change_info.get('from', ''))))
-                    self.history_table.setItem(row, 3, QTableWidgetItem(str(change_info.get('to', ''))))
+                    for param_idx, param_name in enumerate(param_names):
+                        if param_idx > 0:
+                            # 为额外参数插入新行
+                            self.history_table.insertRow(row + param_idx)
+                            # 复制时间列
+                            self.history_table.setItem(row + param_idx, 0, QTableWidgetItem(timestamp))
+                        
+                        change_info = changes[param_name]
+                        current_row = row + param_idx
+                        
+                        # 参数名
+                        self.history_table.setItem(current_row, 1, QTableWidgetItem(param_name))
+                        # 原值
+                        self.history_table.setItem(current_row, 2, QTableWidgetItem(str(change_info.get('from', ''))))
+                        # 新值
+                        new_value = str(change_info.get('to', ''))
+                        # 如果新值包含LLM分析文本，只显示参数值部分
+                        if '###' in new_value:
+                            new_value = new_value.split('###')[0].strip()
+                        self.history_table.setItem(current_row, 3, QTableWidgetItem(new_value))
+                        # 原因（只在第一行显示）
+                        if param_idx == 0:
+                            reason = adjustment.get('reason', '')
+                            self.history_table.setItem(current_row, 4, QTableWidgetItem(reason))
+                        # 状态（只在第一行显示）
+                        if param_idx == 0:
+                            status = adjustment.get('status', 'unknown')
+                            self.history_table.setItem(current_row, 5, QTableWidgetItem(status))
                 else:
                     self.history_table.setItem(row, 1, QTableWidgetItem("无变更"))
                     self.history_table.setItem(row, 2, QTableWidgetItem(""))
                     self.history_table.setItem(row, 3, QTableWidgetItem(""))
-                
-                # 原因
-                reason = adjustment.get('reason', '')
-                self.history_table.setItem(row, 4, QTableWidgetItem(reason))
-                
-                # 状态
-                status = adjustment.get('status', 'unknown')
-                self.history_table.setItem(row, 5, QTableWidgetItem(status))
+                    # 原因
+                    reason = adjustment.get('reason', '')
+                    self.history_table.setItem(row, 4, QTableWidgetItem(reason))
+                    # 状态
+                    status = adjustment.get('status', 'unknown')
+                    self.history_table.setItem(row, 5, QTableWidgetItem(status))
             
             # 调整列宽
             self.history_table.resizeColumnsToContents()

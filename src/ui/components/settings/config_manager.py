@@ -88,8 +88,8 @@ class ConfigManager:
                 # 智能训练编排器配置
                 'enabled': True,
                 'max_iterations': 5,
-                'min_iteration_epochs': 5,
-                'analysis_interval': 5,
+                'min_iteration_epochs': 2,
+                'analysis_interval': 2,
                 'convergence_threshold': 0.01,
                 'improvement_threshold': 0.02,
                 'auto_restart': True,

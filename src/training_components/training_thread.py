@@ -429,13 +429,25 @@ class TrainingThread(QThread):
             import traceback
             traceback.print_exc()
         finally:
+            print("[DEBUG] 训练线程进入finally块")
             # 确保停止资源限制器
             if self.resource_limiter:
                 self.resource_limiter.stop_monitoring()
                 self.status_updated.emit("🔚 资源限制器已停止")
+            
+            # 停止指标采集
+            if self.metrics_collector:
+                try:
+                    self.metrics_collector.stop_collection()
+                    print("[DEBUG] 指标采集已停止")
+                except Exception as e:
+                    print(f"[DEBUG] 停止指标采集时出错: {e}")
+            
+            print("[DEBUG] 训练线程finally块完成")
     
     def stop(self):
         """停止训练过程"""
+        print("[DEBUG] 训练线程收到停止信号")
         self.stop_training = True
         
         # 停止资源限制器
@@ -447,6 +459,7 @@ class TrainingThread(QThread):
         self._release_stream_server()
         
         self.status_updated.emit("训练线程正在停止...")
+        print("[DEBUG] 训练线程停止信号处理完成")
     
     def _release_stream_server(self):
         """释放数据流服务器引用"""

@@ -375,8 +375,21 @@ class TrainingAnalysisEngine:
 请用中文回答，保持专业性和实用性，重点关注参数配置与训练表现的关联性。
 """
             
+            # 添加调试信息
+            print(f"[DEBUG] 分析引擎开始调用LLM")
+            print(f"[DEBUG] LLM适配器类型: {type(self.llm).__name__}")
+            print(f"[DEBUG] 提示词长度: {len(prompt)} 字符")
+            
             # 获取LLM分析（使用增强的提示词）
+            print(f"[DEBUG] 开始调用LLM.analyze_metrics...")
             llm_analysis = self.llm.analyze_metrics(metrics_data, prompt)
+            print(f"[DEBUG] LLM分析完成，结果类型: {type(llm_analysis)}")
+            
+            # 检查是否是模拟结果
+            if isinstance(llm_analysis, str) and "模拟分析结果" in llm_analysis:
+                print("[WARNING] 检测到模拟分析结果！")
+            else:
+                print("[DEBUG] LLM分析结果看起来是真实的")
             
             # 结合规则分析
             rule_analysis = self._rule_based_analysis(metrics_data)

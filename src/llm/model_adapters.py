@@ -94,7 +94,14 @@ class OpenAIAdapter(LLMAdapter):
     
     def analyze_metrics(self, metrics_data: Dict, custom_prompt: str = None) -> str:
         """分析训练指标"""
+        print(f"[DEBUG] OpenAIAdapter.analyze_metrics 被调用")
+        print(f"[DEBUG] 使用自定义提示词: {custom_prompt is not None}")
+        print(f"[DEBUG] 模型: {self.model}")
+        print(f"[DEBUG] API密钥已配置: {bool(self.api_key)}")
+        print(f"[DEBUG] 客户端可用: {self.available}")
+        
         if custom_prompt:
+            print(f"[DEBUG] 使用自定义提示词进行分析")
             return self.generate_response(custom_prompt)
         
         prompt = f"""
@@ -111,6 +118,7 @@ class OpenAIAdapter(LLMAdapter):
 
 请用中文回答，并保持专业性。
 """
+        print(f"[DEBUG] 使用默认提示词进行分析")
         return self.generate_response(prompt)
     
     def _get_system_prompt(self) -> str:
@@ -597,6 +605,10 @@ class MockLLMAdapter(LLMAdapter):
     
     def analyze_metrics(self, metrics_data: Dict, custom_prompt: str = None) -> str:
         """分析训练指标"""
+        print(f"[DEBUG] MockLLMAdapter.analyze_metrics 被调用")
+        print(f"[DEBUG] 使用自定义提示词: {custom_prompt is not None}")
+        print(f"[WARNING] 正在使用模拟LLM适配器！这不是真实的分析结果！")
+        
         if custom_prompt:
             return self.generate_response(custom_prompt)
         return self._generate_metrics_analysis(metrics_data)

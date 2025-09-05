@@ -77,8 +77,20 @@ class IntelligentConfigGenerator(QObject):
     def _initialize_components(self):
         """初始化相关组件"""
         try:
+            # 获取LLM配置
+            llm_config = self._load_llm_config()
+            adapter_type = llm_config.get('adapter_type', 'openai')
+            
+            # 生产环境检查
+            if adapter_type == 'mock':
+                self.error_occurred.emit("❌ 生产环境不允许使用mock LLM适配器！请在智能训练设置中配置真实的LLM服务。")
+                raise ValueError("生产环境不允许使用mock LLM适配器")
+            
             # 初始化LLM框架
-            self.llm_framework = LLMFramework(adapter_type='mock')
+            self.llm_framework = LLMFramework(
+                adapter_type=adapter_type,
+                adapter_config=llm_config.get('adapter_config', {})
+            )
             self.llm_framework.start()
             
             # 初始化分析引擎
@@ -87,10 +99,120 @@ class IntelligentConfigGenerator(QObject):
             # 获取指标采集器
             self.metrics_collector = get_global_metrics_collector()
             
-            print("智能配置生成器初始化完成")
+            print(f"✅ 智能配置生成器初始化完成，使用LLM适配器: {adapter_type}")
             
         except Exception as e:
             self.error_occurred.emit(f"初始化组件失败: {str(e)}")
+            # 生产环境中不允许使用模拟适配器作为后备
+            raise
+    
+    def _load_llm_config(self) -> Dict[str, Any]:
+        """加载LLM配置"""
+        try:
+            print("[DEBUG] 开始加载LLM配置...")
+            
+            # 首先尝试从智能训练设置中加载
+            intelligent_config_file = "setting/intelligent_training_config.json"
+            if os.path.exists(intelligent_config_file):
+                print(f"[DEBUG] 检查智能训练配置文件: {intelligent_config_file}")
+                with open(intelligent_config_file, 'r', encoding='utf-8') as f:
+                    config = json.load(f)
+                    llm_config = config.get('llm_config', {})
+                    if llm_config:
+                        print(f"[DEBUG] 从智能训练配置中找到LLM配置: {llm_config}")
+                        return llm_config
+                    else:
+                        print("[DEBUG] 智能训练配置中未找到llm_config")
+            else:
+                print(f"[DEBUG] 智能训练配置文件不存在: {intelligent_config_file}")
+            
+            # 然后尝试从AI设置中加载
+            ai_config_file = "setting/ai_config.json"
+            if os.path.exists(ai_config_file):
+                print(f"[DEBUG] 检查AI配置文件: {ai_config_file}")
+                with open(ai_config_file, 'r', encoding='utf-8') as f:
+                    config = json.load(f)
+                    
+                    # 获取默认适配器类型
+                    default_adapter = config.get('general', {}).get('default_adapter', 'openai')
+                    print(f"[DEBUG] 从AI配置中获取默认适配器: {default_adapter}")
+                    
+                    # 根据适配器类型获取对应配置
+                    if default_adapter == 'deepseek':
+                        adapter_config = config.get('deepseek', {})
+                        print(f"[DEBUG] 加载DeepSeek配置: {adapter_config}")
+                        result = {
+                            'adapter_type': 'deepseek',
+                            'adapter_config': {
+                                'api_key': adapter_config.get('api_key', ''),
+                                'base_url': adapter_config.get('base_url', ''),
+                                'model': adapter_config.get('model', 'deepseek-chat'),
+                                'temperature': adapter_config.get('temperature', 0.7),
+                                'max_tokens': adapter_config.get('max_tokens', 3000)
+                            }
+                        }
+                        print(f"[DEBUG] 返回DeepSeek配置: {result}")
+                        return result
+                    elif default_adapter == 'openai':
+                        adapter_config = config.get('openai', {})
+                        return {
+                            'adapter_type': 'openai',
+                            'adapter_config': {
+                                'api_key': adapter_config.get('api_key', ''),
+                                'base_url': adapter_config.get('base_url', ''),
+                                'model': adapter_config.get('model', 'gpt-4'),
+                                'temperature': adapter_config.get('temperature', 0.7),
+                                'max_tokens': adapter_config.get('max_tokens', 1000)
+                            }
+                        }
+                    elif default_adapter == 'ollama':
+                        adapter_config = config.get('ollama', {})
+                        return {
+                            'adapter_type': 'ollama',
+                            'adapter_config': {
+                                'base_url': adapter_config.get('base_url', ''),
+                                'model': adapter_config.get('model', 'llama2'),
+                                'temperature': adapter_config.get('temperature', 0.7),
+                                'num_predict': adapter_config.get('num_predict', 1000),
+                                'timeout': adapter_config.get('timeout', 120)
+                            }
+                        }
+                    elif default_adapter == 'custom':
+                        adapter_config = config.get('custom_api', {})
+                        return {
+                            'adapter_type': 'custom',
+                            'adapter_config': {
+                                'api_key': adapter_config.get('api_key', ''),
+                                'base_url': adapter_config.get('base_url', ''),
+                                'model': adapter_config.get('model', ''),
+                                'temperature': adapter_config.get('temperature', 0.7),
+                                'max_tokens': adapter_config.get('max_tokens', 1000)
+                            }
+                        }
+            
+            # 如果都没有，返回默认配置
+            return {
+                'adapter_type': 'openai',
+                'adapter_config': {
+                    'api_key': '',
+                    'model': 'gpt-4',
+                    'temperature': 0.7,
+                    'max_tokens': 1000
+                }
+            }
+            
+        except Exception as e:
+            print(f"加载LLM配置失败: {str(e)}")
+            # 返回默认配置
+            return {
+                'adapter_type': 'openai',
+                'adapter_config': {
+                    'api_key': '',
+                    'model': 'gpt-4',
+                    'temperature': 0.7,
+                    'max_tokens': 1000
+                }
+            }
     
     def _load_parameter_constraints(self) -> Dict[str, Dict[str, Any]]:
         """加载参数约束配置"""
@@ -188,7 +310,11 @@ class IntelligentConfigGenerator(QObject):
             # 记录配置调整
             # 确保analysis_result是字典格式
             if isinstance(analysis_result, str):
-                analysis_dict = {'reason': analysis_result, 'analysis': analysis_result}
+                # 如果分析结果是字符串，提取其中的关键信息
+                analysis_dict = {
+                    'reason': 'LLM智能分析建议',
+                    'analysis': analysis_result[:500] + '...' if len(analysis_result) > 500 else analysis_result
+                }
             else:
                 analysis_dict = analysis_result
             
@@ -208,16 +334,38 @@ class IntelligentConfigGenerator(QObject):
                                   metrics: Dict[str, Any]) -> Dict[str, Any]:
         """分析配置和训练指标"""
         try:
+            # 添加调试信息
+            adapter_type = type(self.llm_framework.llm_adapter).__name__
+            self.status_updated.emit(f"🔍 开始LLM分析，使用适配器: {adapter_type}")
+            print(f"[DEBUG] 使用LLM适配器: {adapter_type}")
+            print(f"[DEBUG] 适配器类型: {getattr(self.llm_framework.llm_adapter, 'adapter_type', 'unknown')}")
+            
             # 构建分析提示词
             prompt = self._build_config_analysis_prompt(config, metrics)
+            print(f"[DEBUG] 分析提示词长度: {len(prompt)} 字符")
             
             # 使用LLM进行分析
+            self.status_updated.emit("🤖 正在调用LLM进行训练分析...")
+            print(f"[DEBUG] 开始调用LLM分析...")
+            
             analysis_result = self.llm_framework.llm_adapter.analyze_metrics(metrics, prompt)
+            
+            print(f"[DEBUG] LLM分析结果类型: {type(analysis_result)}")
+            print(f"[DEBUG] LLM分析结果长度: {len(str(analysis_result))} 字符")
+            
+            # 检查是否是模拟结果
+            if isinstance(analysis_result, str) and "模拟分析结果" in analysis_result:
+                self.status_updated.emit("⚠️ 检测到模拟分析结果！请配置真实的LLM服务")
+                print("[WARNING] 检测到模拟分析结果，请配置真实的LLM服务")
+            else:
+                self.status_updated.emit("✅ LLM分析完成")
+                print("[DEBUG] LLM分析完成，结果看起来是真实的")
             
             return analysis_result
             
         except Exception as e:
             self.error_occurred.emit(f"分析配置和指标失败: {str(e)}")
+            print(f"[ERROR] LLM分析失败: {str(e)}")
             return {'error': str(e)}
     
     def _build_config_analysis_prompt(self, 
@@ -286,14 +434,21 @@ class IntelligentConfigGenerator(QObject):
     def _generate_optimization_suggestions(self, 
                                          config: Dict[str, Any],
                                          metrics: Dict[str, Any],
-                                         analysis_result: Dict[str, Any]) -> List[Dict[str, Any]]:
+                                         analysis_result: Any) -> List[Dict[str, Any]]:
         """生成优化建议"""
         suggestions = []
         
         try:
+            print(f"[DEBUG] 分析结果类型: {type(analysis_result)}")
+            print(f"[DEBUG] 分析结果内容: {str(analysis_result)[:200]}...")
+            
             # 从LLM分析结果中提取建议
-            if 'suggestions' in analysis_result:
+            if isinstance(analysis_result, dict) and 'suggestions' in analysis_result:
                 suggestions.extend(analysis_result['suggestions'])
+            elif isinstance(analysis_result, str):
+                # 如果分析结果是字符串，尝试解析其中的建议
+                parsed_suggestions = self._parse_suggestions_from_text(analysis_result)
+                suggestions.extend(parsed_suggestions)
             
             # 基于规则生成额外建议
             rule_suggestions = self._generate_rule_based_suggestions(config, metrics)
@@ -306,6 +461,88 @@ class IntelligentConfigGenerator(QObject):
             
         except Exception as e:
             self.error_occurred.emit(f"生成优化建议失败: {str(e)}")
+            print(f"[ERROR] 生成优化建议失败: {str(e)}")
+            import traceback
+            traceback.print_exc()
+            return []
+    
+    def _parse_suggestions_from_text(self, text: str) -> List[Dict[str, Any]]:
+        """从文本中解析建议"""
+        suggestions = []
+        
+        try:
+            print(f"[DEBUG] 开始解析LLM返回的文本建议")
+            
+            # 首先尝试提取JSON格式的建议
+            json_suggestions = self._extract_json_suggestions(text)
+            if json_suggestions:
+                print(f"[DEBUG] 成功提取到 {len(json_suggestions)} 个JSON格式建议")
+                return json_suggestions
+            
+            # 如果没有JSON格式，则进行文本解析
+            print(f"[DEBUG] 未找到JSON格式建议，进行文本解析")
+            lines = text.split('\n')
+            current_suggestion = None
+            
+            for line in lines:
+                line = line.strip()
+                if not line:
+                    continue
+                    
+                # 检测建议项（以数字开头或包含关键词）
+                if (line.startswith(('1.', '2.', '3.', '4.', '5.', '6.', '7.', '8.', '9.')) or
+                    any(keyword in line.lower() for keyword in ['建议', '推荐', '调整', '优化', '增加', '减少', '降低', '提高'])):
+                    
+                    if current_suggestion:
+                        suggestions.append(current_suggestion)
+                    
+                    current_suggestion = {
+                        'type': 'parameter_adjustment',
+                        'description': line,
+                        'priority': 'medium',
+                        'confidence': 0.7
+                    }
+                elif current_suggestion and line.startswith(('  ', '\t', '-', '*')):
+                    # 这是建议的详细说明
+                    current_suggestion['description'] += f" {line.strip()}"
+            
+            if current_suggestion:
+                suggestions.append(current_suggestion)
+                
+        except Exception as e:
+            print(f"[DEBUG] 解析文本建议失败: {str(e)}")
+        
+        return suggestions
+    
+    def _extract_json_suggestions(self, text: str) -> List[Dict[str, Any]]:
+        """从文本中提取JSON格式的建议"""
+        try:
+            import re
+            import json
+            
+            # 查找JSON代码块
+            json_pattern = r'```json\s*(\{.*?\})\s*```'
+            matches = re.findall(json_pattern, text, re.DOTALL)
+            
+            if not matches:
+                # 如果没有代码块标记，尝试直接查找JSON对象
+                json_pattern = r'\{[^{}]*"suggestions"[^{}]*\[.*?\][^{}]*\}'
+                matches = re.findall(json_pattern, text, re.DOTALL)
+            
+            for match in matches:
+                try:
+                    json_data = json.loads(match)
+                    if 'suggestions' in json_data and isinstance(json_data['suggestions'], list):
+                        print(f"[DEBUG] 成功解析JSON建议: {len(json_data['suggestions'])} 个建议")
+                        return json_data['suggestions']
+                except json.JSONDecodeError as e:
+                    print(f"[DEBUG] JSON解析失败: {str(e)}")
+                    continue
+            
+            return []
+            
+        except Exception as e:
+            print(f"[DEBUG] 提取JSON建议失败: {str(e)}")
             return []
     
     def _generate_rule_based_suggestions(self, 

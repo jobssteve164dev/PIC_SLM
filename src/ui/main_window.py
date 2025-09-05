@@ -224,6 +224,7 @@ class MainWindow(QMainWindow):
             self.intelligent_manager.error_occurred.connect(lambda e: QMessageBox.warning(self, "智能训练错误", e))
             # 智能训练事件桥接到评估曲线
             self.intelligent_manager.analysis_completed.connect(lambda d: self.update_status("AI分析完成"))
+            self.intelligent_manager.training_stopped.connect(self.on_training_stopped)
         except Exception:
             pass
         
@@ -491,6 +492,25 @@ class MainWindow(QMainWindow):
             self.intelligent_manager._on_training_restart_requested({'new_params': suggested})
         except Exception as e:
             self.update_status(f'处理智能重启失败: {e}')
+    
+    def on_training_stopped(self, data):
+        """训练停止时调用"""
+        try:
+            # 检查是否是智能训练重启
+            is_intelligent_restart = data.get('is_intelligent_restart', False)
+            
+            # 更新训练标签页状态
+            if hasattr(self, 'training_tab'):
+                self.training_tab.on_training_stopped(is_intelligent_restart)
+            
+            # 更新状态栏
+            if is_intelligent_restart:
+                self.update_status('智能训练重启中...')
+            else:
+                self.update_status('训练已停止')
+            
+        except Exception as e:
+            self.update_status(f'处理训练停止事件失败: {e}')
 
     def update_status(self, message):
         """更新状态栏消息"""
