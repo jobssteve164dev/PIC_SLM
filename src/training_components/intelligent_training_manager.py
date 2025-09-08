@@ -211,6 +211,10 @@ class IntelligentTrainingManager(QObject):
         try:
             self.config.update(new_config)
             
+            # 将配置传递给智能训练编排器
+            if self.intelligent_orchestrator:
+                self.intelligent_orchestrator.update_config(new_config)
+            
             # 保存配置到文件
             os.makedirs(os.path.dirname(self.config_file), exist_ok=True)
             with open(self.config_file, 'w', encoding='utf-8') as f:

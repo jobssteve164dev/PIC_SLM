@@ -317,7 +317,8 @@ class MainWindow(QMainWindow):
             cfg = ConfigLoader().get_config()
             intelligent_config = cfg.get('intelligent_training', {})
             if intelligent_config:
-                self.intelligent_manager.config.update(intelligent_config)
+                # 使用update_config方法，确保配置传递给编排器
+                self.intelligent_manager.update_config(intelligent_config)
                 print(f"从主配置加载智能训练配置: {intelligent_config}")
         except Exception as e:
             print(f"从主配置加载智能训练配置失败: {e}")

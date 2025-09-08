@@ -66,7 +66,7 @@ class IntelligentTrainingOrchestrator(QObject):
         self.current_session: Optional[IntelligentTrainingSession] = None
         self.training_tab = None  # 训练标签页引用
         
-        # 配置参数
+        # 配置参数 - 默认值
         self.config = {
             'max_iterations': 5,           # 最大迭代次数
             'min_iteration_epochs': 2,     # 每次迭代最小训练轮数（调试用）
@@ -76,6 +76,9 @@ class IntelligentTrainingOrchestrator(QObject):
             'auto_restart': True,          # 自动重启训练
             'preserve_best_model': True,   # 保留最佳模型
         }
+        
+        # 加载外部配置
+        self._load_external_config()
         
         # 状态管理
         self.is_running = False
@@ -88,6 +91,65 @@ class IntelligentTrainingOrchestrator(QObject):
         
         # 连接状态管理器信号
         self.state_manager.state_changed.connect(self._on_state_changed)
+    
+    def _load_external_config(self):
+        """加载外部配置文件"""
+        try:
+            # 首先尝试从主配置文件加载
+            main_config_file = "config.json"
+            if os.path.exists(main_config_file):
+                with open(main_config_file, 'r', encoding='utf-8') as f:
+                    main_config = json.load(f)
+                    intelligent_config = main_config.get('intelligent_training', {})
+                    if intelligent_config:
+                        self._update_config_from_dict(intelligent_config)
+                        print(f"[INFO] 从主配置文件加载智能训练配置: {intelligent_config}")
+                        return
+            
+            # 然后尝试从智能训练专用配置文件加载
+            intelligent_config_file = "setting/intelligent_training_config.json"
+            if os.path.exists(intelligent_config_file):
+                with open(intelligent_config_file, 'r', encoding='utf-8') as f:
+                    intelligent_config = json.load(f)
+                    self._update_config_from_dict(intelligent_config)
+                    print(f"[INFO] 从智能训练配置文件加载配置: {intelligent_config}")
+                    return
+            
+            print("[INFO] 未找到外部配置文件，使用默认配置")
+            
+        except Exception as e:
+            print(f"[WARNING] 加载外部配置失败: {str(e)}，使用默认配置")
+    
+    def _update_config_from_dict(self, config_dict: Dict[str, Any]):
+        """从字典更新配置"""
+        try:
+            # 更新编排器相关配置
+            orchestrator_keys = [
+                'max_iterations', 'min_iteration_epochs', 'analysis_interval',
+                'convergence_threshold', 'improvement_threshold', 'auto_restart', 'preserve_best_model'
+            ]
+            
+            for key in orchestrator_keys:
+                if key in config_dict:
+                    self.config[key] = config_dict[key]
+                    print(f"[DEBUG] 更新配置 {key}: {config_dict[key]}")
+            
+            # 更新配置生成器的配置
+            if self.config_generator:
+                self.config_generator.update_config(config_dict)
+                
+        except Exception as e:
+            print(f"[ERROR] 更新配置失败: {str(e)}")
+    
+    def update_config(self, new_config: Dict[str, Any]):
+        """更新配置（供外部调用）"""
+        try:
+            self._update_config_from_dict(new_config)
+            self.status_updated.emit("智能训练配置已更新")
+            print(f"[INFO] 智能训练编排器配置已更新: {new_config}")
+        except Exception as e:
+            self.error_occurred.emit(f"更新配置失败: {str(e)}")
+            print(f"[ERROR] 更新配置失败: {str(e)}")
         
     def _initialize_components(self):
         """初始化组件"""

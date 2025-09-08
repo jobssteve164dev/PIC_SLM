@@ -732,9 +732,10 @@ class SettingsTab(BaseTab):
             print(f"智能训练配置已变更: {intelligent_config}")
             
             # 通知主窗口的智能训练管理器更新配置
-            if hasattr(self.main_window, 'intelligent_manager'):
-                self.main_window.intelligent_manager.config.update(intelligent_config)
-                print("智能训练管理器配置已更新")
+            if hasattr(self.main_window, 'intelligent_manager') and self.main_window.intelligent_manager:
+                # 使用update_config方法，确保配置传递给编排器
+                self.main_window.intelligent_manager.update_config(intelligent_config)
+                print("智能训练管理器配置已更新并传递给编排器")
             
             # 不自动保存，避免多次弹出保存提示
             # 用户可以通过点击"保存配置"按钮手动保存

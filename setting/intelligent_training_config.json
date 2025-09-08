@@ -1,14 +1,20 @@
 {
   "auto_intervention_enabled": true,
-  "analysis_interval": 2,
-  "max_interventions_per_session": 3,
-  "parameter_tuning_strategy": "conservative",
   "intervention_thresholds": {
     "overfitting_risk": 0.8,
     "underfitting_risk": 0.7,
     "stagnation_epochs": 5,
     "divergence_threshold": 2.0,
     "min_training_epochs": 2
+  },
+  "analysis_interval": 2,
+  "max_interventions_per_session": 10,
+  "parameter_tuning_strategy": "conservative",
+  "training_restart": {
+    "auto_restart": true,
+    "max_restart_attempts": 3,
+    "restart_delay": 5,
+    "preserve_best_checkpoint": true
   },
   "llm_analysis": {
     "enabled": true,
@@ -36,12 +42,6 @@
       "weight_decay_increase": 2.5
     }
   },
-  "training_restart": {
-    "auto_restart": true,
-    "max_restart_attempts": 3,
-    "restart_delay": 5,
-    "preserve_best_checkpoint": true
-  },
   "monitoring": {
     "check_interval": 5,
     "metrics_buffer_size": 100,
@@ -52,6 +52,42 @@
     "auto_generate_reports": true,
     "report_format": "json",
     "include_visualizations": true,
-    "save_intervention_details": true
-  }
-} 
+    "save_intervention_details": true,
+    "parameter_tuning_reports": {
+      "enabled": true,
+      "save_path": "reports/parameter_tuning",
+      "format": "markdown",
+      "include_llm_analysis": true,
+      "include_metrics_comparison": true,
+      "include_config_changes": true
+    }
+  },
+  "enabled": true,
+  "max_iterations": 10,
+  "min_iteration_epochs": 3,
+  "convergence_threshold": 0.01,
+  "improvement_threshold": 0.02,
+  "auto_restart": true,
+  "preserve_best_model": true,
+  "overfitting_threshold": 0.8,
+  "underfitting_threshold": 0.7,
+  "stagnation_epochs": 5,
+  "divergence_threshold": 2.0,
+  "min_training_epochs": 3,
+  "tuning_strategy": "conservative",
+  "enable_auto_intervention": true,
+  "intervention_cooldown": 2,
+  "llm_analysis_enabled": true,
+  "adapter_type": "deepseek",
+  "analysis_frequency": "epoch_based",
+  "min_data_points": 5,
+  "confidence_threshold": 0.7,
+  "check_interval": 30,
+  "metrics_buffer_size": 100,
+  "trend_analysis_window": 10,
+  "alert_on_intervention": true,
+  "auto_generate_reports": true,
+  "report_format": "json",
+  "include_visualizations": true,
+  "save_intervention_details": true
+}

@@ -632,6 +632,37 @@ class LLMFramework:
         self.analysis_engine.clear_history()
         print("历史记录已清空")
     
+    def update_config(self, config_dict: Dict[str, Any]):
+        """更新LLM框架配置"""
+        try:
+            # 更新适配器类型和配置
+            if 'adapter_type' in config_dict:
+                self.adapter_type = config_dict['adapter_type']
+                print(f"[DEBUG] 更新适配器类型: {self.adapter_type}")
+            
+            if 'adapter_config' in config_dict:
+                self.adapter_config = config_dict['adapter_config']
+                print(f"[DEBUG] 更新适配器配置: {self.adapter_config}")
+            
+            # 如果配置发生变化，重新创建适配器
+            if 'adapter_type' in config_dict or 'adapter_config' in config_dict:
+                old_adapter = type(self.llm_adapter).__name__
+                new_adapter = self._create_adapter()
+                self.llm_adapter = new_adapter
+                self.analysis_engine.llm = new_adapter
+                print(f"[INFO] 适配器已从 {old_adapter} 切换到 {type(new_adapter).__name__}")
+            
+            # 更新其他配置
+            if 'enable_streaming' in config_dict:
+                self.enable_streaming = config_dict['enable_streaming']
+                print(f"[DEBUG] 更新流式处理设置: {self.enable_streaming}")
+            
+            print(f"[INFO] LLM框架配置已更新")
+            
+        except Exception as e:
+            print(f"[ERROR] 更新LLM框架配置失败: {str(e)}")
+            raise
+
     def switch_adapter(self, adapter_type: str, adapter_config: Dict = None):
         """切换LLM适配器"""
         try:

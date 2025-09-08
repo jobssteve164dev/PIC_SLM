@@ -21,6 +21,7 @@ from PyQt5.QtWidgets import QMessageBox
 from .real_time_metrics_collector import get_global_metrics_collector
 from ..llm.llm_framework import LLMFramework
 from ..llm.analysis_engine import TrainingAnalysisEngine
+from .parameter_tuning_report_generator import ParameterTuningReportGenerator
 
 
 @dataclass
@@ -63,6 +64,7 @@ class IntelligentConfigGenerator(QObject):
         self.llm_framework = None
         self.analysis_engine = None
         self.metrics_collector = None
+        self.report_generator = None
         
         # 会话管理
         self.current_session: Optional[TrainingSession] = None
@@ -73,6 +75,37 @@ class IntelligentConfigGenerator(QObject):
         
         # 初始化组件
         self._initialize_components()
+    
+    def update_config(self, config_dict: Dict[str, Any]):
+        """更新配置"""
+        try:
+            # 更新LLM配置
+            if 'llm_config' in config_dict:
+                llm_config = config_dict['llm_config']
+                if self.llm_framework:
+                    self.llm_framework.update_config(llm_config)
+            
+            # 更新报告生成器配置
+            if self.report_generator:
+                self.report_generator.update_config(config_dict)
+            
+            # 更新干预阈值配置
+            intervention_keys = [
+                'overfitting_threshold', 'underfitting_threshold', 'stagnation_epochs',
+                'divergence_threshold', 'min_training_epochs', 'tuning_strategy',
+                'enable_auto_intervention', 'intervention_cooldown', 'max_interventions_per_session'
+            ]
+            
+            for key in intervention_keys:
+                if key in config_dict:
+                    # 这里可以添加配置更新逻辑
+                    print(f"[DEBUG] 配置生成器更新配置 {key}: {config_dict[key]}")
+            
+            print(f"[INFO] 智能配置生成器配置已更新")
+            
+        except Exception as e:
+            print(f"[ERROR] 更新配置生成器配置失败: {str(e)}")
+            raise
         
     def _initialize_components(self):
         """初始化相关组件"""
@@ -98,6 +131,9 @@ class IntelligentConfigGenerator(QObject):
             
             # 获取指标采集器
             self.metrics_collector = get_global_metrics_collector()
+            
+            # 初始化报告生成器
+            self.report_generator = ParameterTuningReportGenerator()
             
             print(f"✅ 智能配置生成器初始化完成，使用LLM适配器: {adapter_type}")
             
@@ -703,6 +739,30 @@ class IntelligentConfigGenerator(QObject):
             self.adjustment_history.append(adjustment)
             if self.current_session:
                 self.current_session.adjustments.append(adjustment)
+            
+            # 生成参数微调报告
+            if self.report_generator:
+                try:
+                    report_path = self.report_generator.generate_report(
+                        original_config=adjustment.original_config,
+                        adjusted_config=adjustment.adjusted_config,
+                        changes=adjustment.changes,
+                        llm_analysis=adjustment.llm_analysis,
+                        training_metrics=adjustment.training_metrics,
+                        reason=adjustment.reason,
+                        session_id=self.current_session.session_id if self.current_session else "",
+                        adjustment_id=adjustment.adjustment_id
+                    )
+                    
+                    if report_path:
+                        print(f"[INFO] 参数微调报告已生成: {report_path}")
+                        self.status_updated.emit(f"📄 参数微调报告已生成: {os.path.basename(report_path)}")
+                    else:
+                        print(f"[WARNING] 参数微调报告生成失败")
+                        
+                except Exception as e:
+                    print(f"[ERROR] 生成参数微调报告时发生错误: {str(e)}")
+                    self.error_occurred.emit(f"生成参数微调报告失败: {str(e)}")
             
             # 发射信号
             self.adjustment_recorded.emit(asdict(adjustment))
