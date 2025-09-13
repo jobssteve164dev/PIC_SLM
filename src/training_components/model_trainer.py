@@ -27,7 +27,7 @@ class ModelTrainer(QObject):
     training_error = pyqtSignal(str)
     epoch_finished = pyqtSignal(dict)
     model_download_failed = pyqtSignal(str, str)  # 模型名称，下载链接
-    training_stopped = pyqtSignal()
+    training_stopped = pyqtSignal(dict)
     
     # 检测任务相关信号
     metrics_updated = pyqtSignal(dict)
@@ -43,7 +43,7 @@ class ModelTrainer(QObject):
         # 连接验证器信号
         self.validator.status_updated.connect(self.status_updated)
         self.validator.validation_error.connect(self.training_error)
-        self.validator.training_cancelled.connect(self.training_stopped)
+        self.validator.training_cancelled.connect(self._on_training_cancelled)
 
     def train_model_with_config(self, config, parent_widget=None):
         """
@@ -232,7 +232,7 @@ class ModelTrainer(QObject):
             self.detection_trainer.model_download_failed.connect(self.model_download_failed)
             self.detection_trainer.training_stopped.connect(self.training_stopped)
 
-    def stop(self):
+    def stop(self, is_intelligent_restart=False):
         """停止训练过程"""
         try:
             self.stop_training = True
@@ -248,13 +248,21 @@ class ModelTrainer(QObject):
             if self.detection_trainer:
                 self.detection_trainer.stop()
             
-            self.status_updated.emit("训练已停止")
+            if is_intelligent_restart:
+                self.status_updated.emit("智能训练重启中...")
+            else:
+                self.status_updated.emit("训练已停止")
             
         except Exception as e:
             print(f"停止训练时出错: {str(e)}")
         
         # 发射训练停止信号
-        self.training_stopped.emit()
+        self.training_stopped.emit({'is_intelligent_restart': is_intelligent_restart})
+    
+    def _on_training_cancelled(self):
+        """处理训练取消信号（来自验证器）"""
+        # 验证器取消训练时，不是智能重启，而是真正的停止
+        self.training_stopped.emit({'is_intelligent_restart': False})
 
     def get_supported_models(self):
         """获取支持的模型列表"""

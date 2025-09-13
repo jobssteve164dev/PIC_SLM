@@ -42,7 +42,7 @@ class TrainingThread(QThread):
     training_error = pyqtSignal(str)
     epoch_finished = pyqtSignal(dict)
     model_download_failed = pyqtSignal(str, str)  # 模型名称，下载链接
-    training_stopped = pyqtSignal()
+    training_stopped = pyqtSignal(dict)
     conflict_detected = pyqtSignal(list, list)  # 冲突列表，建议列表
     waiting_for_conflict_resolution = pyqtSignal()  # 等待冲突解决信号
     

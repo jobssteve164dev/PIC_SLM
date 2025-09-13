@@ -71,6 +71,7 @@ class IntelligentTrainingOrchestrator(QObject):
             'max_iterations': 5,           # 最大迭代次数
             'min_iteration_epochs': 2,     # 每次迭代最小训练轮数（调试用）
             'analysis_interval': 2,        # 分析间隔（epoch）（调试用）
+            'monitoring_interval': 30,     # 监控循环间隔（秒）
             'convergence_threshold': 0.01, # 收敛阈值
             'improvement_threshold': 0.02, # 改进阈值
             'auto_restart': True,          # 自动重启训练
@@ -85,6 +86,8 @@ class IntelligentTrainingOrchestrator(QObject):
         self.current_iteration = 0
         self.monitoring_thread = None
         self.stop_monitoring = False
+        self.is_analyzing = False  # 防止重复分析的标志
+        self.last_analysis_epoch = -1  # 记录上次分析的epoch
         
         # 初始化组件
         self._initialize_components()
@@ -341,9 +344,9 @@ class IntelligentTrainingOrchestrator(QObject):
                     if not self.stop_monitoring and self.is_running:
                         self._analyze_and_optimize()
                 
-                # 使用较长的睡眠时间，避免过于频繁的检查
-                # 每30秒检查一次，而不是每秒检查
-                for _ in range(30):  # 30秒检查一次
+                # 使用配置的监控间隔时间
+                monitoring_interval = self.config.get('monitoring_interval', 30)
+                for _ in range(monitoring_interval):  # 使用配置的间隔时间
                     if self.stop_monitoring or not self.is_running:
                         break
                     time.sleep(1)  # 每秒检查一次停止标志
@@ -354,6 +357,10 @@ class IntelligentTrainingOrchestrator(QObject):
     def _should_analyze_and_optimize(self) -> bool:
         """判断是否应该进行分析和优化"""
         try:
+            # 如果正在分析中，直接返回False
+            if self.is_analyzing:
+                return False
+            
             # 获取当前训练数据
             real_data = self.metrics_collector.get_current_training_data_for_ai()
             if 'error' in real_data:
@@ -361,6 +368,10 @@ class IntelligentTrainingOrchestrator(QObject):
             
             current_metrics = real_data.get('current_metrics', {})
             epoch = current_metrics.get('epoch', 0)
+            
+            # 检查是否已经分析过这个epoch
+            if epoch <= self.last_analysis_epoch:
+                return False
             
             # 添加调试日志
             self.status_updated.emit(f"🔍 检查分析条件: epoch={epoch}, min_iteration_epochs={self.config['min_iteration_epochs']}, analysis_interval={self.config['analysis_interval']}")
@@ -385,6 +396,16 @@ class IntelligentTrainingOrchestrator(QObject):
     def _analyze_and_optimize(self):
         """分析和优化"""
         try:
+            # 设置分析标志，防止重复分析
+            self.is_analyzing = True
+            
+            # 获取当前epoch并记录
+            real_data = self.metrics_collector.get_current_training_data_for_ai()
+            if 'error' not in real_data:
+                current_metrics = real_data.get('current_metrics', {})
+                epoch = current_metrics.get('epoch', 0)
+                self.last_analysis_epoch = epoch
+            
             self.status_updated.emit("正在进行智能分析和优化...")
             
             # 生成优化配置
@@ -409,16 +430,21 @@ class IntelligentTrainingOrchestrator(QObject):
                 
                 # 停止当前训练
                 if self.model_trainer:
-                    self.model_trainer.stop()
+                    self.model_trainer.stop(is_intelligent_restart=True)
                 
                 # 等待训练停止
                 time.sleep(2)
                 
                 # 通过信号请求应用配置（避免在后台线程中直接操作UI）
                 self.apply_config_requested.emit(restart_context)
+            else:
+                self.status_updated.emit("当前配置已是最优，无需调整")
             
         except Exception as e:
             self.error_occurred.emit(f"分析和优化失败: {str(e)}")
+        finally:
+            # 无论成功还是失败，都要重置分析标志
+            self.is_analyzing = False
     
     def _on_training_completed(self, result: Dict[str, Any]):
         """训练完成回调"""
@@ -645,7 +671,7 @@ class IntelligentTrainingOrchestrator(QObject):
             
             # 停止当前训练
             if self.model_trainer:
-                self.model_trainer.stop()
+                self.model_trainer.stop(is_intelligent_restart=False)
             
             # 更新会话状态
             if self.current_session:
@@ -657,6 +683,10 @@ class IntelligentTrainingOrchestrator(QObject):
                 self.monitoring_thread.join(timeout=10)
                 if self.monitoring_thread.is_alive():
                     print("⚠️ 监控线程未能在10秒内结束，强制继续")
+            
+            # 重置分析相关标志
+            self.is_analyzing = False
+            self.last_analysis_epoch = -1
             
             # 设置状态为真正停止
             self.state_manager.stop_training()

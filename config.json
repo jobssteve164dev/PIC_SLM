@@ -29,6 +29,7 @@
         "max_iterations": 6,
         "min_iteration_epochs": 2,
         "analysis_interval": 2,
+        "monitoring_interval": 60,
         "convergence_threshold": 0.015,
         "improvement_threshold": 0.025,
         "auto_restart": true,

@@ -35,6 +35,7 @@ class IntelligentTrainingSettingsWidget(QWidget):
             'max_iterations': 5,
             'min_iteration_epochs': 2,
             'analysis_interval': 2,
+            'monitoring_interval': 30,  # 监控循环间隔（秒）
             'convergence_threshold': 0.01,
             'improvement_threshold': 0.02,
             'auto_restart': True,
@@ -105,6 +106,12 @@ class IntelligentTrainingSettingsWidget(QWidget):
         self.analysis_interval_spinbox.setRange(1, 50)
         self.analysis_interval_spinbox.setValue(self.current_config['analysis_interval'])
         basic_form.addRow("分析间隔:", self.analysis_interval_spinbox)
+
+        self.monitoring_interval_spinbox = QSpinBox()
+        self.monitoring_interval_spinbox.setRange(10, 300)
+        self.monitoring_interval_spinbox.setValue(self.current_config['monitoring_interval'])
+        self.monitoring_interval_spinbox.setToolTip("监控循环检查间隔（秒）。较小值响应更快但占用更多资源。")
+        basic_form.addRow("监控间隔(秒):", self.monitoring_interval_spinbox)
 
         layout.addWidget(basic_group)
 
@@ -258,7 +265,7 @@ class IntelligentTrainingSettingsWidget(QWidget):
     def _connect_signals(self):
         for w in [
             self.enabled_checkbox, self.max_iterations_spinbox, self.min_iteration_epochs_spinbox,
-            self.analysis_interval_spinbox, self.convergence_threshold_spinbox,
+            self.analysis_interval_spinbox, self.monitoring_interval_spinbox, self.convergence_threshold_spinbox,
             self.improvement_threshold_spinbox, self.auto_restart_checkbox,
             self.preserve_best_model_checkbox, self.overfitting_spinbox,
             self.llm_analysis_checkbox, self.adapter_type_combo,
@@ -291,6 +298,7 @@ class IntelligentTrainingSettingsWidget(QWidget):
             'max_iterations': self.max_iterations_spinbox.value(),
             'min_iteration_epochs': self.min_iteration_epochs_spinbox.value(),
             'analysis_interval': self.analysis_interval_spinbox.value(),
+            'monitoring_interval': self.monitoring_interval_spinbox.value(),
             'convergence_threshold': self.convergence_threshold_spinbox.value(),
             'improvement_threshold': self.improvement_threshold_spinbox.value(),
             'auto_restart': self.auto_restart_checkbox.isChecked(),
@@ -327,6 +335,7 @@ class IntelligentTrainingSettingsWidget(QWidget):
         self.max_iterations_spinbox.setValue(cfg['max_iterations'])
         self.min_iteration_epochs_spinbox.setValue(cfg['min_iteration_epochs'])
         self.analysis_interval_spinbox.setValue(cfg['analysis_interval'])
+        self.monitoring_interval_spinbox.setValue(cfg.get('monitoring_interval', 30))
         self.convergence_threshold_spinbox.setValue(cfg['convergence_threshold'])
         self.improvement_threshold_spinbox.setValue(cfg['improvement_threshold'])
         self.auto_restart_checkbox.setChecked(cfg['auto_restart'])
@@ -375,6 +384,7 @@ class IntelligentTrainingSettingsWidget(QWidget):
                 'max_iterations': self.current_config['max_iterations'],
                 'min_iteration_epochs': self.current_config['min_iteration_epochs'],
                 'analysis_interval': self.current_config['analysis_interval'],
+                'monitoring_interval': self.current_config['monitoring_interval'],
                 'convergence_threshold': self.current_config['convergence_threshold'],
                 'improvement_threshold': self.current_config['improvement_threshold'],
                 'auto_restart': self.current_config['auto_restart'],
@@ -420,7 +430,7 @@ class IntelligentTrainingSettingsWidget(QWidget):
             
             # 只更新编排器相关的核心配置
             orchestrator_keys = [
-                'enabled', 'max_iterations', 'min_iteration_epochs', 'analysis_interval',
+                'enabled', 'max_iterations', 'min_iteration_epochs', 'analysis_interval', 'monitoring_interval',
                 'convergence_threshold', 'improvement_threshold', 'auto_restart', 'preserve_best_model'
             ]
             
@@ -453,6 +463,8 @@ class IntelligentTrainingSettingsWidget(QWidget):
                 warns.append("最大迭代次数建议至少为2")
             if cfg['min_iteration_epochs'] < 2:
                 warns.append("最小迭代轮数建议至少为2")
+            if cfg['monitoring_interval'] < 10 or cfg['monitoring_interval'] > 300:
+                warns.append("监控间隔建议在[10, 300]秒之间")
             if cfg['convergence_threshold'] < 0.001 or cfg['convergence_threshold'] > 0.1:
                 warns.append("收敛阈值建议在[0.001, 0.1]")
             if cfg['improvement_threshold'] < 0.001 or cfg['improvement_threshold'] > 0.1:

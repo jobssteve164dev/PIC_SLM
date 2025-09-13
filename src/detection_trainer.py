@@ -28,7 +28,7 @@ class DetectionTrainer(QObject):
     training_error = pyqtSignal(str)
     epoch_finished = pyqtSignal(dict)
     model_download_failed = pyqtSignal(str, str)
-    training_stopped = pyqtSignal()
+    training_stopped = pyqtSignal(dict)
     metrics_updated = pyqtSignal(dict)
     tensorboard_updated = pyqtSignal(str, float, int)
     
@@ -368,12 +368,15 @@ class DetectionTrainer(QObject):
             import traceback
             traceback.print_exc()
             
-    def stop(self):
+    def stop(self, is_intelligent_restart=False):
         """停止训练过程"""
         try:
             self.stop_training = True
-            self.status_updated.emit("训练已停止")
-            self.training_stopped.emit()
+            if is_intelligent_restart:
+                self.status_updated.emit("智能训练重启中...")
+            else:
+                self.status_updated.emit("训练已停止")
+            self.training_stopped.emit({'is_intelligent_restart': is_intelligent_restart})
             self.logger.info("已发送训练停止信号")
         except Exception as e:
             self.logger.error(f"停止训练时出错: {str(e)}")

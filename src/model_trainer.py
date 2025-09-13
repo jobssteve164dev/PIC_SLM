@@ -175,7 +175,7 @@ else:
         training_error = pyqtSignal(str)
         epoch_finished = pyqtSignal(dict)
         model_download_failed = pyqtSignal(str, str)
-        training_stopped = pyqtSignal()
+        training_stopped = pyqtSignal(dict)
         
         def __init__(self, config, parent=None):
             super().__init__(parent)
@@ -212,10 +212,13 @@ else:
             except Exception as e:
                 self.training_error.emit(f"训练过程中发生错误: {str(e)}")
         
-        def stop(self):
+        def stop(self, is_intelligent_restart=False):
             """停止训练"""
             self.stop_training = True
-            self.status_updated.emit("训练线程正在停止...")
+            if is_intelligent_restart:
+                self.status_updated.emit("智能训练重启中...")
+            else:
+                self.status_updated.emit("训练线程正在停止...")
         
         def train_model(self, data_dir, model_name, num_epochs, batch_size, learning_rate, 
                        model_save_dir, task_type='classification', use_tensorboard=True):
@@ -358,7 +361,7 @@ else:
         training_error = pyqtSignal(str)
         epoch_finished = pyqtSignal(dict)
         model_download_failed = pyqtSignal(str, str)
-        training_stopped = pyqtSignal()
+        training_stopped = pyqtSignal(dict)
         metrics_updated = pyqtSignal(dict)
         tensorboard_updated = pyqtSignal(str, float, int)
 
@@ -421,7 +424,7 @@ else:
             }
             self.train_model_with_config(config)
 
-        def stop(self):
+        def stop(self, is_intelligent_restart=False):
             """停止训练"""
             try:
                 if self.training_thread and self.training_thread.isRunning():
@@ -432,12 +435,15 @@ else:
                     self.detection_trainer.stop()
                 
                 self.stop_training = True
-                self.status_updated.emit("训练已停止")
+                if is_intelligent_restart:
+                    self.status_updated.emit("智能训练重启中...")
+                else:
+                    self.status_updated.emit("训练已停止")
                 
             except Exception as e:
                 print(f"停止训练时出错: {str(e)}")
             
-            self.training_stopped.emit()
+            self.training_stopped.emit({'is_intelligent_restart': is_intelligent_restart})
 
         def configure_model(self, model, layer_config):
             """配置模型"""
