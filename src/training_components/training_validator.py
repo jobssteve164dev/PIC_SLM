@@ -743,14 +743,8 @@ class TrainingValidator(QObject):
             # 尝试创建目录
             os.makedirs(model_save_dir, exist_ok=True)
             
-            # 检查目录是否可写
-            test_file = os.path.join(model_save_dir, 'test_write.tmp')
-            try:
-                with open(test_file, 'w') as f:
-                    f.write('test')
-                os.remove(test_file)
-            except Exception as e:
-                self.validation_error.emit(f"模型保存目录不可写: {model_save_dir}, 错误: {str(e)}")
+            # 检查目录是否可写（带清理机制）
+            if not self._check_directory_writable_with_cleanup(model_save_dir):
                 return False
                 
         except Exception as e:
@@ -775,14 +769,8 @@ class TrainingValidator(QObject):
             try:
                 os.makedirs(param_save_dir, exist_ok=True)
                 
-                # 检查目录是否可写
-                test_file = os.path.join(param_save_dir, 'test_write.tmp')
-                try:
-                    with open(test_file, 'w') as f:
-                        f.write('test')
-                    os.remove(test_file)
-                except Exception as e:
-                    self.validation_error.emit(f"参数保存目录不可写: {param_save_dir}, 错误: {str(e)}")
+                # 检查目录是否可写（带清理机制）
+                if not self._check_directory_writable_with_cleanup(param_save_dir):
                     return False
                     
             except Exception as e:
@@ -860,3 +848,91 @@ class TrainingValidator(QObject):
                 self.status_updated.emit(f"警告: 以下类别缺少权重配置: {list(missing_classes)[:5]}...")
         
         return True 
+    
+    def _check_directory_writable_with_cleanup(self, directory: str) -> bool:
+        """检查目录是否可写，带清理机制处理云同步冲突"""
+        import time
+        import random
+        
+        # 清理可能存在的临时文件
+        self._cleanup_temp_files(directory)
+        
+        # 尝试多次写入测试，处理云同步冲突
+        max_attempts = 3
+        for attempt in range(max_attempts):
+            try:
+                # 生成唯一的测试文件名，避免冲突
+                timestamp = int(time.time() * 1000)
+                random_suffix = random.randint(1000, 9999)
+                test_file = os.path.join(directory, f'test_write_{timestamp}_{random_suffix}.tmp')
+                
+                # 尝试写入测试文件
+                with open(test_file, 'w') as f:
+                    f.write('test')
+                
+                # 立即删除测试文件
+                os.remove(test_file)
+                
+                # 如果成功，返回True
+                return True
+                
+            except PermissionError as e:
+                if "另一个程序正在使用此文件" in str(e) or "WinError 32" in str(e):
+                    # 云同步冲突，等待后重试
+                    if attempt < max_attempts - 1:
+                        wait_time = (attempt + 1) * 2  # 递增等待时间：2秒、4秒
+                        self.status_updated.emit(f"检测到云同步冲突，等待 {wait_time} 秒后重试...")
+                        time.sleep(wait_time)
+                        continue
+                    else:
+                        # 最后一次尝试失败，提供详细错误信息
+                        self.validation_error.emit(
+                            f"模型保存目录被云同步服务占用: {directory}\n"
+                            f"建议解决方案:\n"
+                            f"1. 暂停 iCloudDrive 或 Qsync 同步\n"
+                            f"2. 等待同步完成后重试\n"
+                            f"3. 将项目移动到非云同步目录\n"
+                            f"错误详情: {str(e)}"
+                        )
+                        return False
+                else:
+                    # 其他权限错误
+                    self.validation_error.emit(f"模型保存目录权限不足: {directory}, 错误: {str(e)}")
+                    return False
+                    
+            except Exception as e:
+                # 其他错误
+                self.validation_error.emit(f"模型保存目录不可写: {directory}, 错误: {str(e)}")
+                return False
+        
+        return False
+    
+    def _cleanup_temp_files(self, directory: str):
+        """清理目录中的临时文件"""
+        try:
+            import glob
+            import time
+            
+            # 查找所有临时文件
+            temp_patterns = [
+                os.path.join(directory, 'test_write*.tmp'),
+                os.path.join(directory, '*.tmp'),
+                os.path.join(directory, '*.lock')
+            ]
+            
+            for pattern in temp_patterns:
+                temp_files = glob.glob(pattern)
+                for temp_file in temp_files:
+                    try:
+                        # 检查文件是否超过5分钟
+                        file_age = time.time() - os.path.getmtime(temp_file)
+                        if file_age > 300:  # 5分钟
+                            os.remove(temp_file)
+                            self.status_updated.emit(f"已清理过期临时文件: {os.path.basename(temp_file)}")
+                    except Exception:
+                        # 忽略清理失败的文件
+                        pass
+                        
+        except Exception:
+            # 忽略清理过程中的错误
+            pass

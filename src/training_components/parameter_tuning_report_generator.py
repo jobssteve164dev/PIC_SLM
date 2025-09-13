@@ -7,6 +7,7 @@
 - 包含LLM分析结果
 - 记录配置变更历史
 - 提供训练指标对比
+- 集成参数调整可解释性分析
 """
 
 import os
@@ -15,6 +16,7 @@ import time
 from datetime import datetime
 from typing import Dict, Any, List, Optional
 from dataclasses import dataclass
+from src.llm.parameter_explanation_engine import ParameterExplanationEngine
 
 
 @dataclass
@@ -31,6 +33,7 @@ class ParameterTuningReport:
     training_metrics: Dict[str, Any]
     reason: str
     status: str
+    parameter_explanations: List[Any] = None  # 参数调整解释
 
 
 class ParameterTuningReportGenerator:
@@ -53,8 +56,12 @@ class ParameterTuningReportGenerator:
             'format': 'markdown',
             'include_llm_analysis': True,
             'include_metrics_comparison': True,
-            'include_config_changes': True
+            'include_config_changes': True,
+            'include_parameter_explanations': True
         }
+        
+        # 初始化参数解释引擎
+        self.explanation_engine = ParameterExplanationEngine()
         
         # 合并配置
         for key, value in self.default_config.items():
@@ -90,6 +97,16 @@ class ParameterTuningReportGenerator:
             if not self.report_config.get('enabled', True):
                 return ""
             
+            # 生成参数调整解释
+            parameter_explanations = []
+            if self.report_config.get('include_parameter_explanations', True):
+                try:
+                    parameter_explanations = self.explanation_engine.generate_parameter_explanations(
+                        original_config, adjusted_config, training_metrics, llm_analysis
+                    )
+                except Exception as e:
+                    print(f"[WARNING] 生成参数解释失败: {str(e)}")
+            
             # 创建报告数据结构
             report = ParameterTuningReport(
                 report_id=f"report_{int(time.time())}",
@@ -102,6 +119,7 @@ class ParameterTuningReportGenerator:
                 llm_analysis=llm_analysis,
                 training_metrics=training_metrics,
                 reason=reason,
+                parameter_explanations=parameter_explanations,
                 status='generated'
             )
             
@@ -195,6 +213,18 @@ class ParameterTuningReportGenerator:
                     content.append("")
                     content.append(str(report.llm_analysis))
                     content.append("")
+            
+            # 参数调整详细解释
+            if (self.report_config.get('include_parameter_explanations', True) and 
+                report.parameter_explanations):
+                try:
+                    explanation_content = self.explanation_engine.format_explanations_for_report(
+                        report.parameter_explanations
+                    )
+                    content.append(explanation_content)
+                    content.append("")
+                except Exception as e:
+                    print(f"[WARNING] 格式化参数解释失败: {str(e)}")
             
             # 训练指标对比
             if self.report_config.get('include_metrics_comparison', True) and report.training_metrics:

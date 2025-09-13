@@ -493,9 +493,27 @@ class TrainingTab(BaseTab):
     
     def on_training_stopped(self, is_intelligent_restart=False):
         """训练停止时调用"""
-        self.control_widget.set_training_stopped(is_intelligent_restart)
-        self.update_status("训练完成")
-        self.update_progress(100)
+        # 检查防止重复调用的标志
+        if hasattr(self, '_stopping_in_progress') and self._stopping_in_progress:
+            return
+            
+        # 设置标志防止重复调用
+        self._stopping_in_progress = True
+        
+        try:
+            self.control_widget.set_training_stopped(is_intelligent_restart)
+            
+            if is_intelligent_restart:
+                # 智能训练重启中，不显示弹窗，只更新状态
+                self.update_status("智能训练重启中...")
+                self.update_progress(100)
+            else:
+                # 普通训练停止，显示弹窗
+                self.update_status("训练已停止")
+                QMessageBox.information(self, "训练状态", "训练已成功停止")
+        finally:
+            # 重置标志
+            self._stopping_in_progress = False
     
     def on_training_error(self, error):
         """训练出错时调用"""
@@ -522,23 +540,6 @@ class TrainingTab(BaseTab):
         """处理模型下载失败事件"""
         dialog = ModelDownloadDialog(model_name, model_link, self)
         dialog.exec_()
-        
-    def on_training_stopped(self):
-        """训练停止完成时调用"""
-        # 检查防止重复调用的标志
-        if hasattr(self, '_stopping_in_progress') and self._stopping_in_progress:
-            return
-            
-        # 设置标志防止重复调用
-        self._stopping_in_progress = True
-        
-        try:
-            self.control_widget.set_training_stopped()
-            self.update_status("训练已停止")
-            QMessageBox.information(self, "训练状态", "训练已成功停止")
-        finally:
-            # 重置标志
-            self._stopping_in_progress = False
 
     def connect_model_trainer_signals(self, model_trainer):
         """连接模型训练器的信号"""

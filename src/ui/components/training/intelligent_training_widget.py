@@ -442,10 +442,8 @@ class IntelligentTrainingWidget(QWidget):
     def _get_current_training_config(self) -> Dict[str, Any]:
         """获取当前训练配置"""
         try:
-            # 首先检查是否已经有缓存的配置
-            if self.current_config:
-                self.add_log("使用缓存的训练配置")
-                return self.current_config
+            # 强制从UI获取最新配置，不使用缓存
+            self.add_log("🔄 从UI获取最新训练配置...")
             
             # 尝试从训练标签页获取配置
             if hasattr(self.training_tab, 'main_window'):
@@ -453,14 +451,17 @@ class IntelligentTrainingWidget(QWidget):
                 if hasattr(main_window, '_build_training_config_from_ui'):
                     config = main_window._build_training_config_from_ui()
                     if config:
-                        self.add_log(f"从主窗口获取训练配置: {len(config)} 个参数")
+                        self.add_log(f"✅ 从主窗口获取训练配置: {len(config)} 个参数")
+                        # 显示关键参数状态
+                        self._log_key_parameters(config)
                         return config
             
             # 尝试从父组件获取配置
             if hasattr(self.training_tab, '_build_training_config_from_ui'):
                 config = self.training_tab._build_training_config_from_ui()
                 if config:
-                    self.add_log(f"从父组件获取训练配置: {len(config)} 个参数")
+                    self.add_log(f"✅ 从父组件获取训练配置: {len(config)} 个参数")
+                    self._log_key_parameters(config)
                     return config
             
             # 尝试从训练标签页的父组件获取配置
@@ -469,15 +470,40 @@ class IntelligentTrainingWidget(QWidget):
                 if hasattr(main_window, '_build_training_config_from_ui'):
                     config = main_window._build_training_config_from_ui()
                     if config:
-                        self.add_log(f"从主窗口获取训练配置: {len(config)} 个参数")
+                        self.add_log(f"✅ 从主窗口获取训练配置: {len(config)} 个参数")
+                        self._log_key_parameters(config)
                         return config
             
             self.add_log("⚠️ 未找到有效的训练配置")
             return {}
             
         except Exception as e:
-            self.add_log(f"获取训练配置失败: {str(e)}")
+            self.add_log(f"❌ 获取训练配置失败: {str(e)}")
             return {}
+    
+    def _log_key_parameters(self, config: Dict[str, Any]):
+        """记录关键参数状态"""
+        try:
+            # 记录数据增强相关参数
+            advanced_augmentation_enabled = config.get('advanced_augmentation_enabled', False)
+            cutmix_prob = config.get('cutmix_prob', 0.0)
+            mixup_alpha = config.get('mixup_alpha', 0.0)
+            
+            self.add_log(f"📊 数据增强状态:")
+            self.add_log(f"   - 高级数据增强启用: {advanced_augmentation_enabled}")
+            self.add_log(f"   - CutMix概率: {cutmix_prob}")
+            self.add_log(f"   - MixUp Alpha: {mixup_alpha}")
+            
+            # 检查是否会导致冲突
+            if advanced_augmentation_enabled and cutmix_prob > 0 and mixup_alpha > 0:
+                self.add_log("⚠️ 检测到数据增强冲突: CutMix和MixUp同时启用")
+            elif advanced_augmentation_enabled and (cutmix_prob > 0 or mixup_alpha > 0):
+                self.add_log("✅ 数据增强配置正常")
+            else:
+                self.add_log("✅ 数据增强已禁用")
+                
+        except Exception as e:
+            self.add_log(f"记录关键参数失败: {str(e)}")
     
     def stop_intelligent_training(self):
         """停止智能训练"""

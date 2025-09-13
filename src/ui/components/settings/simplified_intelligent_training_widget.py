@@ -390,13 +390,53 @@ class IntelligentTrainingSettingsWidget(QWidget):
                 'parameter_tuning_reports': self.current_config['parameter_tuning_reports']
             }
 
+            # 保存到智能训练专用配置文件
             with open(config_file, 'w', encoding='utf-8') as f:
                 json.dump(full_config, f, ensure_ascii=False, indent=2)
+
+            # 同时更新主配置文件中的智能训练配置
+            self._update_main_config_file()
 
             self.config_changed.emit(self.current_config)
             QMessageBox.information(self, "成功", "智能训练配置已保存")
         except Exception as e:
             QMessageBox.warning(self, "错误", f"保存配置失败: {str(e)}")
+    
+    def _update_main_config_file(self):
+        """更新主配置文件中的智能训练配置"""
+        try:
+            main_config_file = "config.json"
+            
+            # 读取主配置文件
+            if os.path.exists(main_config_file):
+                with open(main_config_file, 'r', encoding='utf-8') as f:
+                    main_config = json.load(f)
+            else:
+                main_config = {}
+            
+            # 更新智能训练配置部分
+            if 'intelligent_training' not in main_config:
+                main_config['intelligent_training'] = {}
+            
+            # 只更新编排器相关的核心配置
+            orchestrator_keys = [
+                'enabled', 'max_iterations', 'min_iteration_epochs', 'analysis_interval',
+                'convergence_threshold', 'improvement_threshold', 'auto_restart', 'preserve_best_model'
+            ]
+            
+            for key in orchestrator_keys:
+                if key in self.current_config:
+                    main_config['intelligent_training'][key] = self.current_config[key]
+            
+            # 保存更新后的主配置文件
+            with open(main_config_file, 'w', encoding='utf-8') as f:
+                json.dump(main_config, f, ensure_ascii=False, indent=4)
+            
+            print(f"[INFO] 已同步更新主配置文件中的智能训练配置")
+            
+        except Exception as e:
+            print(f"[WARNING] 更新主配置文件失败: {str(e)}")
+            # 不抛出异常，因为智能训练专用配置文件已经保存成功
 
     def _reset_to_default(self):
         self.set_config(self.default_config)

@@ -821,6 +821,43 @@ class IntelligentConfigGenerator(QObject):
             'final_config': self.current_session.final_config
         }
     
+    def generate_iteration_summary_report(self, iteration: int, metrics: Dict[str, Any]) -> str:
+        """生成迭代总结报告"""
+        try:
+            import os
+            import json
+            from datetime import datetime
+            
+            # 创建报告目录
+            report_dir = "reports/parameter_tuning"
+            os.makedirs(report_dir, exist_ok=True)
+            
+            # 生成报告文件名
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            report_filename = f"iteration_summary_{iteration}_{timestamp}.json"
+            report_path = os.path.join(report_dir, report_filename)
+            
+            # 构建报告内容
+            report_data = {
+                'iteration': iteration,
+                'timestamp': timestamp,
+                'metrics': metrics,
+                'session_info': self.get_current_session_info(),
+                'adjustment_history': self.get_adjustment_history(),
+                'report_type': 'iteration_summary'
+            }
+            
+            # 保存报告
+            with open(report_path, 'w', encoding='utf-8') as f:
+                json.dump(report_data, f, ensure_ascii=False, indent=2)
+            
+            self.status_updated.emit(f"迭代{iteration}总结报告已生成: {report_filename}")
+            return report_path
+            
+        except Exception as e:
+            self.error_occurred.emit(f"生成迭代总结报告失败: {str(e)}")
+            return None
+    
     def export_adjustment_report(self) -> Dict[str, Any]:
         """导出调整报告"""
         return {

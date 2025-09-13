@@ -150,6 +150,30 @@ class IntelligentTrainingOrchestrator(QObject):
         except Exception as e:
             self.error_occurred.emit(f"更新配置失败: {str(e)}")
             print(f"[ERROR] 更新配置失败: {str(e)}")
+    
+    def update_training_config(self, config: Dict[str, Any]):
+        """更新训练配置（兼容性方法）"""
+        try:
+            # 提取智能训练相关配置
+            intelligent_config = {}
+            orchestrator_keys = [
+                'max_iterations', 'min_iteration_epochs', 'analysis_interval',
+                'convergence_threshold', 'improvement_threshold', 'auto_restart', 'preserve_best_model'
+            ]
+            
+            for key in orchestrator_keys:
+                if key in config:
+                    intelligent_config[key] = config[key]
+            
+            if intelligent_config:
+                self.update_config(intelligent_config)
+                print(f"[INFO] 通过update_training_config更新配置: {intelligent_config}")
+            else:
+                print("[WARNING] update_training_config未找到智能训练相关配置")
+                
+        except Exception as e:
+            self.error_occurred.emit(f"更新训练配置失败: {str(e)}")
+            print(f"[ERROR] 更新训练配置失败: {str(e)}")
         
     def _initialize_components(self):
         """初始化组件"""
@@ -363,10 +387,9 @@ class IntelligentTrainingOrchestrator(QObject):
         try:
             self.status_updated.emit("正在进行智能分析和优化...")
             
-            # 生成优化配置，但不生成报告（报告将在训练完成时统一生成）
+            # 生成优化配置
             optimized_config = self.config_generator.generate_optimized_config(
-                self.current_session.current_config,
-                generate_report=False  # 不在分析阶段生成报告
+                self.current_session.current_config
             )
             
             # 检查配置是否有变化
