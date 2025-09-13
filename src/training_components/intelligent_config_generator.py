@@ -337,6 +337,7 @@ class IntelligentConfigGenerator(QObject):
         """生成优化的训练配置"""
         try:
             self.status_updated.emit("正在生成优化配置...")
+            print(f"[DEBUG] generate_optimized_config called | thread={threading.current_thread().name}")
             
             # 获取实时训练数据
             if training_metrics is None:
@@ -345,31 +346,37 @@ class IntelligentConfigGenerator(QObject):
                     self.error_occurred.emit(f"无法获取训练数据: {real_data['error']}")
                     return current_config
                 training_metrics = real_data.get('current_metrics', {})
+            print(f"[DEBUG] metrics epoch={training_metrics.get('epoch')} train_loss={training_metrics.get('train_loss')} val_loss={training_metrics.get('val_loss')}")
             
             # 生成缓存键，确保相同输入使用相同分析结果
             cache_key = self._generate_analysis_cache_key(current_config, training_metrics)
+            print(f"[DEBUG] analysis cache_key={cache_key}")
             
             # 检查是否可以使用缓存的分析结果
             if (self._cached_analysis_key == cache_key and 
                 self._cached_analysis_result is not None):
                 self.status_updated.emit("使用缓存的分析结果确保一致性...")
                 analysis_result = self._cached_analysis_result
+                print("[DEBUG] 使用缓存分析结果")
             else:
                 # 使用LLM分析当前配置和训练数据
                 analysis_result = self._analyze_config_and_metrics(current_config, training_metrics)
                 # 缓存分析结果
                 self._cached_analysis_result = analysis_result
                 self._cached_analysis_key = cache_key
+                print("[DEBUG] 写入缓存分析结果")
             
             # 生成优化建议
             optimization_suggestions = self._generate_optimization_suggestions(
                 current_config, training_metrics, analysis_result
             )
+            print(f"[DEBUG] 建议数量={len(optimization_suggestions)}")
             
             # 应用优化建议到配置
             optimized_config = self._apply_optimization_suggestions(
                 current_config, optimization_suggestions
             )
+            print("[DEBUG] 应用建议完成")
             
             # 验证配置有效性
             validated_config = self._validate_config(optimized_config)
@@ -831,7 +838,7 @@ class IntelligentConfigGenerator(QObject):
             
             if not changes:
                 return  # 没有变更，不记录
-            
+            print(f"[DEBUG] 记录配置调整 | epoch={training_metrics.get('epoch')} | changes_keys={list(changes.keys())}")
             # 创建调整记录
             adjustment = ConfigAdjustment(
                 adjustment_id=f"adj_{int(time.time())}",

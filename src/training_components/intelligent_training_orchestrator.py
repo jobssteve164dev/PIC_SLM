@@ -328,11 +328,12 @@ class IntelligentTrainingOrchestrator(QObject):
         try:
             # 防重复启动监控线程
             if self.monitoring_thread and self.monitoring_thread.is_alive():
-                print("[INFO] 监控线程已在运行，跳过重复启动")
+                print(f"[INFO] 监控线程已在运行，跳过重复启动 | thread={self.monitoring_thread.name}")
                 return
             self.stop_monitoring = False
             self.monitoring_thread = threading.Thread(target=self._monitoring_loop, name="IntelligentMonitoringThread")
             self.monitoring_thread.daemon = True
+            print(f"[DEBUG] 启动监控线程 | thread={self.monitoring_thread.name} | session={self.current_session.session_id if self.current_session else 'None'}")
             self.monitoring_thread.start()
             
         except Exception as e:
@@ -347,6 +348,7 @@ class IntelligentTrainingOrchestrator(QObject):
                     # 再次检查停止标志，防止在分析过程中被停止
                     if not self.stop_monitoring and self.is_running:
                         if not self.is_analyzing:
+                            print(f"[DEBUG] 进入分析 | iter={self.current_iteration} | analyzing={self.is_analyzing} | thread={threading.current_thread().name}")
                             self._analyze_and_optimize()
                 
                 # 使用配置的监控间隔时间
@@ -403,6 +405,7 @@ class IntelligentTrainingOrchestrator(QObject):
         try:
             # 设置分析标志，防止重复分析
             self.is_analyzing = True
+            print(f"[DEBUG] _analyze_and_optimize 开始 | iter={self.current_iteration} | thread={threading.current_thread().name}")
             
             # 获取当前epoch并记录
             real_data = self.metrics_collector.get_current_training_data_for_ai()
@@ -410,6 +413,7 @@ class IntelligentTrainingOrchestrator(QObject):
                 current_metrics = real_data.get('current_metrics', {})
                 epoch = current_metrics.get('epoch', 0)
                 self.last_analysis_epoch = epoch
+                print(f"[DEBUG] 本次分析epoch={epoch} | last_analysis_epoch={self.last_analysis_epoch}")
             
             self.status_updated.emit("正在进行智能分析和优化...")
             
@@ -417,6 +421,7 @@ class IntelligentTrainingOrchestrator(QObject):
             optimized_config = self.config_generator.generate_optimized_config(
                 self.current_session.current_config
             )
+            print(f"[DEBUG] 生成优化配置完成 | has_change={optimized_config != self.current_session.current_config}")
             
             # 检查配置是否有变化
             if optimized_config != self.current_session.current_config:
@@ -441,6 +446,7 @@ class IntelligentTrainingOrchestrator(QObject):
                 time.sleep(2)
                 
                 # 通过信号请求应用配置（避免在后台线程中直接操作UI）
+                print(f"[DEBUG] 发出apply_config_requested | iter={self.current_iteration} | session={self.current_session.session_id}")
                 self.apply_config_requested.emit(restart_context)
             else:
                 self.status_updated.emit("当前配置已是最优，无需调整")
@@ -450,6 +456,7 @@ class IntelligentTrainingOrchestrator(QObject):
         finally:
             # 无论成功还是失败，都要重置分析标志
             self.is_analyzing = False
+            print(f"[DEBUG] _analyze_and_optimize 结束 | iter={self.current_iteration} | thread={threading.current_thread().name}")
     
     def _on_training_completed(self, result: Dict[str, Any]):
         """训练完成回调"""
