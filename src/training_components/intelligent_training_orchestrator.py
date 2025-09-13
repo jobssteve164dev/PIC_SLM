@@ -88,6 +88,8 @@ class IntelligentTrainingOrchestrator(QObject):
         self.stop_monitoring = False
         self.is_analyzing = False  # 防止重复分析的标志
         self.last_analysis_epoch = -1  # 记录上次分析的epoch
+        self.last_apply_epoch = -1     # 记录上次触发应用配置的epoch
+        self._analyze_lock = threading.Lock()
         
         # 初始化组件
         self._initialize_components()
@@ -347,9 +349,15 @@ class IntelligentTrainingOrchestrator(QObject):
                 if self._should_analyze_and_optimize():
                     # 再次检查停止标志，防止在分析过程中被停止
                     if not self.stop_monitoring and self.is_running:
-                        if not self.is_analyzing:
-                            print(f"[DEBUG] 进入分析 | iter={self.current_iteration} | analyzing={self.is_analyzing} | thread={threading.current_thread().name}")
-                            self._analyze_and_optimize()
+                        # 原子化获取分析锁，防止重复进入
+                        acquired = self._analyze_lock.acquire(blocking=False)
+                        if acquired:
+                            try:
+                                if not self.is_analyzing:
+                                    print(f"[DEBUG] 进入分析 | iter={self.current_iteration} | analyzing={self.is_analyzing} | thread={threading.current_thread().name}")
+                                    self._analyze_and_optimize()
+                            finally:
+                                self._analyze_lock.release()
                 
                 # 使用配置的监控间隔时间
                 monitoring_interval = self.config.get('monitoring_interval', 30)
@@ -436,7 +444,12 @@ class IntelligentTrainingOrchestrator(QObject):
                     'session_id': self.current_session.session_id if self.current_session else None,
                     'reason': 'parameter_optimization'
                 }
-                self.state_manager.start_intelligent_restart(restart_context)
+                # 同一epoch仅触发一次应用
+                if epoch <= self.last_apply_epoch:
+                    print(f"[DEBUG] 本epoch已触发过应用，跳过 | epoch={epoch} | last_apply_epoch={self.last_apply_epoch}")
+                else:
+                    self.last_apply_epoch = epoch
+                    self.state_manager.start_intelligent_restart(restart_context)
                 
                 # 停止当前训练
                 if self.model_trainer:
@@ -447,7 +460,8 @@ class IntelligentTrainingOrchestrator(QObject):
                 
                 # 通过信号请求应用配置（避免在后台线程中直接操作UI）
                 print(f"[DEBUG] 发出apply_config_requested | iter={self.current_iteration} | session={self.current_session.session_id}")
-                self.apply_config_requested.emit(restart_context)
+                if epoch == self.last_apply_epoch:
+                    self.apply_config_requested.emit(restart_context)
             else:
                 self.status_updated.emit("当前配置已是最优，无需调整")
             
