@@ -143,11 +143,11 @@ class IntelligentConfigGenerator(QObject):
             # 获取指标采集器
             self.metrics_collector = get_global_metrics_collector()
             
-        # 初始化报告生成器
-        self.report_generator = ParameterTuningReportGenerator()
-        
-        # 初始化智能冲突解决器
-        self.conflict_resolver = IntelligentConflictResolver()
+            # 初始化报告生成器
+            self.report_generator = ParameterTuningReportGenerator()
+            
+            # 初始化智能冲突解决器
+            self.conflict_resolver = IntelligentConflictResolver()
             
             print(f"✅ 智能配置生成器初始化完成，使用LLM适配器: {adapter_type}")
             
@@ -337,7 +337,8 @@ class IntelligentConfigGenerator(QObject):
     
     def generate_optimized_config(self, 
                                 current_config: Dict[str, Any],
-                                training_metrics: Dict[str, Any] = None) -> Dict[str, Any]:
+                                training_metrics: Dict[str, Any] = None,
+                                training_round_id: str = None) -> Dict[str, Any]:
         """生成优化的训练配置"""
         try:
             self.status_updated.emit("正在生成优化配置...")
@@ -425,7 +426,7 @@ class IntelligentConfigGenerator(QObject):
                 ]
             
             self._record_config_adjustment(
-                current_config, validated_config, training_metrics, analysis_dict
+                current_config, validated_config, training_metrics, analysis_dict, training_round_id
             )
             
             self.status_updated.emit("优化配置生成完成")
@@ -839,11 +840,28 @@ class IntelligentConfigGenerator(QObject):
                                 original_config: Dict[str, Any],
                                 adjusted_config: Dict[str, Any],
                                 training_metrics: Dict[str, Any],
-                                analysis_result: Dict[str, Any]):
+                                analysis_result: Dict[str, Any],
+                                training_round_id: str = None):
         """记录配置调整"""
         try:
-            # 并发与重复写入保护：同一signature在2秒内只记录一次
+            # 训练轮次ID唯一性验证 - 最强的去重机制
+            if training_round_id:
+                with self._adjustment_lock:
+                    # 检查是否已经为此轮次ID生成过报告
+                    if hasattr(self, '_processed_round_ids'):
+                        if training_round_id in self._processed_round_ids:
+                            print(f"[DEBUG] 训练轮次ID已处理过，跳过记录 | round_id={training_round_id}")
+                            return
+                    else:
+                        self._processed_round_ids = set()
+                    
+                    # 标记此轮次ID为已处理
+                    self._processed_round_ids.add(training_round_id)
+                    print(f"[DEBUG] 标记训练轮次ID为已处理 | round_id={training_round_id}")
+            
+            # 备用去重机制：基于内容签名的去重（防止没有round_id的情况）
             signature_source = {
+                'round_id': training_round_id,
                 'orig': original_config,
                 'adj': adjusted_config,
                 'metrics_epoch': training_metrics.get('epoch'),
@@ -854,7 +872,7 @@ class IntelligentConfigGenerator(QObject):
             now = _t.time()
             with self._adjustment_lock:
                 if self._last_adjustment_signature == signature and (now - self._last_adjustment_time) < 2.0:
-                    print("[INFO] 检测到重复的配置调整记录，已去重跳过")
+                    print(f"[DEBUG] 跳过重复调整记录 | signature={signature[:8]} | round_id={training_round_id}")
                     return
                 self._last_adjustment_signature = signature
                 self._last_adjustment_time = now

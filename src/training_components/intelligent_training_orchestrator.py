@@ -91,6 +91,11 @@ class IntelligentTrainingOrchestrator(QObject):
         self.last_apply_epoch = -1     # 记录上次触发应用配置的epoch
         self._analyze_lock = threading.Lock()
         
+        # 训练轮次ID管理 - 确保每轮训练的唯一性
+        self.current_training_round_id = None
+        self.processed_round_ids = set()  # 已处理的训练轮次ID集合
+        self._round_id_lock = threading.Lock()
+        
         # 初始化组件
         self._initialize_components()
         
@@ -369,6 +374,21 @@ class IntelligentTrainingOrchestrator(QObject):
         except Exception as e:
             self.error_occurred.emit(f"监控循环出错: {str(e)}")
     
+    def _generate_training_round_id(self, epoch: int, iteration: int) -> str:
+        """生成训练轮次唯一ID"""
+        import time
+        import hashlib
+        
+        # 基于时间戳、epoch、iteration和会话ID生成唯一ID
+        timestamp = int(time.time() * 1000)  # 毫秒级时间戳
+        session_id = getattr(self.current_session, 'session_id', 'unknown')
+        
+        id_source = f"{session_id}_{epoch}_{iteration}_{timestamp}"
+        round_id = hashlib.md5(id_source.encode('utf-8')).hexdigest()[:12]
+        
+        print(f"[DEBUG] 生成训练轮次ID: {round_id} | epoch={epoch} | iteration={iteration}")
+        return round_id
+    
     def _should_analyze_and_optimize(self) -> bool:
         """判断是否应该进行分析和优化"""
         try:
@@ -401,7 +421,21 @@ class IntelligentTrainingOrchestrator(QObject):
                 self.status_updated.emit(f"⏳ 未达到分析间隔: {epoch} % {self.config['analysis_interval']} != 0")
                 return False
             
-            self.status_updated.emit(f"✅ 满足分析条件: epoch={epoch}")
+            # 生成并验证训练轮次ID的唯一性
+            with self._round_id_lock:
+                round_id = self._generate_training_round_id(epoch, self.current_iteration)
+                
+                # 检查是否已处理过此轮次
+                if round_id in self.processed_round_ids:
+                    print(f"[DEBUG] 训练轮次已处理过，跳过 | round_id={round_id}")
+                    self.status_updated.emit(f"⚠️ 训练轮次已处理过: {round_id}")
+                    return False
+                
+                # 记录当前轮次ID
+                self.current_training_round_id = round_id
+                print(f"[DEBUG] 设置当前训练轮次ID: {round_id}")
+            
+            self.status_updated.emit(f"✅ 满足分析条件: epoch={epoch} | round_id={round_id}")
             return True
             
         except Exception as e:
@@ -425,9 +459,9 @@ class IntelligentTrainingOrchestrator(QObject):
             
             self.status_updated.emit("正在进行智能分析和优化...")
             
-            # 生成优化配置
+            # 生成优化配置，传递训练轮次ID
             optimized_config = self.config_generator.generate_optimized_config(
-                self.current_session.current_config
+                self.current_session.current_config, None, self.current_training_round_id
             )
             print(f"[DEBUG] 生成优化配置完成 | has_change={optimized_config != self.current_session.current_config}")
             
@@ -468,6 +502,13 @@ class IntelligentTrainingOrchestrator(QObject):
         except Exception as e:
             self.error_occurred.emit(f"分析和优化失败: {str(e)}")
         finally:
+            # 标记当前轮次ID为已处理
+            if self.current_training_round_id:
+                with self._round_id_lock:
+                    self.processed_round_ids.add(self.current_training_round_id)
+                    print(f"[DEBUG] 标记轮次ID为已处理: {self.current_training_round_id}")
+                    self.current_training_round_id = None
+            
             # 无论成功还是失败，都要重置分析标志
             self.is_analyzing = False
             print(f"[DEBUG] _analyze_and_optimize 结束 | iter={self.current_iteration} | thread={threading.current_thread().name}")
