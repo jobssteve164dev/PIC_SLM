@@ -158,5 +158,5 @@
     "变形": 1.0,
     "异物": 1.0
   },
-  "monitoring_interval": 60
+  "monitoring_interval": 120
 }
