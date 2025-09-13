@@ -375,19 +375,34 @@ class IntelligentTrainingOrchestrator(QObject):
             self.error_occurred.emit(f"监控循环出错: {str(e)}")
     
     def _generate_training_round_id(self, epoch: int, iteration: int) -> str:
-        """生成训练轮次唯一ID"""
-        import time
+        """生成训练轮次唯一ID - 基于确定性因子，确保同一轮训练生成相同ID"""
         import hashlib
         
-        # 基于时间戳、epoch、iteration和会话ID生成唯一ID
-        timestamp = int(time.time() * 1000)  # 毫秒级时间戳
+        # 基于确定性因子生成唯一ID，不使用时间戳避免重复生成不同ID
         session_id = getattr(self.current_session, 'session_id', 'unknown')
         
-        id_source = f"{session_id}_{epoch}_{iteration}_{timestamp}"
+        # 使用确定性因子：会话ID + iteration + epoch + 分析间隔
+        # 这样同一轮训练（相同的session、iteration、epoch）总是生成相同的ID
+        analysis_interval = self.config.get('analysis_interval', 5)
+        id_source = f"{session_id}_{iteration}_{epoch}_{analysis_interval}"
         round_id = hashlib.md5(id_source.encode('utf-8')).hexdigest()[:12]
         
-        print(f"[DEBUG] 生成训练轮次ID: {round_id} | epoch={epoch} | iteration={iteration}")
+        print(f"[DEBUG] 生成训练轮次ID: {round_id} | session={session_id} | epoch={epoch} | iteration={iteration}")
         return round_id
+    
+    def _get_or_create_training_round_id(self, epoch: int) -> str:
+        """获取或创建训练轮次ID - 确保一轮训练只有一个ID"""
+        with self._round_id_lock:
+            # 如果当前已有轮次ID，直接返回
+            if self.current_training_round_id:
+                print(f"[DEBUG] 使用现有轮次ID: {self.current_training_round_id}")
+                return self.current_training_round_id
+            
+            # 生成新的轮次ID
+            round_id = self._generate_training_round_id(epoch, self.current_iteration)
+            self.current_training_round_id = round_id
+            print(f"[DEBUG] 创建新轮次ID: {round_id}")
+            return round_id
     
     def _should_analyze_and_optimize(self) -> bool:
         """判断是否应该进行分析和优化"""
@@ -421,19 +436,14 @@ class IntelligentTrainingOrchestrator(QObject):
                 self.status_updated.emit(f"⏳ 未达到分析间隔: {epoch} % {self.config['analysis_interval']} != 0")
                 return False
             
-            # 生成并验证训练轮次ID的唯一性
-            with self._round_id_lock:
-                round_id = self._generate_training_round_id(epoch, self.current_iteration)
-                
-                # 检查是否已处理过此轮次
-                if round_id in self.processed_round_ids:
-                    print(f"[DEBUG] 训练轮次已处理过，跳过 | round_id={round_id}")
-                    self.status_updated.emit(f"⚠️ 训练轮次已处理过: {round_id}")
-                    return False
-                
-                # 记录当前轮次ID
-                self.current_training_round_id = round_id
-                print(f"[DEBUG] 设置当前训练轮次ID: {round_id}")
+            # 获取或创建训练轮次ID
+            round_id = self._get_or_create_training_round_id(epoch)
+            
+            # 检查是否已处理过此轮次
+            if round_id in self.processed_round_ids:
+                print(f"[DEBUG] 训练轮次已处理过，跳过 | round_id={round_id}")
+                self.status_updated.emit(f"⚠️ 训练轮次已处理过: {round_id}")
+                return False
             
             self.status_updated.emit(f"✅ 满足分析条件: epoch={epoch} | round_id={round_id}")
             return True
@@ -577,6 +587,16 @@ class IntelligentTrainingOrchestrator(QObject):
                 current_iteration['status'] = 'failed'
                 current_iteration['error'] = error_message
             
+            # 生成失败的迭代报告（包含错误信息）
+            failed_metrics = {
+                'status': 'failed',
+                'error': error_message,
+                'epoch': 0,  # 训练失败时可能没有完成任何epoch
+                'accuracy': 0.0,
+                'loss': float('inf')
+            }
+            self._generate_iteration_report(failed_metrics)
+            
             self.status_updated.emit(f"训练失败: {error_message}")
             
             # 检查是否仍在运行状态
@@ -606,9 +626,23 @@ class IntelligentTrainingOrchestrator(QObject):
             if not self.current_session:
                 return
             
+            # 获取当前轮次ID（如果没有则创建）
+            epoch = metrics.get('epoch', 0)
+            round_id = self._get_or_create_training_round_id(epoch)
+            
+            # 检查是否已经为此轮次ID生成过报告
+            with self._round_id_lock:
+                if round_id in self.processed_round_ids:
+                    print(f"[DEBUG] 轮次ID已生成过报告，跳过 | round_id={round_id}")
+                    return
+                
+                # 标记此轮次ID为已处理
+                self.processed_round_ids.add(round_id)
+                print(f"[DEBUG] 标记轮次ID为已生成报告: {round_id}")
+            
             # 使用智能配置生成器的新方法生成统一的迭代报告
             report_path = self.config_generator.generate_iteration_summary_report(
-                self.current_iteration, metrics
+                self.current_iteration, metrics, round_id
             )
             
             if report_path:

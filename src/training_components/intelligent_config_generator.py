@@ -1001,7 +1001,7 @@ class IntelligentConfigGenerator(QObject):
             'final_config': self.current_session.final_config
         }
     
-    def generate_iteration_summary_report(self, iteration: int, metrics: Dict[str, Any]) -> str:
+    def generate_iteration_summary_report(self, iteration: int, metrics: Dict[str, Any], training_round_id: str = None) -> str:
         """生成迭代总结报告"""
         try:
             import os
@@ -1012,15 +1012,19 @@ class IntelligentConfigGenerator(QObject):
             report_dir = "reports/parameter_tuning"
             os.makedirs(report_dir, exist_ok=True)
             
-            # 生成报告文件名
+            # 生成报告文件名，包含训练轮次ID以确保唯一性
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            report_filename = f"iteration_summary_{iteration}_{timestamp}.json"
+            if training_round_id:
+                report_filename = f"iteration_summary_{iteration}_{timestamp}_{training_round_id}.json"
+            else:
+                report_filename = f"iteration_summary_{iteration}_{timestamp}.json"
             report_path = os.path.join(report_dir, report_filename)
             
             # 构建报告内容
             report_data = {
                 'iteration': iteration,
                 'timestamp': timestamp,
+                'training_round_id': training_round_id,
                 'metrics': metrics,
                 'session_info': self.get_current_session_info(),
                 'adjustment_history': self.get_adjustment_history(),

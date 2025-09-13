@@ -438,6 +438,8 @@ class TrainingThread(QThread):
             self.training_error.emit(f"训练过程中发生错误: {str(e)}")
             import traceback
             traceback.print_exc()
+            # 训练失败时不发出training_finished信号
+            return
         finally:
             print("[DEBUG] 训练线程进入finally块")
             # 确保停止资源限制器
