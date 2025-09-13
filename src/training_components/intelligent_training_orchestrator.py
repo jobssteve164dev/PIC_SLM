@@ -326,8 +326,12 @@ class IntelligentTrainingOrchestrator(QObject):
     def _start_monitoring(self):
         """开始监控训练"""
         try:
+            # 防重复启动监控线程
+            if self.monitoring_thread and self.monitoring_thread.is_alive():
+                print("[INFO] 监控线程已在运行，跳过重复启动")
+                return
             self.stop_monitoring = False
-            self.monitoring_thread = threading.Thread(target=self._monitoring_loop)
+            self.monitoring_thread = threading.Thread(target=self._monitoring_loop, name="IntelligentMonitoringThread")
             self.monitoring_thread.daemon = True
             self.monitoring_thread.start()
             
@@ -342,7 +346,8 @@ class IntelligentTrainingOrchestrator(QObject):
                 if self._should_analyze_and_optimize():
                     # 再次检查停止标志，防止在分析过程中被停止
                     if not self.stop_monitoring and self.is_running:
-                        self._analyze_and_optimize()
+                        if not self.is_analyzing:
+                            self._analyze_and_optimize()
                 
                 # 使用配置的监控间隔时间
                 monitoring_interval = self.config.get('monitoring_interval', 30)

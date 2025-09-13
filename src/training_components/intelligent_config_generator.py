@@ -13,6 +13,7 @@ import os
 import json
 import time
 import copy
+import threading
 from typing import Dict, Any, List, Optional, Tuple
 from dataclasses import dataclass, asdict
 from PyQt5.QtCore import QObject, pyqtSignal, QThread
@@ -76,6 +77,11 @@ class IntelligentConfigGenerator(QObject):
         # 分析结果缓存 - 确保微调报告和训练参数的一致性
         self._cached_analysis_result = None
         self._cached_analysis_key = None
+
+        # 去重与并发保护
+        self._adjustment_lock = threading.Lock()
+        self._last_adjustment_signature = None
+        self._last_adjustment_time = 0.0
         
         # 初始化组件
         self._initialize_components()
@@ -797,6 +803,23 @@ class IntelligentConfigGenerator(QObject):
                                 analysis_result: Dict[str, Any]):
         """记录配置调整"""
         try:
+            # 并发与重复写入保护：同一signature在2秒内只记录一次
+            signature_source = {
+                'orig': original_config,
+                'adj': adjusted_config,
+                'metrics_epoch': training_metrics.get('epoch'),
+            }
+            signature_str = json.dumps(signature_source, ensure_ascii=False, sort_keys=True)
+            import hashlib, time as _t
+            signature = hashlib.md5(signature_str.encode('utf-8')).hexdigest()
+            now = _t.time()
+            with self._adjustment_lock:
+                if self._last_adjustment_signature == signature and (now - self._last_adjustment_time) < 2.0:
+                    print("[INFO] 检测到重复的配置调整记录，已去重跳过")
+                    return
+                self._last_adjustment_signature = signature
+                self._last_adjustment_time = now
+
             # 计算变更
             changes = {}
             for key, value in adjusted_config.items():
