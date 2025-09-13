@@ -39,7 +39,7 @@ class IntelligentTrainingWidget(QWidget):
         self.training_tab = parent  # 直接保存父组件（TrainingTab）的引用
         self.main_window = None
         self.is_monitoring = False
-        self.orchestrator = None
+        self.intelligent_manager = None  # 使用主窗口的IntelligentTrainingManager
         self.current_config = {}
         
         # 查找主窗口引用
@@ -48,8 +48,12 @@ class IntelligentTrainingWidget(QWidget):
         elif hasattr(parent, 'parent') and hasattr(parent.parent(), 'main_window'):
             self.main_window = parent.parent().main_window
         
-        # 智能训练编排器
-        self.orchestrator = IntelligentTrainingOrchestrator()
+        # 获取主窗口的智能训练管理器（不创建新实例）
+        if self.main_window and hasattr(self.main_window, 'intelligent_manager'):
+            self.intelligent_manager = self.main_window.intelligent_manager
+            print(f"[DEBUG] IntelligentTrainingWidget 使用主窗口的智能训练管理器: {id(self.intelligent_manager)}")
+        else:
+            print("[WARNING] 无法获取主窗口的智能训练管理器，智能训练功能可能无法正常工作")
         
         # 初始化UI
         self.init_ui()
@@ -286,18 +290,29 @@ class IntelligentTrainingWidget(QWidget):
     
     def connect_signals(self):
         """连接信号"""
-        # 连接编排器信号
-        self.orchestrator.training_started.connect(self._on_training_started)
-        self.orchestrator.training_completed.connect(self._on_training_completed)
-        self.orchestrator.training_failed.connect(self._on_training_failed)
-        self.orchestrator.config_generated.connect(self._on_config_generated)
-        self.orchestrator.config_applied.connect(self._on_config_applied)
-        self.orchestrator.iteration_completed.connect(self._on_iteration_completed)
-        self.orchestrator.status_updated.connect(self._on_status_updated)
-        self.orchestrator.error_occurred.connect(self._on_error_occurred)
-        
-        # 连接配置生成器的调整记录信号
-        self.orchestrator.config_generator.adjustment_recorded.connect(self._on_adjustment_recorded)
+        # 连接智能训练管理器信号（如果可用）
+        if self.intelligent_manager:
+            # 获取内部的编排器
+            orchestrator = getattr(self.intelligent_manager, 'intelligent_orchestrator', None)
+            if orchestrator:
+                orchestrator.training_started.connect(self._on_training_started)
+                orchestrator.training_completed.connect(self._on_training_completed)
+                orchestrator.training_failed.connect(self._on_training_failed)
+                orchestrator.config_generated.connect(self._on_config_generated)
+                orchestrator.config_applied.connect(self._on_config_applied)
+                orchestrator.iteration_completed.connect(self._on_iteration_completed)
+                orchestrator.status_updated.connect(self._on_status_updated)
+                orchestrator.error_occurred.connect(self._on_error_occurred)
+                
+                # 连接配置生成器的调整记录信号
+                if hasattr(orchestrator, 'config_generator') and hasattr(orchestrator.config_generator, 'adjustment_recorded'):
+                    orchestrator.config_generator.adjustment_recorded.connect(self._on_adjustment_recorded)
+                
+                print(f"[DEBUG] IntelligentTrainingWidget 已连接到编排器信号: {id(orchestrator)}")
+            else:
+                print("[WARNING] 无法获取智能训练管理器的编排器")
+        else:
+            print("[WARNING] 智能训练管理器不可用，无法连接信号")
         
     def start_intelligent_training(self):
         """启动智能训练"""
@@ -418,14 +433,11 @@ class IntelligentTrainingWidget(QWidget):
                 QMessageBox.warning(self, "配置不完整", error_msg)
                 return
             
-            # 发射开始监控请求信号
+            # 发射开始监控请求信号（这将触发主窗口启动智能训练管理器）
             self.start_monitoring_requested.emit(self.current_config)
             
-            # 设置模型训练器和训练标签页
-            self._setup_orchestrator()
-            
-            # 启动智能训练
-            success = self.orchestrator.start_intelligent_training(self.current_config)
+            # 不再创建独立的编排器实例，而是等待主窗口的管理器启动
+            success = True  # 假设主窗口会正确处理启动
             
             if success:
                 self.is_monitoring = True
@@ -508,10 +520,15 @@ class IntelligentTrainingWidget(QWidget):
     def stop_intelligent_training(self):
         """停止智能训练"""
         try:
-            # 发射停止监控请求信号
+            # 发射停止监控请求信号（让主窗口处理停止逻辑）
             self.stop_monitoring_requested.emit()
             
-            self.orchestrator.stop_intelligent_training()
+            # 如果有智能训练管理器，也直接停止
+            if self.intelligent_manager:
+                orchestrator = getattr(self.intelligent_manager, 'intelligent_orchestrator', None)
+                if orchestrator and self.is_monitoring:
+                    orchestrator.stop_training()
+                
             self.is_monitoring = False
             self.start_button.setEnabled(True)
             self.stop_button.setEnabled(False)
@@ -520,21 +537,7 @@ class IntelligentTrainingWidget(QWidget):
         except Exception as e:
             QMessageBox.critical(self, "错误", f"停止智能训练时出错: {str(e)}")
     
-    def _setup_orchestrator(self):
-        """设置编排器"""
-        try:
-            if hasattr(self.training_tab, 'main_window'):
-                main_window = self.training_tab.main_window
-                # 设置模型训练器
-                if hasattr(main_window, 'worker') and hasattr(main_window.worker, 'model_trainer'):
-                    self.orchestrator.set_model_trainer(main_window.worker.model_trainer)
-            
-            # 获取训练标签页（父组件本身就是训练标签页）
-            if hasattr(self.training_tab, 'train_model'):
-                self.orchestrator.set_training_tab(self.training_tab)
-            
-        except Exception as e:
-            self.add_log(f"设置编排器时出错: {str(e)}")
+    # 移除_setup_orchestrator方法，因为不再创建独立的编排器实例
     
     def set_training_config(self, config: Dict[str, Any]):
         """设置训练配置"""
@@ -542,11 +545,13 @@ class IntelligentTrainingWidget(QWidget):
         self.update_config_display()
         self.add_log(f"📋 训练配置已更新: {len(config)} 个参数")
         
-        # 如果智能训练正在运行，更新编排器的配置
-        if self.is_monitoring and self.orchestrator:
+        # 如果智能训练正在运行，更新管理器的配置
+        if self.is_monitoring and self.intelligent_manager:
             try:
-                self.orchestrator.update_training_config(config)
-                self.add_log("🔄 智能训练配置已同步更新")
+                orchestrator = getattr(self.intelligent_manager, 'intelligent_orchestrator', None)
+                if orchestrator and hasattr(orchestrator, 'update_training_config'):
+                    orchestrator.update_training_config(config)
+                    self.add_log("🔄 智能训练配置已同步更新")
             except Exception as e:
                 self.add_log(f"⚠️ 同步配置到编排器失败: {str(e)}")
     
@@ -567,7 +572,8 @@ class IntelligentTrainingWidget(QWidget):
         """更新状态显示"""
         try:
             if self.is_monitoring:
-                session_info = self.orchestrator.get_current_session_info()
+                orchestrator = getattr(self.intelligent_manager, 'intelligent_orchestrator', None) if self.intelligent_manager else None
+                session_info = orchestrator.get_current_session_info() if orchestrator and hasattr(orchestrator, 'get_current_session_info') else None
                 if session_info:
                     self.status_label.setText(f"状态: {session_info.get('status', 'unknown')}")
                     self.session_info_label.setText(f"会话: {session_info.get('session_id', 'unknown')}")
@@ -600,7 +606,8 @@ class IntelligentTrainingWidget(QWidget):
     def update_history_table(self):
         """更新调整历史表格"""
         try:
-            history = self.orchestrator.get_adjustment_history()
+            orchestrator = getattr(self.intelligent_manager, 'intelligent_orchestrator', None) if self.intelligent_manager else None
+            history = orchestrator.get_adjustment_history() if orchestrator and hasattr(orchestrator, 'get_adjustment_history') else []
             
             self.history_table.setRowCount(len(history))
             
@@ -662,7 +669,8 @@ class IntelligentTrainingWidget(QWidget):
     def update_iterations_display(self):
         """更新迭代显示"""
         try:
-            session_info = self.orchestrator.get_current_session_info()
+            orchestrator = getattr(self.intelligent_manager, 'intelligent_orchestrator', None) if self.intelligent_manager else None
+            session_info = orchestrator.get_current_session_info() if orchestrator and hasattr(orchestrator, 'get_current_session_info') else None
             if session_info:
                 iterations_text = f"当前迭代: {session_info.get('current_iteration', 0)}\n"
                 iterations_text += f"最大迭代: {session_info.get('max_iterations', 0)}\n"
@@ -684,7 +692,8 @@ class IntelligentTrainingWidget(QWidget):
     def export_training_report(self):
         """导出训练报告"""
         try:
-            report = self.orchestrator.export_training_report()
+            orchestrator = getattr(self.intelligent_manager, 'intelligent_orchestrator', None) if self.intelligent_manager else None
+            report = orchestrator.export_training_report() if orchestrator and hasattr(orchestrator, 'export_training_report') else None
             if not report:
                 QMessageBox.information(self, "提示", "没有可导出的训练报告")
                 return
