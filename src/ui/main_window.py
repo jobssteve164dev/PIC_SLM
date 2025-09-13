@@ -302,11 +302,16 @@ class MainWindow(QMainWindow):
             
             # 统一构建完整训练配置（与普通开始训练一致）
             training_config = self._build_training_config_from_ui()
-            self.intelligent_manager.start_intelligent_training(training_config)
-            # 同步按钮UI
+            
+            # 只使用一个智能训练系统，避免重复启动
             if hasattr(self.training_tab, 'intelligent_widget'):
-                self.training_tab.intelligent_widget.start_monitoring(training_config)
-            self.update_status('智能训练监控已启动')
+                # 使用训练标签页中的智能训练组件
+                self.training_tab.intelligent_widget.start_intelligent_training()
+                self.update_status('智能训练已启动（通过训练标签页）')
+            else:
+                # 回退到使用智能训练管理器
+                self.intelligent_manager.start_intelligent_training(training_config)
+                self.update_status('智能训练已启动（通过管理器）')
         except Exception as e:
             self.update_status(f'启动智能训练失败: {e}')
     
