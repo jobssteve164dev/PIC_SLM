@@ -609,62 +609,143 @@ class IntelligentTrainingWidget(QWidget):
             orchestrator = getattr(self.intelligent_manager, 'intelligent_orchestrator', None) if self.intelligent_manager else None
             history = orchestrator.get_adjustment_history() if orchestrator and hasattr(orchestrator, 'get_adjustment_history') else []
             
-            self.history_table.setRowCount(len(history))
+            # 按时间排序（最新的在前）
+            history = sorted(history, key=lambda x: x.get('timestamp', 0), reverse=True)
             
-            for row, adjustment in enumerate(history):
+            # 计算总行数（每个参数变更一行）
+            total_rows = 0
+            for adjustment in history:
+                changes = adjustment.get('changes', {})
+                total_rows += max(1, len(changes))  # 至少一行
+            
+            self.history_table.setRowCount(total_rows)
+            
+            current_row = 0
+            for adjustment in history:
                 # 时间
                 timestamp = time.strftime("%H:%M:%S", time.localtime(adjustment.get('timestamp', 0)))
-                self.history_table.setItem(row, 0, QTableWidgetItem(timestamp))
                 
                 # 参数变更 - 为每个参数创建单独的行
                 changes = adjustment.get('changes', {})
                 if changes:
-                    # 为每个参数创建单独的行
-                    param_names = list(changes.keys())
-                    for param_idx, param_name in enumerate(param_names):
-                        if param_idx > 0:
-                            # 为额外参数插入新行
-                            self.history_table.insertRow(row + param_idx)
-                            # 复制时间列
-                            self.history_table.setItem(row + param_idx, 0, QTableWidgetItem(timestamp))
-                        
-                        change_info = changes[param_name]
-                        current_row = row + param_idx
+                    for param_idx, (param_name, change_info) in enumerate(changes.items()):
+                        # 时间（每行都显示）
+                        self.history_table.setItem(current_row, 0, QTableWidgetItem(timestamp))
                         
                         # 参数名
                         self.history_table.setItem(current_row, 1, QTableWidgetItem(param_name))
+                        
                         # 原值
-                        self.history_table.setItem(current_row, 2, QTableWidgetItem(str(change_info.get('from', ''))))
+                        old_value = str(change_info.get('from', ''))
+                        self.history_table.setItem(current_row, 2, QTableWidgetItem(old_value))
+                        
                         # 新值
                         new_value = str(change_info.get('to', ''))
                         # 如果新值包含LLM分析文本，只显示参数值部分
                         if '###' in new_value:
                             new_value = new_value.split('###')[0].strip()
                         self.history_table.setItem(current_row, 3, QTableWidgetItem(new_value))
-                        # 原因（只在第一行显示）
-                        if param_idx == 0:
-                            reason = adjustment.get('reason', '')
-                            self.history_table.setItem(current_row, 4, QTableWidgetItem(reason))
-                        # 状态（只在第一行显示）
-                        if param_idx == 0:
-                            status = adjustment.get('status', 'unknown')
-                            self.history_table.setItem(current_row, 5, QTableWidgetItem(status))
+                        
+                        # 原因 - 从LLM分析中提取该参数的具体理由
+                        reason = self._extract_parameter_reason(adjustment, param_name)
+                        reason_item = QTableWidgetItem(reason[:50] + "..." if len(reason) > 50 else reason)
+                        reason_item.setToolTip(reason)  # 设置悬浮提示
+                        self.history_table.setItem(current_row, 4, reason_item)
+                        
+                        # 状态 - 美化显示
+                        status = adjustment.get('status', 'unknown')
+                        status_item = self._create_status_item(status)
+                        self.history_table.setItem(current_row, 5, status_item)
+                        
+                        current_row += 1
                 else:
-                    self.history_table.setItem(row, 1, QTableWidgetItem("无变更"))
-                    self.history_table.setItem(row, 2, QTableWidgetItem(""))
-                    self.history_table.setItem(row, 3, QTableWidgetItem(""))
+                    # 无变更的情况
+                    self.history_table.setItem(current_row, 0, QTableWidgetItem(timestamp))
+                    self.history_table.setItem(current_row, 1, QTableWidgetItem("无变更"))
+                    self.history_table.setItem(current_row, 2, QTableWidgetItem(""))
+                    self.history_table.setItem(current_row, 3, QTableWidgetItem(""))
+                    
                     # 原因
                     reason = adjustment.get('reason', '')
-                    self.history_table.setItem(row, 4, QTableWidgetItem(reason))
+                    reason_item = QTableWidgetItem(reason[:50] + "..." if len(reason) > 50 else reason)
+                    reason_item.setToolTip(reason)
+                    self.history_table.setItem(current_row, 4, reason_item)
+                    
                     # 状态
                     status = adjustment.get('status', 'unknown')
-                    self.history_table.setItem(row, 5, QTableWidgetItem(status))
+                    status_item = self._create_status_item(status)
+                    self.history_table.setItem(current_row, 5, status_item)
+                    
+                    current_row += 1
             
             # 调整列宽
             self.history_table.resizeColumnsToContents()
             
         except Exception as e:
             self.add_log(f"更新历史表格失败: {str(e)}")
+    
+    def _extract_parameter_reason(self, adjustment: dict, param_name: str) -> str:
+        """从调整记录中提取特定参数的调整理由"""
+        try:
+            llm_analysis = adjustment.get('llm_analysis', {})
+            
+            # 优先从final_suggestions中查找
+            final_suggestions = llm_analysis.get('final_suggestions', [])
+            for suggestion in final_suggestions:
+                if isinstance(suggestion, dict) and suggestion.get('parameter') == param_name:
+                    changed_by = suggestion.get('changed_by', 'llm_suggestion')
+                    if changed_by == 'conflict_resolution':
+                        return f"冲突修复调整 (原建议: {suggestion.get('original_suggested_value', '未知')})"
+                    else:
+                        return "LLM智能分析建议"
+            
+            # 从原始suggestions中查找
+            suggestions = llm_analysis.get('suggestions', [])
+            for suggestion in suggestions:
+                if isinstance(suggestion, dict) and suggestion.get('parameter') == param_name:
+                    reason = suggestion.get('reason', '')
+                    priority = suggestion.get('priority', 'medium')
+                    return f"{reason} (优先级: {priority})"
+            
+            # 从分析文本中提取（如果有的话）
+            analysis_text = llm_analysis.get('analysis', '')
+            if param_name in analysis_text:
+                # 简单提取包含参数名的句子
+                sentences = analysis_text.split('。')
+                for sentence in sentences:
+                    if param_name in sentence:
+                        return sentence.strip()[:100]
+            
+            # 默认返回通用理由
+            return adjustment.get('reason', 'LLM智能分析建议')
+            
+        except Exception as e:
+            return f"提取理由失败: {str(e)}"
+    
+    def _create_status_item(self, status: str) -> QTableWidgetItem:
+        """创建美化的状态项"""
+        status_map = {
+            'applied': '✅ 已应用',
+            'pending': '⏳ 待应用',
+            'failed': '❌ 失败',
+            'cancelled': '🚫 已取消',
+            'unknown': '❓ 未知'
+        }
+        
+        display_text = status_map.get(status, f"❓ {status}")
+        item = QTableWidgetItem(display_text)
+        
+        # 设置颜色
+        if status == 'applied':
+            item.setBackground(QColor(200, 255, 200))  # 浅绿色
+        elif status == 'pending':
+            item.setBackground(QColor(255, 255, 200))  # 浅黄色
+        elif status == 'failed':
+            item.setBackground(QColor(255, 200, 200))  # 浅红色
+        elif status == 'cancelled':
+            item.setBackground(QColor(220, 220, 220))  # 浅灰色
+        
+        return item
     
     def update_iterations_display(self):
         """更新迭代显示"""

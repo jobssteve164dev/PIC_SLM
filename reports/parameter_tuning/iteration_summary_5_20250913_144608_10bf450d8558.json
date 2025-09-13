@@ -1,0 +1,635 @@
+{
+  "iteration": 5,
+  "timestamp": "20250913_144608",
+  "training_round_id": "10bf450d8558",
+  "metrics": {},
+  "session_info": {
+    "session_id": "session_1757745269",
+    "start_time": 1757745269.3823879,
+    "status": "running",
+    "adjustment_count": 3,
+    "original_config": {
+      "data_dir": "E:\\PIC_SLM\\TEST\\OUTPUT2\\dataset",
+      "model_name": "MobileNetV3",
+      "num_epochs": 50,
+      "batch_size": 32,
+      "learning_rate": 0.001,
+      "model_save_dir": "F:\\iCloudDrive\\Documents\\Qsync\\00.AI_PROJECT\\图片分类模型训练\\C1\\models\\saved_models",
+      "default_param_save_dir": "F:\\iCloudDrive\\Documents\\Qsync\\00.AI_PROJECT\\图片分类模型训练\\C1\\train_config",
+      "tensorboard_log_dir": "F:\\iCloudDrive\\Documents\\Qsync\\00.AI_PROJECT\\图片分类模型训练\\C1\\runs\\tensorboard",
+      "task_type": "classification",
+      "optimizer": "Adam",
+      "use_pretrained": true,
+      "pretrained_path": "",
+      "metrics": [
+        "accuracy"
+      ],
+      "use_tensorboard": true,
+      "model_note": "",
+      "use_class_weights": true,
+      "weight_strategy": "balanced",
+      "weight_decay": 1e-05,
+      "lr_scheduler": "StepLR",
+      "use_augmentation": true,
+      "early_stopping": true,
+      "early_stopping_patience": 10,
+      "gradient_clipping": false,
+      "gradient_clipping_value": 1.0,
+      "mixed_precision": true,
+      "dropout_rate": 0.0,
+      "activation_function": "None",
+      "beta1": 0.9,
+      "beta2": 0.999,
+      "momentum": 0.9,
+      "nesterov": false,
+      "warmup_enabled": true,
+      "warmup_steps": 500,
+      "warmup_ratio": 0.0,
+      "warmup_method": "linear",
+      "min_lr_enabled": true,
+      "min_lr": 1e-06,
+      "label_smoothing_enabled": true,
+      "label_smoothing": 0.1,
+      "model_ema": true,
+      "model_ema_decay": 0.9999,
+      "gradient_accumulation_enabled": false,
+      "gradient_accumulation_steps": 2,
+      "advanced_augmentation_enabled": false,
+      "cutmix_prob": 0.5,
+      "mixup_alpha": 0.2,
+      "loss_scaling_enabled": true,
+      "loss_scale": "dynamic",
+      "static_loss_scale": 128.0,
+      "class_weights": {
+        "划痕": 1.0,
+        "污点": 1.0,
+        "缺失": 1.0,
+        "变形": 1.0,
+        "异物": 1.0
+      }
+    },
+    "final_config": null
+  },
+  "adjustment_history": [
+    {
+      "adjustment_id": "adj_1757745427",
+      "timestamp": 1757745427.7530882,
+      "original_config": {
+        "data_dir": "E:\\PIC_SLM\\TEST\\OUTPUT2\\dataset",
+        "model_name": "MobileNetV3",
+        "num_epochs": 50,
+        "batch_size": 32,
+        "learning_rate": 0.001,
+        "model_save_dir": "F:\\iCloudDrive\\Documents\\Qsync\\00.AI_PROJECT\\图片分类模型训练\\C1\\models\\saved_models",
+        "default_param_save_dir": "F:\\iCloudDrive\\Documents\\Qsync\\00.AI_PROJECT\\图片分类模型训练\\C1\\train_config",
+        "tensorboard_log_dir": "F:\\iCloudDrive\\Documents\\Qsync\\00.AI_PROJECT\\图片分类模型训练\\C1\\runs\\tensorboard",
+        "task_type": "classification",
+        "optimizer": "Adam",
+        "use_pretrained": true,
+        "pretrained_path": "",
+        "metrics": [
+          "accuracy"
+        ],
+        "use_tensorboard": true,
+        "model_note": "",
+        "use_class_weights": true,
+        "weight_strategy": "balanced",
+        "weight_decay": 1e-05,
+        "lr_scheduler": "StepLR",
+        "use_augmentation": true,
+        "early_stopping": true,
+        "early_stopping_patience": 10,
+        "gradient_clipping": false,
+        "gradient_clipping_value": 1.0,
+        "mixed_precision": true,
+        "dropout_rate": 0.0,
+        "activation_function": "None",
+        "beta1": 0.9,
+        "beta2": 0.999,
+        "momentum": 0.9,
+        "nesterov": false,
+        "warmup_enabled": true,
+        "warmup_steps": 500,
+        "warmup_ratio": 0.0,
+        "warmup_method": "linear",
+        "min_lr_enabled": true,
+        "min_lr": 1e-06,
+        "label_smoothing_enabled": true,
+        "label_smoothing": 0.1,
+        "model_ema": true,
+        "model_ema_decay": 0.9999,
+        "gradient_accumulation_enabled": false,
+        "gradient_accumulation_steps": 2,
+        "advanced_augmentation_enabled": false,
+        "cutmix_prob": 0.5,
+        "mixup_alpha": 0.2,
+        "loss_scaling_enabled": true,
+        "loss_scale": "dynamic",
+        "static_loss_scale": 128.0,
+        "class_weights": {
+          "划痕": 1.0,
+          "污点": 1.0,
+          "缺失": 1.0,
+          "变形": 1.0,
+          "异物": 1.0
+        },
+        "model_filename": "MobileNetV3_20250913-143429",
+        "timestamp": "20250913-143429"
+      },
+      "adjusted_config": {
+        "data_dir": "E:\\PIC_SLM\\TEST\\OUTPUT2\\dataset",
+        "model_name": "MobileNetV3",
+        "num_epochs": 50,
+        "batch_size": 16,
+        "learning_rate": 9.999999999999999e-05,
+        "model_save_dir": "F:\\iCloudDrive\\Documents\\Qsync\\00.AI_PROJECT\\图片分类模型训练\\C1\\models\\saved_models",
+        "default_param_save_dir": "F:\\iCloudDrive\\Documents\\Qsync\\00.AI_PROJECT\\图片分类模型训练\\C1\\train_config",
+        "tensorboard_log_dir": "F:\\iCloudDrive\\Documents\\Qsync\\00.AI_PROJECT\\图片分类模型训练\\C1\\runs\\tensorboard",
+        "task_type": "classification",
+        "optimizer": "Adam",
+        "use_pretrained": true,
+        "pretrained_path": "",
+        "metrics": [
+          "accuracy"
+        ],
+        "use_tensorboard": true,
+        "model_note": "",
+        "use_class_weights": true,
+        "weight_strategy": "balanced",
+        "weight_decay": 9.999999999999999e-06,
+        "lr_scheduler": "StepLR",
+        "use_augmentation": true,
+        "early_stopping": true,
+        "early_stopping_patience": 10,
+        "gradient_clipping": false,
+        "gradient_clipping_value": 1.0,
+        "mixed_precision": true,
+        "dropout_rate": 0.2,
+        "activation_function": "None",
+        "beta1": 0.9,
+        "beta2": 0.999,
+        "momentum": 0.9,
+        "nesterov": false,
+        "warmup_enabled": true,
+        "warmup_steps": 1000,
+        "warmup_ratio": 0.0,
+        "warmup_method": "linear",
+        "min_lr_enabled": true,
+        "min_lr": 1e-06,
+        "label_smoothing_enabled": true,
+        "label_smoothing": 0.1,
+        "model_ema": true,
+        "model_ema_decay": 0.9999,
+        "gradient_accumulation_enabled": false,
+        "gradient_accumulation_steps": 2,
+        "advanced_augmentation_enabled": false,
+        "cutmix_prob": 0.5,
+        "mixup_alpha": 0.2,
+        "loss_scaling_enabled": true,
+        "loss_scale": "dynamic",
+        "static_loss_scale": 128.0,
+        "class_weights": {
+          "划痕": 1.0,
+          "污点": 1.0,
+          "缺失": 1.0,
+          "变形": 1.0,
+          "异物": 1.0
+        },
+        "model_filename": "MobileNetV3_20250913-143711",
+        "timestamp": "20250913-143711",
+        "_intelligent_training_mode": true
+      },
+      "changes": {
+        "batch_size": {
+          "from": 32,
+          "to": 16
+        },
+        "learning_rate": {
+          "from": 0.001,
+          "to": 9.999999999999999e-05
+        },
+        "weight_decay": {
+          "from": 1e-05,
+          "to": 9.999999999999999e-06
+        },
+        "dropout_rate": {
+          "from": 0.0,
+          "to": 0.2
+        },
+        "warmup_steps": {
+          "from": 500,
+          "to": 1000
+        }
+      },
+      "reason": "LLM智能分析建议",
+      "training_metrics": {
+        "timestamp": 1757745372.1850603,
+        "epoch": 2,
+        "phase": "val",
+        "session_id": "MobileNetV3_20250913_143429",
+        "loss": 1.8391587813695272,
+        "accuracy": 0.16666666666666666
+      },
+      "llm_analysis": {
+        "reason": "LLM智能分析建议",
+        "analysis": "## 1. 配置评估\n\n当前配置整体合理，适合图像分类任务，但存在几个需要注意的问题：\n\n**优势配置：**\n- 使用预训练MobileNetV3，适合迁移学习\n- 类别权重平衡，适合多类别不平衡数据\n- 数据增强启用，有助于提升泛化能力\n- 学习率调度和早停机制完善\n\n**潜在问题：**\n- 学习率0.001对于预训练模型可能偏高\n- dropout_rate为0.0，缺少正则化\n- 验证准确率极低，表明配置需要调整\n\n## 2. 训练状态分析\n\n**当前状态：严重欠拟合**\n- 第2轮验证准确率仅16.7%，远低于随机猜测水平（20%）\n- 验证损失1.84，表明模型几乎无法学习有效特征\n- 可能原因：学习率过高导致优化不稳定，或数据预处理存在问题\n\n**与配置关联：**\n- 高学习率可能导致梯度震荡，无法收敛\n- 缺少dropout可能加剧过拟合风险（虽然当前是欠拟合）\n- 类别权重配置正确，但学习过程受阻\n\n## 3. 优化建议\n\n```json\n{\n    \"suggestions\": [\n        {\n            \"parameter\": \"learnin...",
+        "final_suggestions": [
+          {
+            "parameter": "batch_size",
+            "final_value": 16,
+            "original_suggested_value": 16,
+            "changed_by": "llm_suggestion"
+          },
+          {
+            "parameter": "learning_rate",
+            "final_value": 9.999999999999999e-05,
+            "original_suggested_value": 0.0001,
+            "changed_by": "conflict_resolution"
+          },
+          {
+            "parameter": "weight_decay",
+            "final_value": 9.999999999999999e-06
+          },
+          {
+            "parameter": "dropout_rate",
+            "final_value": 0.2,
+            "original_suggested_value": 0.2,
+            "changed_by": "llm_suggestion"
+          },
+          {
+            "parameter": "warmup_steps",
+            "final_value": 1000,
+            "original_suggested_value": 1000,
+            "changed_by": "llm_suggestion"
+          }
+        ]
+      },
+      "status": "applied"
+    },
+    {
+      "adjustment_id": "adj_1757745774",
+      "timestamp": 1757745774.6821942,
+      "original_config": {
+        "data_dir": "E:\\PIC_SLM\\TEST\\OUTPUT2\\dataset",
+        "model_name": "MobileNetV3",
+        "num_epochs": 50,
+        "batch_size": 16,
+        "learning_rate": 9.999999999999999e-05,
+        "model_save_dir": "F:\\iCloudDrive\\Documents\\Qsync\\00.AI_PROJECT\\图片分类模型训练\\C1\\models\\saved_models",
+        "default_param_save_dir": "F:\\iCloudDrive\\Documents\\Qsync\\00.AI_PROJECT\\图片分类模型训练\\C1\\train_config",
+        "tensorboard_log_dir": "F:\\iCloudDrive\\Documents\\Qsync\\00.AI_PROJECT\\图片分类模型训练\\C1\\runs\\tensorboard",
+        "task_type": "classification",
+        "optimizer": "Adam",
+        "use_pretrained": true,
+        "pretrained_path": "",
+        "metrics": [
+          "accuracy"
+        ],
+        "use_tensorboard": true,
+        "model_note": "",
+        "use_class_weights": true,
+        "weight_strategy": "balanced",
+        "weight_decay": 9.999999999999999e-06,
+        "lr_scheduler": "StepLR",
+        "use_augmentation": true,
+        "early_stopping": true,
+        "early_stopping_patience": 10,
+        "gradient_clipping": false,
+        "gradient_clipping_value": 1.0,
+        "mixed_precision": true,
+        "dropout_rate": 0.2,
+        "activation_function": "None",
+        "beta1": 0.9,
+        "beta2": 0.999,
+        "momentum": 0.9,
+        "nesterov": false,
+        "warmup_enabled": true,
+        "warmup_steps": 1000,
+        "warmup_ratio": 0.0,
+        "warmup_method": "linear",
+        "min_lr_enabled": true,
+        "min_lr": 1e-06,
+        "label_smoothing_enabled": true,
+        "label_smoothing": 0.1,
+        "model_ema": true,
+        "model_ema_decay": 0.9999,
+        "gradient_accumulation_enabled": false,
+        "gradient_accumulation_steps": 2,
+        "advanced_augmentation_enabled": false,
+        "cutmix_prob": 0.5,
+        "mixup_alpha": 0.2,
+        "loss_scaling_enabled": true,
+        "loss_scale": "dynamic",
+        "static_loss_scale": 128.0,
+        "class_weights": {
+          "划痕": 1.0,
+          "污点": 1.0,
+          "缺失": 1.0,
+          "变形": 1.0,
+          "异物": 1.0
+        },
+        "model_filename": "MobileNetV3_20250913-143711",
+        "timestamp": "20250913-143711",
+        "_intelligent_training_mode": true
+      },
+      "adjusted_config": {
+        "data_dir": "E:\\PIC_SLM\\TEST\\OUTPUT2\\dataset",
+        "model_name": "MobileNetV3",
+        "num_epochs": 50,
+        "batch_size": 32,
+        "learning_rate": 9.999999999999999e-06,
+        "model_save_dir": "F:\\iCloudDrive\\Documents\\Qsync\\00.AI_PROJECT\\图片分类模型训练\\C1\\models\\saved_models",
+        "default_param_save_dir": "F:\\iCloudDrive\\Documents\\Qsync\\00.AI_PROJECT\\图片分类模型训练\\C1\\train_config",
+        "tensorboard_log_dir": "F:\\iCloudDrive\\Documents\\Qsync\\00.AI_PROJECT\\图片分类模型训练\\C1\\runs\\tensorboard",
+        "task_type": "classification",
+        "optimizer": "Adam",
+        "use_pretrained": true,
+        "pretrained_path": "",
+        "metrics": [
+          "accuracy"
+        ],
+        "use_tensorboard": true,
+        "model_note": "",
+        "use_class_weights": true,
+        "weight_strategy": "balanced",
+        "weight_decay": 9.999999999999999e-06,
+        "lr_scheduler": "StepLR",
+        "use_augmentation": true,
+        "early_stopping": true,
+        "early_stopping_patience": 5,
+        "gradient_clipping": false,
+        "gradient_clipping_value": 1.0,
+        "mixed_precision": true,
+        "dropout_rate": 0.2,
+        "activation_function": "None",
+        "beta1": 0.9,
+        "beta2": 0.999,
+        "momentum": 0.9,
+        "nesterov": false,
+        "warmup_enabled": true,
+        "warmup_steps": 1000,
+        "warmup_ratio": 0.0,
+        "warmup_method": "linear",
+        "min_lr_enabled": true,
+        "min_lr": 1e-06,
+        "label_smoothing_enabled": true,
+        "label_smoothing": 0.1,
+        "model_ema": true,
+        "model_ema_decay": 0.9999,
+        "gradient_accumulation_enabled": false,
+        "gradient_accumulation_steps": 2,
+        "advanced_augmentation_enabled": false,
+        "cutmix_prob": 0.5,
+        "mixup_alpha": 0.2,
+        "loss_scaling_enabled": true,
+        "loss_scale": "dynamic",
+        "static_loss_scale": 128.0,
+        "class_weights": "使用balanced策略自动计算",
+        "model_filename": "MobileNetV3_20250913-144258",
+        "timestamp": "20250913-144258",
+        "_intelligent_training_mode": true
+      },
+      "changes": {
+        "batch_size": {
+          "from": 16,
+          "to": 32
+        },
+        "learning_rate": {
+          "from": 9.999999999999999e-05,
+          "to": 9.999999999999999e-06
+        },
+        "early_stopping_patience": {
+          "from": 10,
+          "to": 5
+        },
+        "class_weights": {
+          "from": {
+            "划痕": 1.0,
+            "污点": 1.0,
+            "缺失": 1.0,
+            "变形": 1.0,
+            "异物": 1.0
+          },
+          "to": "使用balanced策略自动计算"
+        }
+      },
+      "reason": "LLM智能分析建议",
+      "training_metrics": {
+        "timestamp": 1757745731.9480264,
+        "epoch": 4,
+        "phase": "val",
+        "session_id": "MobileNetV3_20250913_143712",
+        "loss": 1.8195452372233072,
+        "accuracy": 0.16666666666666666
+      },
+      "llm_analysis": {
+        "reason": "LLM智能分析建议",
+        "analysis": "## 1. 配置评估\n\n当前配置整体设计较为专业，采用了多项现代训练技术（EMA、标签平滑、混合精度等），但存在几个关键问题：\n\n**主要问题：**\n- 学习率过高：1e-4对于预训练模型微调来说偏高\n- 验证准确率极低（16.7%），表明模型未能有效学习\n- 类别权重策略与手动指定权重冲突（配置中同时启用了balanced策略又手动设置了等权重）\n\n**适合性评估：**\nMobileNetV3适合图像分类任务，但当前配置与数据集特征可能存在不匹配，需要针对性调整。\n\n## 2. 训练状态分析\n\n**当前状态：严重欠拟合**\n- 第4个epoch验证准确率仅16.7%（接近随机猜测）\n- 损失值1.82仍然很高，未见明显下降趋势\n- 模型未能从数据中学习到有效特征\n\n**问题关联性：**\n高学习率导致优化过程不稳定，可能使模型在最优解附近震荡而无法收敛。类别权重配置冲突也可能影响学习效果。\n\n## 3. 优化建议\n\n```json\n{\n    \"suggestions\": [\n        {\n            \"parameter\": \"learning_rate\",\n   ...",
+        "final_suggestions": [
+          {
+            "parameter": "batch_size",
+            "final_value": 32,
+            "original_suggested_value": 32,
+            "changed_by": "llm_suggestion"
+          },
+          {
+            "parameter": "learning_rate",
+            "final_value": 9.999999999999999e-06,
+            "original_suggested_value": 1e-05,
+            "changed_by": "conflict_resolution"
+          },
+          {
+            "parameter": "early_stopping_patience",
+            "final_value": 5,
+            "original_suggested_value": 5,
+            "changed_by": "llm_suggestion"
+          },
+          {
+            "parameter": "class_weights",
+            "final_value": "使用balanced策略自动计算",
+            "original_suggested_value": "使用balanced策略自动计算",
+            "changed_by": "llm_suggestion"
+          }
+        ]
+      },
+      "status": "applied"
+    },
+    {
+      "adjustment_id": "adj_1757745967",
+      "timestamp": 1757745967.7302172,
+      "original_config": {
+        "data_dir": "E:\\PIC_SLM\\TEST\\OUTPUT2\\dataset",
+        "model_name": "MobileNetV3",
+        "num_epochs": 50,
+        "batch_size": 32,
+        "learning_rate": 9.999999999999999e-06,
+        "model_save_dir": "F:\\iCloudDrive\\Documents\\Qsync\\00.AI_PROJECT\\图片分类模型训练\\C1\\models\\saved_models",
+        "default_param_save_dir": "F:\\iCloudDrive\\Documents\\Qsync\\00.AI_PROJECT\\图片分类模型训练\\C1\\train_config",
+        "tensorboard_log_dir": "F:\\iCloudDrive\\Documents\\Qsync\\00.AI_PROJECT\\图片分类模型训练\\C1\\runs\\tensorboard",
+        "task_type": "classification",
+        "optimizer": "Adam",
+        "use_pretrained": true,
+        "pretrained_path": "",
+        "metrics": [
+          "accuracy"
+        ],
+        "use_tensorboard": true,
+        "model_note": "",
+        "use_class_weights": true,
+        "weight_strategy": "balanced",
+        "weight_decay": 9.999999999999999e-06,
+        "lr_scheduler": "StepLR",
+        "use_augmentation": true,
+        "early_stopping": true,
+        "early_stopping_patience": 5,
+        "gradient_clipping": false,
+        "gradient_clipping_value": 1.0,
+        "mixed_precision": true,
+        "dropout_rate": 0.2,
+        "activation_function": "None",
+        "beta1": 0.9,
+        "beta2": 0.999,
+        "momentum": 0.9,
+        "nesterov": false,
+        "warmup_enabled": true,
+        "warmup_steps": 1000,
+        "warmup_ratio": 0.0,
+        "warmup_method": "linear",
+        "min_lr_enabled": true,
+        "min_lr": 1e-06,
+        "label_smoothing_enabled": true,
+        "label_smoothing": 0.1,
+        "model_ema": true,
+        "model_ema_decay": 0.9999,
+        "gradient_accumulation_enabled": false,
+        "gradient_accumulation_steps": 2,
+        "advanced_augmentation_enabled": false,
+        "cutmix_prob": 0.5,
+        "mixup_alpha": 0.2,
+        "loss_scaling_enabled": true,
+        "loss_scale": "dynamic",
+        "static_loss_scale": 128.0,
+        "class_weights": "使用balanced策略自动计算",
+        "model_filename": "MobileNetV3_20250913-144258",
+        "timestamp": "20250913-144258",
+        "_intelligent_training_mode": true
+      },
+      "adjusted_config": {
+        "data_dir": "E:\\PIC_SLM\\TEST\\OUTPUT2\\dataset",
+        "model_name": "MobileNetV3",
+        "num_epochs": 50,
+        "batch_size": 32,
+        "learning_rate": 9.999999999999999e-05,
+        "model_save_dir": "F:\\iCloudDrive\\Documents\\Qsync\\00.AI_PROJECT\\图片分类模型训练\\C1\\models\\saved_models",
+        "default_param_save_dir": "F:\\iCloudDrive\\Documents\\Qsync\\00.AI_PROJECT\\图片分类模型训练\\C1\\train_config",
+        "tensorboard_log_dir": "F:\\iCloudDrive\\Documents\\Qsync\\00.AI_PROJECT\\图片分类模型训练\\C1\\runs\\tensorboard",
+        "task_type": "classification",
+        "optimizer": "Adam",
+        "use_pretrained": true,
+        "pretrained_path": "",
+        "metrics": [
+          "accuracy"
+        ],
+        "use_tensorboard": true,
+        "model_note": "",
+        "use_class_weights": true,
+        "weight_strategy": "balanced",
+        "weight_decay": 9.999999999999999e-06,
+        "lr_scheduler": "CosineAnnealingLR",
+        "use_augmentation": true,
+        "early_stopping": true,
+        "early_stopping_patience": 5,
+        "gradient_clipping": false,
+        "gradient_clipping_value": 1.0,
+        "mixed_precision": true,
+        "dropout_rate": 0.2,
+        "activation_function": "None",
+        "beta1": 0.9,
+        "beta2": 0.999,
+        "momentum": 0.9,
+        "nesterov": false,
+        "warmup_enabled": true,
+        "warmup_steps": 500,
+        "warmup_ratio": 0.0,
+        "warmup_method": "linear",
+        "min_lr_enabled": true,
+        "min_lr": 1e-06,
+        "label_smoothing_enabled": false,
+        "label_smoothing": 0.1,
+        "model_ema": true,
+        "model_ema_decay": 0.9999,
+        "gradient_accumulation_enabled": false,
+        "gradient_accumulation_steps": 2,
+        "advanced_augmentation_enabled": false,
+        "cutmix_prob": 0.5,
+        "mixup_alpha": 0.2,
+        "loss_scaling_enabled": true,
+        "loss_scale": "dynamic",
+        "static_loss_scale": 128.0,
+        "class_weights": "使用balanced策略自动计算",
+        "model_filename": "MobileNetV3_20250913-144258",
+        "timestamp": "20250913-144258",
+        "_intelligent_training_mode": true
+      },
+      "changes": {
+        "learning_rate": {
+          "from": 9.999999999999999e-06,
+          "to": 9.999999999999999e-05
+        },
+        "lr_scheduler": {
+          "from": "StepLR",
+          "to": "CosineAnnealingLR"
+        },
+        "warmup_steps": {
+          "from": 1000,
+          "to": 500
+        },
+        "label_smoothing_enabled": {
+          "from": true,
+          "to": false
+        }
+      },
+      "reason": "LLM智能分析建议",
+      "training_metrics": {
+        "timestamp": 1757745929.7180238,
+        "epoch": 6,
+        "phase": "train",
+        "session_id": "MobileNetV3_20250913_144258",
+        "loss": 1.8134501258532205,
+        "accuracy": 0.17291666666666666
+      },
+      "llm_analysis": {
+        "reason": "LLM智能分析建议",
+        "analysis": "## 1. 配置评估\n\n**当前配置适合性**：\n- MobileNetV3作为轻量级网络适合图像分类任务\n- 使用预训练权重和类别权重平衡是合理选择\n- 数据增强和混合精度训练配置恰当\n\n**明显问题**：\n- 学习率过低（1e-5），可能导致训练停滞\n- 学习率调度器（StepLR）与warmup同时使用可能冲突\n- 标签平滑和类别权重同时使用可能过度正则化\n\n**需要调整的参数**：\n学习率、学习率调度策略、正则化强度\n\n## 2. 训练状态分析\n\n**当前状态**：严重欠拟合\n- 第6轮训练准确率仅17.29%，远低于随机猜测水平\n- 损失值1.81居高不下，表明模型未能有效学习\n- 学习率过低是主要原因，梯度更新不足\n\n**关联性分析**：\n极低的学习率（1e-5）导致权重更新幅度过小，模型无法从预训练权重有效微调\n\n## 3. 优化建议\n\n```json\n{\n    \"suggestions\": [\n        {\n            \"parameter\": \"learning_rate\",\n            \"current_value\": 1e-5,\n ...",
+        "final_suggestions": [
+          {
+            "parameter": "learning_rate",
+            "final_value": 9.999999999999999e-05,
+            "original_suggested_value": 0.0001,
+            "changed_by": "conflict_resolution"
+          },
+          {
+            "parameter": "lr_scheduler",
+            "final_value": "CosineAnnealingLR",
+            "original_suggested_value": "CosineAnnealingLR",
+            "changed_by": "llm_suggestion"
+          },
+          {
+            "parameter": "warmup_steps",
+            "final_value": 500,
+            "original_suggested_value": 500,
+            "changed_by": "llm_suggestion"
+          },
+          {
+            "parameter": "label_smoothing_enabled",
+            "final_value": false,
+            "original_suggested_value": false,
+            "changed_by": "llm_suggestion"
+          }
+        ]
+      },
+      "status": "pending"
+    }
+  ],
+  "report_type": "iteration_summary"
+}
