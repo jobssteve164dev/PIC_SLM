@@ -7,7 +7,7 @@
     "divergence_threshold": 2.0,
     "min_training_epochs": 2
   },
-  "analysis_interval": 2,
+  "analysis_interval": 3,
   "max_interventions_per_session": 10,
   "parameter_tuning_strategy": "conservative",
   "training_restart": {
@@ -63,13 +63,13 @@
     }
   },
   "enabled": true,
-  "max_iterations": 10,
-  "min_iteration_epochs": 3,
-  "convergence_threshold": 0.01,
-  "improvement_threshold": 0.02,
+  "max_iterations": 6,
+  "min_iteration_epochs": 4,
+  "convergence_threshold": 0.015,
+  "improvement_threshold": 0.025,
   "auto_restart": true,
   "preserve_best_model": true,
-  "overfitting_threshold": 0.8,
+  "overfitting_threshold": 1.0,
   "underfitting_threshold": 0.7,
   "stagnation_epochs": 5,
   "divergence_threshold": 2.0,
@@ -78,16 +78,25 @@
   "enable_auto_intervention": true,
   "intervention_cooldown": 2,
   "llm_analysis_enabled": true,
-  "adapter_type": "deepseek",
+  "adapter_type": "custom",
   "analysis_frequency": "epoch_based",
   "min_data_points": 5,
   "confidence_threshold": 0.7,
-  "check_interval": 30,
+  "check_interval": 5,
   "metrics_buffer_size": 100,
   "trend_analysis_window": 10,
   "alert_on_intervention": true,
   "auto_generate_reports": true,
   "report_format": "json",
   "include_visualizations": true,
-  "save_intervention_details": true
+  "save_intervention_details": true,
+  "parameter_tuning_reports": {
+    "enabled": true,
+    "save_path": "reports/parameter_tuning",
+    "format": "markdown",
+    "include_llm_analysis": true,
+    "include_metrics_comparison": true,
+    "include_config_changes": true
+  },
+  "overfitting_ratio": 1.3
 }

@@ -363,14 +363,18 @@ class IntelligentTrainingOrchestrator(QObject):
         try:
             self.status_updated.emit("正在进行智能分析和优化...")
             
-            # 生成优化配置
+            # 生成优化配置，但不生成报告（报告将在训练完成时统一生成）
             optimized_config = self.config_generator.generate_optimized_config(
-                self.current_session.current_config
+                self.current_session.current_config,
+                generate_report=False  # 不在分析阶段生成报告
             )
             
             # 检查配置是否有变化
             if optimized_config != self.current_session.current_config:
                 self.status_updated.emit("检测到配置优化机会，准备重启训练...")
+                
+                # 更新当前会话的配置
+                self.current_session.current_config = optimized_config
                 
                 # 开始智能重启过程
                 restart_context = {
@@ -411,6 +415,9 @@ class IntelligentTrainingOrchestrator(QObject):
             if self._is_better_than_current_best(metrics):
                 self.current_session.best_metrics = metrics
                 self.current_session.best_config = self.current_session.current_config.copy()
+            
+            # 生成本轮训练的统一报告
+            self._generate_iteration_report(metrics)
             
             # 发射迭代完成信号
             self.iteration_completed.emit({
@@ -476,6 +483,25 @@ class IntelligentTrainingOrchestrator(QObject):
             
         except Exception as e:
             self.error_occurred.emit(f"处理训练失败事件失败: {str(e)}")
+    
+    def _generate_iteration_report(self, metrics: Dict[str, Any]):
+        """生成本轮训练的统一报告"""
+        try:
+            if not self.current_session:
+                return
+            
+            # 使用智能配置生成器的新方法生成统一的迭代报告
+            report_path = self.config_generator.generate_iteration_summary_report(
+                self.current_iteration, metrics
+            )
+            
+            if report_path:
+                self.status_updated.emit(f"📄 第{self.current_iteration}轮训练总结报告已生成: {os.path.basename(report_path)}")
+            else:
+                self.status_updated.emit(f"⚠️ 第{self.current_iteration}轮训练报告生成失败")
+            
+        except Exception as e:
+            self.error_occurred.emit(f"生成迭代报告失败: {str(e)}")
     
     def _is_better_than_current_best(self, metrics: Dict[str, Any]) -> bool:
         """判断当前结果是否比最佳结果更好"""

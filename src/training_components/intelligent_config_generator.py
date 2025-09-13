@@ -594,8 +594,9 @@ class IntelligentConfigGenerator(QObject):
             val_acc = metrics.get('val_accuracy', 0)
             epoch = metrics.get('epoch', 0)
             
-            # 过拟合检测
-            if val_loss > train_loss * 1.3 and epoch > 5:
+            # 过拟合检测（使用可配置阈值，默认1.3）
+            overfit_ratio = self.current_session.original_config.get('overfitting_threshold', 1.3) if getattr(self, 'current_session', None) else 1.3
+            if val_loss > train_loss * overfit_ratio and epoch > 5:
                 suggestions.append({
                     'parameter': 'dropout_rate',
                     'current_value': config.get('dropout_rate', 0.0),
