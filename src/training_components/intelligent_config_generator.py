@@ -23,6 +23,7 @@ from .real_time_metrics_collector import get_global_metrics_collector
 from ..llm.llm_framework import LLMFramework
 from ..llm.analysis_engine import TrainingAnalysisEngine
 from .parameter_tuning_report_generator import ParameterTuningReportGenerator
+from .intelligent_conflict_resolver import IntelligentConflictResolver
 
 
 @dataclass
@@ -142,8 +143,11 @@ class IntelligentConfigGenerator(QObject):
             # 获取指标采集器
             self.metrics_collector = get_global_metrics_collector()
             
-            # 初始化报告生成器
-            self.report_generator = ParameterTuningReportGenerator()
+        # 初始化报告生成器
+        self.report_generator = ParameterTuningReportGenerator()
+        
+        # 初始化智能冲突解决器
+        self.conflict_resolver = IntelligentConflictResolver()
             
             print(f"✅ 智能配置生成器初始化完成，使用LLM适配器: {adapter_type}")
             
@@ -381,6 +385,23 @@ class IntelligentConfigGenerator(QObject):
             # 验证配置有效性
             validated_config = self._validate_config(optimized_config)
             
+            # 智能冲突自动修复
+            print("[DEBUG] 开始智能冲突检测与自动修复...")
+            llm_changes = {}
+            for suggestion in optimization_suggestions:
+                param_name = suggestion.get('parameter')
+                suggested_value = suggestion.get('suggested_value')
+                if param_name and suggested_value is not None:
+                    llm_changes[param_name] = suggested_value
+            
+            conflict_resolved_config, resolutions = self.conflict_resolver.resolve_conflicts_automatically(
+                validated_config, llm_changes
+            )
+            
+            if resolutions:
+                print(f"[DEBUG] 智能冲突修复完成，修复了 {len(resolutions)} 个冲突")
+                validated_config = conflict_resolved_config
+            
             # 记录配置调整
             # 确保analysis_result是字典格式
             if isinstance(analysis_result, str):
@@ -391,6 +412,17 @@ class IntelligentConfigGenerator(QObject):
                 }
             else:
                 analysis_dict = analysis_result
+            
+            # 如果有冲突修复，添加修复信息到分析结果
+            if resolutions:
+                analysis_dict['conflict_resolutions'] = [
+                    {
+                        'type': r.conflict_type,
+                        'strategy': r.resolution_strategy,
+                        'reason': r.reason,
+                        'confidence': r.confidence_level
+                    } for r in resolutions
+                ]
             
             self._record_config_adjustment(
                 current_config, validated_config, training_metrics, analysis_dict
@@ -894,29 +926,43 @@ class IntelligentConfigGenerator(QObject):
         try:
             self.status_updated.emit("正在应用配置到训练系统...")
             
+            # 智能训练模式下，先进行智能冲突检测和修复
+            print("[DEBUG] 智能训练模式：应用配置前进行最终冲突检查...")
+            final_config, final_resolutions = self.conflict_resolver.resolve_conflicts_automatically(config)
+            
+            if final_resolutions:
+                print(f"[DEBUG] 应用配置时发现并修复了 {len(final_resolutions)} 个额外冲突")
+                config = final_config
+            
+            # 标记为智能训练模式，用于训练线程识别
+            config['_intelligent_training_mode'] = True
+            
             # 使用现有的ConfigApplier应用配置
             from ..ui.components.training.config_applier import ConfigApplier
             success = ConfigApplier.apply_to_training_tab(config, training_tab)
             
             if success:
-                self.status_updated.emit("配置应用成功")
+                self.status_updated.emit("智能训练配置应用成功")
                 self.config_applied.emit({
                     'config': config,
                     'timestamp': time.time(),
-                    'success': True
+                    'success': True,
+                    'intelligent_mode': True,
+                    'conflict_resolutions': len(final_resolutions) if final_resolutions else 0
                 })
             else:
-                self.error_occurred.emit("配置应用失败")
+                self.error_occurred.emit("智能训练配置应用失败")
                 self.config_applied.emit({
                     'config': config,
                     'timestamp': time.time(),
-                    'success': False
+                    'success': False,
+                    'intelligent_mode': True
                 })
             
             return success
             
         except Exception as e:
-            self.error_occurred.emit(f"应用配置到训练系统失败: {str(e)}")
+            self.error_occurred.emit(f"应用智能训练配置失败: {str(e)}")
             return False
     
     def get_adjustment_history(self) -> List[Dict[str, Any]]:

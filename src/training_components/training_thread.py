@@ -233,28 +233,38 @@ class TrainingThread(QThread):
             if conflicts:
                 self.status_updated.emit(f"检测到 {len(conflicts)} 个超参数冲突")
                 
-                # 通过信号通知主线程显示对话框
-                self.conflict_detected.emit(conflicts, suggestions)
+                # 检查是否为智能训练模式
+                is_intelligent_training = config.get('_intelligent_training_mode', False)
                 
-                # 等待主线程的用户选择
-                user_choice, modified_config = self._wait_for_conflict_resolution()
-                
-                if user_choice == 'apply':
-                    if modified_config:
-                        self.status_updated.emit("已应用参数冲突修复")
-                        return True, modified_config
-                    else:
-                        # 如果没有修复配置，应用自动修复
-                        auto_fixed_config = self.validator.apply_conflict_fixes(config, suggestions)
-                        self.status_updated.emit("已自动修复参数冲突")
-                        return True, auto_fixed_config
-                elif user_choice == 'ignore':
-                    self.status_updated.emit("用户选择忽略冲突，继续训练")
-                    return True, config
+                if is_intelligent_training:
+                    # 智能训练模式：自动修复冲突，无需用户交互
+                    self.status_updated.emit("智能训练模式：自动修复参数冲突")
+                    auto_fixed_config = self.validator.apply_conflict_fixes(config, suggestions)
+                    self.status_updated.emit("已应用参数冲突修复")
+                    return True, auto_fixed_config
                 else:
-                    # 用户取消训练
-                    self.status_updated.emit("用户取消训练")
-                    return False, config
+                    # 普通训练模式：通过信号通知主线程显示对话框
+                    self.conflict_detected.emit(conflicts, suggestions)
+                    
+                    # 等待主线程的用户选择
+                    user_choice, modified_config = self._wait_for_conflict_resolution()
+                    
+                    if user_choice == 'apply':
+                        if modified_config:
+                            self.status_updated.emit("已应用参数冲突修复")
+                            return True, modified_config
+                        else:
+                            # 如果没有修复配置，应用自动修复
+                            auto_fixed_config = self.validator.apply_conflict_fixes(config, suggestions)
+                            self.status_updated.emit("已自动修复参数冲突")
+                            return True, auto_fixed_config
+                    elif user_choice == 'ignore':
+                        self.status_updated.emit("用户选择忽略冲突，继续训练")
+                        return True, config
+                    else:
+                        # 用户取消训练
+                        self.status_updated.emit("用户取消训练")
+                        return False, config
             
             self.status_updated.emit("配置验证通过")
             return True, config

@@ -132,13 +132,14 @@ class TrainingValidator(QObject):
     def __init__(self):
         super().__init__()
     
-    def validate_config(self, config, parent_widget=None):
+    def validate_config(self, config, parent_widget=None, intelligent_mode=False):
         """
         验证训练配置
         
         Args:
             config: 训练配置字典
             parent_widget: 父窗口，用于显示对话框
+            intelligent_mode: 是否为智能训练模式（无弹窗）
             
         Returns:
             tuple: (验证是否通过, 修改后的配置)
@@ -168,28 +169,35 @@ class TrainingValidator(QObject):
             if conflicts:
                 self.status_updated.emit(f"检测到 {len(conflicts)} 个超参数冲突")
                 
-                # 显示冲突对话框
-                dialog = HyperparameterConflictDialog(conflicts, suggestions, parent_widget)
-                result = dialog.exec_()
-                
-                if result == QDialog.Accepted:
-                    if dialog.user_choice == 'apply':
-                        # 应用建议的修改
-                        if dialog.should_auto_fix():
-                            modified_config = self.apply_conflict_fixes(config, suggestions)
-                            self.status_updated.emit("已自动修复参数冲突")
-                            return True, modified_config
-                        else:
-                            self.status_updated.emit("用户选择手动修改参数")
-                            return False, config
-                    elif dialog.user_choice == 'ignore':
-                        self.status_updated.emit("用户选择忽略冲突，继续训练")
-                        return True, config
+                if intelligent_mode:
+                    # 智能训练模式：自动应用修复，不显示对话框
+                    self.status_updated.emit("智能训练模式：自动修复参数冲突")
+                    modified_config = self.apply_conflict_fixes(config, suggestions)
+                    self.status_updated.emit("已应用参数冲突修复")
+                    return True, modified_config
                 else:
-                    # 用户取消训练
-                    self.training_cancelled.emit()
-                    self.status_updated.emit("用户取消训练")
-                    return False, config
+                    # 普通训练模式：显示冲突对话框
+                    dialog = HyperparameterConflictDialog(conflicts, suggestions, parent_widget)
+                    result = dialog.exec_()
+                    
+                    if result == QDialog.Accepted:
+                        if dialog.user_choice == 'apply':
+                            # 应用建议的修改
+                            if dialog.should_auto_fix():
+                                modified_config = self.apply_conflict_fixes(config, suggestions)
+                                self.status_updated.emit("已自动修复参数冲突")
+                                return True, modified_config
+                            else:
+                                self.status_updated.emit("用户选择手动修改参数")
+                                return False, config
+                        elif dialog.user_choice == 'ignore':
+                            self.status_updated.emit("用户选择忽略冲突，继续训练")
+                            return True, config
+                    else:
+                        # 用户取消训练
+                        self.training_cancelled.emit()
+                        self.status_updated.emit("用户取消训练")
+                        return False, config
             
             self.status_updated.emit("配置验证通过")
             return True, config
