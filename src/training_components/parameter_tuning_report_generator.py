@@ -195,8 +195,27 @@ class ParameterTuningReportGenerator:
                         content.append(report.llm_analysis['analysis'])
                         content.append("")
                     
+                    # 优先展示最终生效建议，其次展示原始建议
+                    final_suggestions = report.llm_analysis.get('final_suggestions') if isinstance(report.llm_analysis, dict) else None
+                    if final_suggestions:
+                        content.append("**最终生效建议**:")
+                        content.append("")
+                        for i, item in enumerate(final_suggestions, 1):
+                            if isinstance(item, dict):
+                                param = item.get('parameter', '未知参数')
+                                final_value = item.get('final_value')
+                                changed_by = item.get('changed_by', 'llm_suggestion')
+                                original_value = item.get('original_suggested_value', '—')
+                                if original_value == final_value:
+                                    content.append(f"{i}. **{param}** → 最终值: `{final_value}` (来源: LLM建议)")
+                                else:
+                                    content.append(f"{i}. **{param}** → 最终值: `{final_value}` (原始建议: `{original_value}` | 调整来源: {changed_by})")
+                            else:
+                                content.append(f"{i}. {item}")
+                        content.append("")
+
                     if 'suggestions' in report.llm_analysis:
-                        content.append("**优化建议**:")
+                        content.append("**原始优化建议**:")
                         content.append("")
                         for i, suggestion in enumerate(report.llm_analysis['suggestions'], 1):
                             if isinstance(suggestion, dict):

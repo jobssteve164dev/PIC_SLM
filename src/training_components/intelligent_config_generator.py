@@ -424,7 +424,28 @@ class IntelligentConfigGenerator(QObject):
                         'confidence': r.confidence_level
                     } for r in resolutions
                 ]
-            
+
+            # 生成最终生效建议（与原始LLM建议对齐，标注差异）
+            try:
+                final_suggestions = []
+                # 使用当前配置与最终配置对比，生成最终生效建议
+                for key, final_value in validated_config.items():
+                    # 仅记录与当前配置不同的键
+                    if key in current_config and current_config[key] != final_value:
+                        item = {
+                            'parameter': key,
+                            'final_value': final_value
+                        }
+                        # 如果存在原始建议，附带原始建议值
+                        if key in llm_changes:
+                            item['original_suggested_value'] = llm_changes[key]
+                            item['changed_by'] = 'conflict_resolution' if (key in llm_changes and llm_changes[key] != final_value) else 'llm_suggestion'
+                        final_suggestions.append(item)
+                analysis_dict['final_suggestions'] = final_suggestions
+            except Exception as _:
+                # 安静失败，不影响主流程
+                pass
+
             self._record_config_adjustment(
                 current_config, validated_config, training_metrics, analysis_dict, training_round_id
             )
@@ -968,6 +989,14 @@ class IntelligentConfigGenerator(QObject):
                     'intelligent_mode': True,
                     'conflict_resolutions': len(final_resolutions) if final_resolutions else 0
                 })
+                # 回填最近一次调整记录为最终应用配置并标记applied
+                try:
+                    if self.adjustment_history:
+                        last_adj = self.adjustment_history[-1]
+                        last_adj.adjusted_config = copy.deepcopy(config)
+                        last_adj.status = 'applied'
+                except Exception as _:
+                    pass
             else:
                 self.error_occurred.emit("智能训练配置应用失败")
                 self.config_applied.emit({
