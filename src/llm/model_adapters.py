@@ -79,7 +79,7 @@ class OpenAIAdapter(LLMAdapter):
                 response = self.client.chat.completions.create(
                     model=self.model,
                     messages=messages,
-                    temperature=0.7,
+                    temperature=0.1,  # 降低温度以确保一致性
                     max_tokens=1000
                 )
                 content = response.choices[0].message.content
@@ -235,7 +235,7 @@ class DeepSeekAdapter(LLMAdapter):
                 response = self.client.chat.completions.create(
                     model=self.model,
                     messages=messages,
-                    temperature=0.7,
+                    temperature=0.1,  # 降低温度以确保一致性
                     max_tokens=1000
                 )
                 content = response.choices[0].message.content
@@ -377,7 +377,7 @@ class LocalLLMAdapter(LLMAdapter):
                     'prompt': full_prompt,
                     'stream': False,
                     'options': {
-                        'temperature': 0.7,
+                        'temperature': 0.1,  # 降低温度以确保一致性
                         'num_predict': 1000
                     }
                 },
@@ -438,7 +438,7 @@ class CustomAPIAdapter(LLMAdapter):
     """自定义API适配器 - 支持OpenAI兼容的API"""
     
     def __init__(self, api_key: str, model: str = 'custom-model', base_url: str = None, 
-                 provider_type: str = "OpenAI兼容", temperature: float = 0.7, 
+                 provider_type: str = "OpenAI兼容", temperature: float = 0.1,  # 降低温度以确保一致性 
                  max_tokens: int = 1000):
         super().__init__(model)
         self.api_key = api_key
@@ -702,7 +702,7 @@ def create_llm_adapter(adapter_type: str, **kwargs) -> LLMAdapter:
             model=kwargs.get('model', 'custom-model'),
             base_url=base_url,
             provider_type=kwargs.get('provider_type', 'OpenAI兼容'),
-            temperature=kwargs.get('temperature', 0.7),
+            temperature=kwargs.get('temperature', 0.1),  # 降低温度以确保一致性
             max_tokens=kwargs.get('max_tokens', 1000)
         )
     
