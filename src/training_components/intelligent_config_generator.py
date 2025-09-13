@@ -38,6 +38,7 @@ class ConfigAdjustment:
     training_metrics: Dict[str, Any]  # 触发调整的训练指标
     llm_analysis: Dict[str, Any]  # LLM分析结果
     status: str  # 'pending', 'applied', 'failed'
+    parameter_explanations: List[Any] = None  # 参数调整解释
 
 
 @dataclass
@@ -910,6 +911,17 @@ class IntelligentConfigGenerator(QObject):
             if not changes:
                 return  # 没有变更，不记录
             print(f"[DEBUG] 记录配置调整 | epoch={training_metrics.get('epoch')} | changes_keys={list(changes.keys())}")
+            
+            # 生成参数解释
+            parameter_explanations = []
+            try:
+                if self.report_generator and hasattr(self.report_generator, 'explanation_engine'):
+                    parameter_explanations = self.report_generator.explanation_engine.generate_parameter_explanations(
+                        original_config, adjusted_config, training_metrics, analysis_result
+                    )
+            except Exception as e:
+                print(f"[WARNING] 生成参数解释失败: {str(e)}")
+            
             # 创建调整记录
             adjustment = ConfigAdjustment(
                 adjustment_id=f"adj_{int(time.time())}",
@@ -920,7 +932,8 @@ class IntelligentConfigGenerator(QObject):
                 reason=analysis_result.get('reason', '智能优化建议'),
                 training_metrics=copy.deepcopy(training_metrics),
                 llm_analysis=copy.deepcopy(analysis_result),
-                status='pending'
+                status='pending',
+                parameter_explanations=parameter_explanations
             )
             
             # 添加到历史记录

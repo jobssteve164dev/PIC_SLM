@@ -527,7 +527,7 @@ class IntelligentTrainingWidget(QWidget):
             if self.intelligent_manager:
                 orchestrator = getattr(self.intelligent_manager, 'intelligent_orchestrator', None)
                 if orchestrator and self.is_monitoring:
-                    orchestrator.stop_training()
+                    orchestrator.stop_intelligent_training()
                 
             self.is_monitoring = False
             self.start_button.setEnabled(True)
@@ -687,6 +687,37 @@ class IntelligentTrainingWidget(QWidget):
     def _extract_parameter_reason(self, adjustment: dict, param_name: str) -> str:
         """从调整记录中提取特定参数的调整理由"""
         try:
+            # 首先尝试从参数解释中获取详细理由
+            parameter_explanations = adjustment.get('parameter_explanations', [])
+            if parameter_explanations:
+                for explanation in parameter_explanations:
+                    if isinstance(explanation, dict) and explanation.get('parameter_name') == param_name:
+                        # 提取调整理由的核心内容
+                        detailed_reason = explanation.get('detailed_reason', '')
+                        adjustment_reason = explanation.get('adjustment_reason', '')
+                        confidence = explanation.get('confidence', 0)
+                        
+                        # 构建简洁的理由描述
+                        if detailed_reason:
+                            # 提取第一句话作为主要理由
+                            main_reason = detailed_reason.split('：')[0] if '：' in detailed_reason else detailed_reason.split('.')[0]
+                            main_reason = main_reason.strip()
+                            if len(main_reason) > 80:
+                                main_reason = main_reason[:80] + "..."
+                            return f"{main_reason} (置信度: {confidence:.0f}%)"
+                        elif adjustment_reason:
+                            reason_map = {
+                                'convergence_issue': '收敛问题优化',
+                                'performance_optimization': '性能优化',
+                                'conflict_resolution': '冲突修复',
+                                'regularization': '正则化调整',
+                                'data_augmentation': '数据增强优化',
+                                'learning_rate_scheduling': '学习率调度',
+                                'loss_function': '损失函数优化'
+                            }
+                            return reason_map.get(adjustment_reason, adjustment_reason)
+            
+            # 回退到原有逻辑
             llm_analysis = adjustment.get('llm_analysis', {})
             
             # 优先从final_suggestions中查找
@@ -705,7 +736,8 @@ class IntelligentTrainingWidget(QWidget):
                 if isinstance(suggestion, dict) and suggestion.get('parameter') == param_name:
                     reason = suggestion.get('reason', '')
                     priority = suggestion.get('priority', 'medium')
-                    return f"{reason} (优先级: {priority})"
+                    if reason:
+                        return f"{reason[:60]}{'...' if len(reason) > 60 else ''} (优先级: {priority})"
             
             # 从分析文本中提取（如果有的话）
             analysis_text = llm_analysis.get('analysis', '')
