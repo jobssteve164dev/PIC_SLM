@@ -73,6 +73,10 @@ class IntelligentConfigGenerator(QObject):
         # 配置约束
         self.parameter_constraints = self._load_parameter_constraints()
         
+        # 分析结果缓存 - 确保微调报告和训练参数的一致性
+        self._cached_analysis_result = None
+        self._cached_analysis_key = None
+        
         # 初始化组件
         self._initialize_components()
     
@@ -291,9 +295,18 @@ class IntelligentConfigGenerator(QObject):
             }
         }
     
+    def clear_analysis_cache(self):
+        """清除分析缓存，确保新的分析会话开始时缓存是干净的"""
+        self._cached_analysis_result = None
+        self._cached_analysis_key = None
+        print("[DEBUG] 分析缓存已清除")
+    
     def start_training_session(self, initial_config: Dict[str, Any]) -> str:
         """开始新的训练会话"""
         try:
+            # 清除分析缓存，确保新会话开始时缓存是干净的
+            self.clear_analysis_cache()
+            
             session_id = f"session_{int(time.time())}"
             
             self.current_session = TrainingSession(
@@ -327,8 +340,20 @@ class IntelligentConfigGenerator(QObject):
                     return current_config
                 training_metrics = real_data.get('current_metrics', {})
             
-            # 使用LLM分析当前配置和训练数据
-            analysis_result = self._analyze_config_and_metrics(current_config, training_metrics)
+            # 生成缓存键，确保相同输入使用相同分析结果
+            cache_key = self._generate_analysis_cache_key(current_config, training_metrics)
+            
+            # 检查是否可以使用缓存的分析结果
+            if (self._cached_analysis_key == cache_key and 
+                self._cached_analysis_result is not None):
+                self.status_updated.emit("使用缓存的分析结果确保一致性...")
+                analysis_result = self._cached_analysis_result
+            else:
+                # 使用LLM分析当前配置和训练数据
+                analysis_result = self._analyze_config_and_metrics(current_config, training_metrics)
+                # 缓存分析结果
+                self._cached_analysis_result = analysis_result
+                self._cached_analysis_key = cache_key
             
             # 生成优化建议
             optimization_suggestions = self._generate_optimization_suggestions(
@@ -364,6 +389,67 @@ class IntelligentConfigGenerator(QObject):
         except Exception as e:
             self.error_occurred.emit(f"生成优化配置失败: {str(e)}")
             return current_config
+    
+    def _generate_analysis_cache_key(self, config: Dict[str, Any], metrics: Dict[str, Any]) -> str:
+        """生成分析缓存键，确保相同输入使用相同分析结果"""
+        try:
+            import hashlib
+            
+            # 提取关键配置参数
+            key_config = {
+                'model_name': config.get('model_name'),
+                'batch_size': config.get('batch_size'),
+                'learning_rate': config.get('learning_rate'),
+                'optimizer': config.get('optimizer'),
+                'num_epochs': config.get('num_epochs'),
+                'use_augmentation': config.get('use_augmentation'),
+                'use_class_weights': config.get('use_class_weights'),
+                'weight_strategy': config.get('weight_strategy'),
+                'lr_scheduler': config.get('lr_scheduler'),
+                'early_stopping': config.get('early_stopping'),
+                'early_stopping_patience': config.get('early_stopping_patience'),
+                'mixed_precision': config.get('mixed_precision'),
+                'dropout_rate': config.get('dropout_rate'),
+                'weight_decay': config.get('weight_decay'),
+                'warmup_enabled': config.get('warmup_enabled'),
+                'warmup_steps': config.get('warmup_steps'),
+                'warmup_ratio': config.get('warmup_ratio'),
+                'gradient_accumulation_enabled': config.get('gradient_accumulation_enabled'),
+                'gradient_accumulation_steps': config.get('gradient_accumulation_steps'),
+                'advanced_augmentation_enabled': config.get('advanced_augmentation_enabled'),
+                'cutmix_prob': config.get('cutmix_prob'),
+                'mixup_alpha': config.get('mixup_alpha'),
+                'label_smoothing_enabled': config.get('label_smoothing_enabled'),
+                'label_smoothing': config.get('label_smoothing'),
+                'model_ema': config.get('model_ema'),
+                'model_ema_decay': config.get('model_ema_decay')
+            }
+            
+            # 提取关键训练指标
+            key_metrics = {
+                'epoch': metrics.get('epoch'),
+                'train_loss': round(metrics.get('train_loss', 0), 4),
+                'val_loss': round(metrics.get('val_loss', 0), 4),
+                'train_accuracy': round(metrics.get('train_accuracy', 0), 4),
+                'val_accuracy': round(metrics.get('val_accuracy', 0), 4),
+                'learning_rate': round(metrics.get('learning_rate', 0), 6)
+            }
+            
+            # 生成哈希键
+            cache_data = {
+                'config': key_config,
+                'metrics': key_metrics,
+                'timestamp': int(time.time() // 60)  # 按分钟缓存，避免过于频繁的缓存失效
+            }
+            
+            cache_string = json.dumps(cache_data, sort_keys=True, ensure_ascii=False)
+            cache_key = hashlib.md5(cache_string.encode('utf-8')).hexdigest()
+            
+            return cache_key
+            
+        except Exception as e:
+            print(f"[WARNING] 生成缓存键失败: {str(e)}")
+            return f"fallback_{int(time.time())}"
     
     def _analyze_config_and_metrics(self, 
                                   config: Dict[str, Any], 
@@ -490,8 +576,8 @@ class IntelligentConfigGenerator(QObject):
             rule_suggestions = self._generate_rule_based_suggestions(config, metrics)
             suggestions.extend(rule_suggestions)
             
-            # 按优先级排序
-            suggestions.sort(key=lambda x: x.get('priority', 'low'), reverse=True)
+            # 按优先级排序，确保相同优先级时按参数名排序以保证稳定性
+            suggestions.sort(key=lambda x: (x.get('priority', 'low'), x.get('parameter', '')), reverse=True)
             
             return suggestions
             
