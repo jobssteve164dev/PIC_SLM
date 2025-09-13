@@ -145,7 +145,7 @@
   "model_ema_decay": 0.9999,
   "gradient_accumulation_enabled": true,
   "gradient_accumulation_steps": 4,
-  "advanced_augmentation_enabled": true,
+  "advanced_augmentation_enabled": false,
   "cutmix_prob": 0.5,
   "mixup_alpha": 0.2,
   "loss_scaling_enabled": true,

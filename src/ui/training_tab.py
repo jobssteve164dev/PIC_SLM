@@ -258,8 +258,12 @@ class TrainingTab(BaseTab):
     
     def _on_intelligent_status_updated(self, message):
         """智能训练状态更新回调"""
-        print(f"智能训练状态: {message}")
-        # 可以在这里添加状态显示逻辑
+        try:
+            print(f"智能训练状态: {message}")
+            # 避免循环调用，不在这里调用update_status
+            # 可以在这里添加其他状态显示逻辑
+        except Exception as e:
+            print(f"处理智能训练状态更新时出错: {str(e)}")
     
     def check_training_ready(self):
         """检查是否可以开始训练"""
