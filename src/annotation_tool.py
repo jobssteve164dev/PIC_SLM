@@ -4,7 +4,6 @@ import sys
 import json
 from PyQt5.QtCore import QObject, pyqtSignal
 from typing import List
-from src.utils.logger import get_logger, log_error, performance_monitor
 
 class AnnotationTool(QObject):
     # 定义信号
@@ -15,8 +14,6 @@ class AnnotationTool(QObject):
         super().__init__()
         # 内嵌UI已经在主窗口中创建，这里不需要额外的初始化
         self.processes = []  # 存储所有启动的子进程
-        self.logger = get_logger(__name__, "annotation_tool")
-        self.logger.info("标注工具初始化完成")
         
     def start_annotation(self, folder: str) -> None:
         """

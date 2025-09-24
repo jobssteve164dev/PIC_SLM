@@ -74,88 +74,160 @@ def build_exe():
     print("此版本只包含启动必需的依赖，其他依赖将通过程序内置功能下载")
     print("这可能需要几分钟时间，请耐心等待...")
     
+    # 检查路径长度问题
+    project_path_str = str(project_root)
+    if len(project_path_str) > 200:
+        print(f"⚠️  警告：项目路径过长 ({len(project_path_str)} 字符)")
+        print(f"路径: {project_path_str}")
+        print("建议将项目移动到更短的路径下，如 C:\\dev\\project")
+        print("继续尝试构建...")
+    
     # 创建最小依赖文件
     minimal_req_path = create_minimal_requirements()
     
     # 使用轻量版主程序作为入口点
     lightweight_main = project_root / 'src' / 'main_lightweight.py'
+
+    # 是否启用控制台模式（便于调试）：
+    # 1) 设置环境变量 LIGHTWEIGHT_CONSOLE=1
+    # 2) 或在命令行添加 --console 标志
+    enable_console = os.environ.get('LIGHTWEIGHT_CONSOLE', '0') == '1' or ('--console' in sys.argv)
     
-    # PyInstaller命令 - 简化版只包含启动必需的依赖
-    cmd = [
-        sys.executable, '-m', 'PyInstaller',
-        '--onefile',  # 打包成单个exe文件
-        '--windowed',  # 窗口应用，不显示控制台
-        '--name=图片分类模型训练工具_轻量版',
-        # 只添加必要的数据文件
-        '--add-data=config;config',
-        '--add-data=setting;setting',
-        '--add-data=config.json;.',
-        '--add-data=requirements_minimal.txt;.',
-        '--add-data=src;src',  # 添加整个src目录
-        # 只包含启动必需的隐藏导入
-        '--hidden-import=PyQt5.QtCore',
-        '--hidden-import=PyQt5.QtGui',
-        '--hidden-import=PyQt5.QtWidgets',
-        '--hidden-import=PyQt5.sip',
-        '--hidden-import=numpy',
-        '--hidden-import=PIL',
-        '--hidden-import=PIL.Image',
-        '--hidden-import=yaml',
-        '--hidden-import=colorama',
-        '--hidden-import=requests',
-        '--hidden-import=psutil',
-        '--hidden-import=json',
-        '--hidden-import=subprocess',
-        '--hidden-import=threading',
-        '--hidden-import=importlib',
-        '--hidden-import=importlib.util',
-        '--hidden-import=pkg_resources',
-        # 排除不必要的模块以减小体积
-        '--exclude-module=torch',
-        '--exclude-module=torchvision',
-        '--exclude-module=matplotlib',
-        '--exclude-module=cv2',
-        '--exclude-module=sklearn',
-        '--exclude-module=pandas',
-        '--exclude-module=seaborn',
-        '--exclude-module=lime',
-        '--exclude-module=shap',
-        '--exclude-module=tensorboard',
-        '--exclude-module=albumentations',
-        '--exclude-module=timm',
-        '--exclude-module=efficientnet_pytorch',
-        '--exclude-module=torchmetrics',
-        '--exclude-module=torchsummary',
-        '--exclude-module=scikit-image',
-        '--exclude-module=mplcursors',
-        '--exclude-module=labelImg',
-        '--exclude-module=labelme',
-        '--exclude-module=ultralytics',
-        '--clean',
-        '--noconfirm',
-        str(lightweight_main)  # 使用轻量版主程序作为入口点
-    ]
+    # 尝试使用更短的临时工作目录来避免路径问题
+    import tempfile
+    import shutil
+    
+    # 创建临时工作目录
+    temp_dir = tempfile.mkdtemp(prefix='pyinstaller_')
+    print(f"使用临时工作目录: {temp_dir}")
     
     try:
+        # 复制必要的文件到临时目录
+        temp_src = Path(temp_dir) / 'src'
+        temp_src.mkdir()
+        
+        # 复制完整的src目录结构，确保所有UI模块都可用
+        print("复制完整的src目录...")
+        shutil.copytree(project_root / 'src', temp_src, dirs_exist_ok=True)
+        
+        # 复制配置文件
+        for config_file in ['config.json', 'requirements_minimal.txt']:
+            src_file = project_root / config_file
+            if src_file.exists():
+                shutil.copy2(src_file, temp_dir)
+        
+        # 复制配置目录
+        for config_dir in ['config', 'setting']:
+            src_dir = project_root / config_dir
+            if src_dir.exists():
+                dest_dir = Path(temp_dir) / config_dir
+                shutil.copytree(src_dir, dest_dir)
+        
+        # 使用临时目录中的文件
+        temp_main = temp_src / 'main_lightweight.py'
+        
+        # PyInstaller命令 - 使用临时目录和更简化的配置
+        cmd = [
+            sys.executable, '-m', 'PyInstaller',
+            '--onefile',  # 打包成单个exe文件
+            '--name=ImageTrainingTool_Lite',
+            '--log-level=INFO',
+            '--workpath', temp_dir,
+            '--distpath', str(project_root / 'dist'),
+            '--specpath', temp_dir,
+            # 只添加必要的数据文件
+            '--add-data=config;config',
+            '--add-data=setting;setting', 
+            '--add-data=config.json;.',
+            '--add-data=requirements_minimal.txt;.',
+            '--add-data=src;src',
+            # 只包含启动必需的隐藏导入
+            '--hidden-import=PyQt5.QtCore',
+            '--hidden-import=PyQt5.QtGui',
+            '--hidden-import=PyQt5.QtWidgets',
+            '--hidden-import=PyQt5.sip',
+            '--hidden-import=numpy',
+            '--hidden-import=PIL',
+            '--hidden-import=PIL.Image',
+            '--hidden-import=yaml',
+            '--hidden-import=colorama',
+            '--hidden-import=requests',
+            '--hidden-import=psutil',
+            '--hidden-import=json',
+            '--hidden-import=subprocess',
+            '--hidden-import=threading',
+            '--hidden-import=importlib',
+            '--hidden-import=importlib.util',
+            '--hidden-import=pkg_resources',
+            # 排除不必要的模块以减小体积
+            '--exclude-module=torch',
+            '--exclude-module=torchvision',
+            '--exclude-module=matplotlib',
+            '--exclude-module=cv2',
+            '--exclude-module=sklearn',
+            '--exclude-module=pandas',
+            '--exclude-module=seaborn',
+            '--exclude-module=lime',
+            '--exclude-module=shap',
+            '--exclude-module=tensorboard',
+            '--exclude-module=albumentations',
+            '--exclude-module=timm',
+            '--exclude-module=efficientnet_pytorch',
+            '--exclude-module=torchmetrics',
+            '--exclude-module=torchsummary',
+            '--exclude-module=scikit-image',
+            '--exclude-module=mplcursors',
+            '--exclude-module=labelImg',
+            '--exclude-module=labelme',
+            '--exclude-module=ultralytics',
+            '--clean',
+            '--noconfirm',
+            str(temp_main)  # 使用临时目录中的主程序
+        ]
+
+        # 根据调试需要切换窗口/控制台
+        if enable_console:
+            cmd.insert(3, '--console')
+        else:
+            cmd.insert(3, '--windowed')
+
         # 设置环境变量解决编码问题
         env = os.environ.copy()
         env['PYTHONIOENCODING'] = 'utf-8'
-        
-        result = subprocess.run(
-            cmd, 
-            cwd=str(project_root), 
-            capture_output=True, 
+
+        # 打印关键信息与命令，便于排障
+        print("启动 PyInstaller...")
+        print("命令:")
+        try:
+            print(' '.join(cmd))
+        except Exception:
+            pass
+
+        # 实时输出 PyInstaller 日志，避免看起来卡住
+        process = subprocess.Popen(
+            cmd,
+            cwd=temp_dir,  # 在临时目录中执行
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
             text=True,
             encoding='utf-8',
             errors='ignore',
-            env=env
+            env=env,
+            bufsize=1
         )
-        
-        if result.returncode == 0:
+
+        if process.stdout is not None:
+            for line in iter(process.stdout.readline, ''):
+                if not line:
+                    break
+                print(line.rstrip())
+        process.wait()
+
+        if process.returncode == 0:
             print("✓ 轻量级exe文件构建成功！")
             
             # 检查生成的exe文件
-            exe_path = project_root / 'dist' / '图片分类模型训练工具_轻量版.exe'
+            exe_path = project_root / 'dist' / 'ImageTrainingTool_Lite.exe'
             if exe_path.exists():
                 file_size = exe_path.stat().st_size / (1024 * 1024)  # MB
                 print(f"exe文件位置: {exe_path}")
@@ -170,17 +242,20 @@ def build_exe():
                 return False
         else:
             print("✗ exe文件构建失败")
-            print("错误输出:")
-            if result.stderr:
-                try:
-                    print(result.stderr)
-                except UnicodeDecodeError:
-                    print("错误信息包含特殊字符，无法显示")
+            print(f"退出码: {process.returncode}")
             return False
             
     except Exception as e:
         print(f"✗ 构建过程中出现错误: {e}")
         return False
+    finally:
+        # 清理临时目录
+        try:
+            if 'temp_dir' in locals() and os.path.exists(temp_dir):
+                shutil.rmtree(temp_dir)
+                print(f"✓ 已清理临时目录: {temp_dir}")
+        except Exception as e:
+            print(f"⚠️  清理临时目录失败: {e}")
 
 def create_launcher_and_docs(dist_dir):
     """创建启动脚本和说明文档"""
@@ -193,7 +268,7 @@ REM 设置工作目录
 cd /d "%~dp0"
 
 REM 启动应用程序
-"图片分类模型训练工具_轻量版.exe"
+"ImageTrainingTool_Lite.exe"
 
 REM 如果程序异常退出，显示错误信息
 if errorlevel 1 (

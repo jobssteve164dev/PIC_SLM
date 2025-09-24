@@ -6,7 +6,6 @@ from PIL import Image
 import albumentations as A
 from sklearn.model_selection import train_test_split
 from PyQt5.QtCore import QObject, pyqtSignal
-from src.utils.logger import get_logger, log_error, performance_monitor, PerformanceMonitor
 
 class DataProcessor(QObject):
     # 定义信号
@@ -22,10 +21,7 @@ class DataProcessor(QObject):
             '中等': self._get_medium_augmentation(),
             '强化': self._get_strong_augmentation()
         }
-        self.logger = get_logger(__name__, "data_processor")
-        self.logger.info("数据处理器初始化完成")
 
-    @performance_monitor("process_data", "data_processor")
     def process_data(self, 
                     input_folder: str,
                     output_folder: str,
@@ -35,10 +31,6 @@ class DataProcessor(QObject):
         处理数据集，包括划分训练集和验证集，以及数据增强
         """
         try:
-            self.logger.info(f"开始处理数据集: {input_folder}")
-            self.logger.info(f"输出目录: {output_folder}")
-            self.logger.info(f"训练集比例: {train_ratio}")
-            self.logger.info(f"数据增强级别: {augmentation_level}")
             # 确保输出目录存在
             os.makedirs(output_folder, exist_ok=True)
             train_folder = os.path.join(output_folder, 'train')

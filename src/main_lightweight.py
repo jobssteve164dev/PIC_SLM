@@ -12,22 +12,39 @@ import os
 import json
 import traceback
 
-# 设置编码
+# 设置编码（在无控制台的 windowed 模式下避免访问 stdout/stderr 导致崩溃）
 if sys.platform == 'win32':
-    import codecs
-    sys.stdout = codecs.getwriter('utf-8')(sys.stdout.detach())
-    sys.stderr = codecs.getwriter('utf-8')(sys.stderr.detach())
+    try:
+        import codecs
+        # 仅当 stdout/stderr 存在且支持 detach 时才重绑定编码
+        if getattr(sys, 'stdout', None) is not None and hasattr(sys.stdout, 'detach'):
+            sys.stdout = codecs.getwriter('utf-8')(sys.stdout.detach())
+        if getattr(sys, 'stderr', None) is not None and hasattr(sys.stderr, 'detach'):
+            sys.stderr = codecs.getwriter('utf-8')(sys.stderr.detach())
+    except Exception:
+        # 在无控制台或其他环境下静默跳过
+        pass
 
 # 将src目录添加到Python路径中
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 def safe_print(text):
-    """安全打印函数，避免编码问题"""
+    """安全打印函数，避免编码或无控制台导致的错误"""
     try:
+        # 无控制台时 sys.stdout 可能为 None
+        if getattr(sys, 'stdout', None) is None:
+            return
         print(text)
     except UnicodeEncodeError:
         # 如果出现编码错误，转换为ASCII
-        print(text.encode('ascii', errors='ignore').decode('ascii'))
+        try:
+            print(text.encode('ascii', errors='ignore').decode('ascii'))
+        except Exception:
+            # 仍有问题则静默忽略
+            pass
+    except Exception:
+        # 非编码相关异常（如无控制台），静默忽略
+        pass
 
 def check_critical_dependencies():
     """检查关键依赖"""
